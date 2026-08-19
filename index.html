@@ -17,39 +17,69 @@
 </head>
 <body class="text-gray-100 h-screen flex flex-col">
 
-  <header class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm">M</div>
-      <div>
-        <h1 class="font-semibold text-lg leading-none">mragent</h1>
-        <p class="text-xs text-gray-500" id="tunnel-status">tunnel qidirilmoqda...</p>
+  <!-- =================== LOGIN SCREEN =================== -->
+  <div id="login-screen" class="h-screen w-screen flex items-center justify-center bg-[#0f0f11]">
+    <form id="login-form" class="w-full max-w-sm bg-[#17171b] border border-gray-800 rounded-2xl p-8 space-y-5">
+      <div class="text-center space-y-1">
+        <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm mx-auto">M</div>
+        <h1 class="font-semibold text-lg">mragent</h1>
+        <p class="text-xs text-gray-500">Kirish uchun parolni kiriting</p>
       </div>
-    </div>
-    <button id="token-btn" class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 hover:border-gray-500">
-      token
-    </button>
-  </header>
 
-  <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
-    <div class="text-center text-gray-500 text-sm py-10" id="welcome">
-      Tunnel ulanishini kutmoqda...
-    </div>
-  </main>
+      <div class="space-y-1">
+        <label class="text-xs text-gray-400">Parol (AUTH_TOKEN)</label>
+        <input id="login-pass" type="password" autocomplete="current-password"
+               class="w-full bg-[#1e1e24] border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+               placeholder="••••••••••••••••" required />
+      </div>
 
-  <footer class="border-t border-gray-800 p-4">
-    <div class="max-w-3xl mx-auto flex gap-3">
-      <input id="message" type="text" placeholder="Xabar yozing..."
-             class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
-             autocomplete="off" disabled />
-      <button id="send" class="bg-blue-600 hover:bg-blue-500 px-5 rounded-xl text-sm font-medium transition disabled:opacity-40" disabled>
-        Yuborish
+      <p id="login-error" class="text-xs text-red-500 hidden">Parol noto'g'ri yoki backend javob bermadi.</p>
+
+      <button type="submit" id="login-btn"
+              class="w-full bg-blue-600 hover:bg-blue-500 rounded-lg py-2.5 text-sm font-medium transition disabled:opacity-40">
+        Kirish
       </button>
-    </div>
-    <div class="max-w-3xl mx-auto mt-2 flex gap-3 text-xs text-gray-500">
-      <input id="category" type="text" value="general" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
-      <input id="filename" type="text" value="chat" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
-    </div>
-  </footer>
+
+      <p class="text-[11px] text-gray-600 text-center" id="login-tunnel-status">tunnel qidirilmoqda...</p>
+    </form>
+  </div>
+
+  <!-- =================== CHAT APP (login'dan keyin ko'rinadi) =================== -->
+  <div id="app-screen" class="hidden h-screen flex flex-col">
+    <header class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm">M</div>
+        <div>
+          <h1 class="font-semibold text-lg leading-none">mragent</h1>
+          <p class="text-xs text-gray-500" id="tunnel-status">ulanmoqda...</p>
+        </div>
+      </div>
+      <button id="logout-btn" class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 hover:border-red-500 hover:text-red-400">
+        chiqish
+      </button>
+    </header>
+
+    <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
+      <div class="text-center text-gray-500 text-sm py-10" id="welcome">
+        Salom! Men mragentman.<br>Nima qilishimni xohlaysan?
+      </div>
+    </main>
+
+    <footer class="border-t border-gray-800 p-4">
+      <div class="max-w-3xl mx-auto flex gap-3">
+        <input id="message" type="text" placeholder="Xabar yozing..."
+               class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+               autocomplete="off" />
+        <button id="send" class="bg-blue-600 hover:bg-blue-500 px-5 rounded-xl text-sm font-medium transition disabled:opacity-40">
+          Yuborish
+        </button>
+      </div>
+      <div class="max-w-3xl mx-auto mt-2 flex gap-3 text-xs text-gray-500">
+        <input id="category" type="text" value="general" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+        <input id="filename" type="text" value="chat" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+      </div>
+    </footer>
+  </div>
 
   <script>
     const firebaseConfig = {
@@ -66,21 +96,101 @@
     const db = firebase.firestore();
 
     let API_BASE = null;
-    let AUTH_TOKEN = localStorage.getItem("mragent_token") || "";
+    // MUHIM: sessionStorage ishlatamiz, localStorage EMAS.
+    // sessionStorage tab yopilganda / brauzer refresh(F5)da ham yo'qoladi
+    // (aslida faqat tab yopilganda o'chadi, lekin biz refresh'da ham qayta
+    // so'rash uchun pastda maxsus login-gate mantiqi qo'ygan bo'lamiz —
+    // token har doim shu sessiyada birinchi marta login qilinganda tekshiriladi).
+    let AUTH_TOKEN = "";
+
+    const loginScreen = document.getElementById("login-screen");
+    const appScreen = document.getElementById("app-screen");
+    const loginForm = document.getElementById("login-form");
+    const loginPass = document.getElementById("login-pass");
+    const loginError = document.getElementById("login-error");
+    const loginBtn = document.getElementById("login-btn");
+    const loginTunnelStatus = document.getElementById("login-tunnel-status");
 
     const chat = document.getElementById("chat");
     const input = document.getElementById("message");
     const sendBtn = document.getElementById("send");
     const tunnelStatus = document.getElementById("tunnel-status");
-    const welcome = document.getElementById("welcome");
-    const tokenBtn = document.getElementById("token-btn");
+    const logoutBtn = document.getElementById("logout-btn");
 
-    tokenBtn.addEventListener("click", () => {
-      const t = prompt("Auth token (backend konsolida chiqadi):", AUTH_TOKEN);
-      if (t !== null) {
-        AUTH_TOKEN = t.trim();
-        localStorage.setItem("mragent_token", AUTH_TOKEN);
+    function showApp() {
+      loginScreen.classList.add("hidden");
+      appScreen.classList.remove("hidden");
+      tunnelStatus.textContent = "ulandi";
+      tunnelStatus.classList.add("text-green-500");
+      input.focus();
+    }
+
+    function showLogin(errorMsg) {
+      appScreen.classList.add("hidden");
+      loginScreen.classList.remove("hidden");
+      AUTH_TOKEN = "";
+      sessionStorage.removeItem("mragent_token");
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Kirish";
+      if (errorMsg) {
+        loginError.textContent = errorMsg;
+        loginError.classList.remove("hidden");
+      } else {
+        loginError.classList.add("hidden");
       }
+      loginPass.value = "";
+      loginPass.focus();
+    }
+
+    // /confirm kabi "haqiqiy" endpoint yo'q parolni tekshirish uchun,
+    // shuning uchun /chat'ga bo'sh/ping xabar yuborib, 401 keladimi
+    // yo'qmi shu orqali tekshiramiz. Bu haqiqiy komanda bajarmaydi,
+    // faqat auth'ni tasdiqlaydi.
+    async function verifyToken(token) {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Auth-Token": token
+        },
+        body: JSON.stringify({ message: "__mragent_auth_check__", category: "_auth", filename: "check" })
+      });
+      return res.status !== 401;
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!API_BASE) {
+        loginError.textContent = "Tunnel hali topilmadi, biroz kuting va qayta urinib ko'ring.";
+        loginError.classList.remove("hidden");
+        return;
+      }
+      const pass = loginPass.value.trim();
+      if (!pass) return;
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Tekshirilmoqda...";
+      loginError.classList.add("hidden");
+
+      try {
+        const ok = await verifyToken(pass);
+        if (ok) {
+          AUTH_TOKEN = pass;
+          sessionStorage.setItem("mragent_token", AUTH_TOKEN);
+          showApp();
+        } else {
+          showLogin("Parol noto'g'ri.");
+        }
+      } catch (err) {
+        showLogin("Backendga ulanib bo'lmadi. Tunnel ishlayaptimi?");
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Kirish";
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      showLogin();
     });
 
     function addMessage(text, kind = "bot") {
@@ -124,22 +234,12 @@
         const doc = await db.collection("config").doc("tunnel").get();
         if (doc.exists && doc.data().url) {
           API_BASE = doc.data().url.replace(/\/$/, "");
-          tunnelStatus.textContent = "tunnel ulandi";
-          tunnelStatus.classList.add("text-green-500");
-          input.disabled = false;
-          sendBtn.disabled = false;
-          welcome.innerHTML = "Salom! Men mragentman.<br>Nima qilishimni xohlaysan?";
-          if (!AUTH_TOKEN) {
-            welcome.innerHTML += "<br><span class='text-amber-500'>Avval yuqoridagi 'token' tugmasi orqali auth tokenni kiriting.</span>";
-          }
-          input.focus();
+          loginTunnelStatus.textContent = "tunnel ulandi, parolni kiriting";
         } else {
-          tunnelStatus.textContent = "tunnel topilmadi";
-          welcome.textContent = "Firestoreda tunnel URL yo'q. Kompyuterda tunnelni yoqing.";
+          loginTunnelStatus.textContent = "tunnel topilmadi (Firestore bo'sh)";
         }
       } catch (e) {
-        tunnelStatus.textContent = "Firestore xatosi";
-        welcome.textContent = "Firestorega ulanib bo'lmadi.";
+        loginTunnelStatus.textContent = "Firestore xatosi";
         console.error(e);
       }
     }
@@ -154,6 +254,10 @@
           },
           body: JSON.stringify({ command_id: commandId })
         });
+        if (res.status === 401) {
+          showLogin("Sessiya tugadi, qayta kiring.");
+          return;
+        }
         const data = await res.json();
         addMessage(data.response || data.error || "Javob yo'q", "bot");
       } catch (err) {
@@ -184,7 +288,8 @@
         });
 
         if (res.status === 401) {
-          addMessage("Auth xato. Token noto'g'ri yoki kiritilmagan (yuqoridagi 'token' tugmasi).", "bot");
+          addMessage("Sessiya tugadi, qayta kirish kerak.", "bot");
+          showLogin("Sessiya tugadi, qayta kiring.");
           return;
         }
 
@@ -214,6 +319,11 @@
       }
     });
 
+    // Sahifa har ochilganda / refresh bo'lganda — LOGIN EKRANIDAN BOSHLAYMIZ.
+    // sessionStorage'da eski token bo'lsa ham ataylab ishlatmaymiz, chunki
+    // talab: "har safar mragent'ga kirsak parol so'rasin, hattoki refresh'da ham".
+    sessionStorage.removeItem("mragent_token");
+    showLogin();
     loadTunnelUrl();
   </script>
 </body>
