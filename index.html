@@ -1,1 +1,152 @@
-hello
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mragent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+  <style>
+    body { background: #0f0f11; }
+    #chat { scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .bubble-user { background: #2563eb; }
+    .bubble-bot { background: #1e1e24; border: 1px solid #2a2a32; }
+  </style>
+</head>
+<body class="text-gray-100 h-screen flex flex-col">
+
+  <header class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm">M</div>
+      <div>
+        <h1 class="font-semibold text-lg leading-none">mragent</h1>
+        <p class="text-xs text-gray-500" id="tunnel-status">tunnel qidirilmoqda...</p>
+      </div>
+    </div>
+    <div class="text-xs text-gray-500" id="status">tayyor</div>
+  </header>
+
+  <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
+    <div class="text-center text-gray-500 text-sm py-10" id="welcome">
+      Tunnel ulanishini kutmoqda...
+    </div>
+  </main>
+
+  <footer class="border-t border-gray-800 p-4">
+    <div class="max-w-3xl mx-auto flex gap-3">
+      <input id="message" type="text" placeholder="Xabar yozing..." 
+             class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition" 
+             autocomplete="off" disabled />
+      <button id="send" class="bg-blue-600 hover:bg-blue-500 px-5 rounded-xl text-sm font-medium transition disabled:opacity-40" disabled>
+        Yuborish
+      </button>
+    </div>
+    <div class="max-w-3xl mx-auto mt-2 flex gap-3 text-xs text-gray-500">
+      <input id="category" type="text" value="general" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+      <input id="filename" type="text" value="chat" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+    </div>
+  </footer>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDYkT1b_SOg5T76yhpyRuqnem9YsG53Qn0",
+      authDomain: "mragent-2d280.firebaseapp.com",
+      projectId: "mragent-2d280",
+      storageBucket: "mragent-2d280.firebasestorage.app",
+      messagingSenderId: "654437071743",
+      appId: "1:654437071743:web:7281d306d8c6cd054c784a",
+      measurementId: "G-MZEC0M55WH"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let API_URL = null;
+
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("message");
+    const sendBtn = document.getElementById("send");
+    const status = document.getElementById("status");
+    const tunnelStatus = document.getElementById("tunnel-status");
+    const welcome = document.getElementById("welcome");
+
+    function addMessage(text, isUser = false) {
+      const div = document.createElement("div");
+      div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
+      div.innerHTML = `
+        <div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-bot"}">
+          <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+        </div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function loadTunnelUrl() {
+      try {
+        const doc = await db.collection("config").doc("tunnel").get();
+        if (doc.exists && doc.data().url) {
+          API_URL = doc.data().url.replace(/\/$/, "") + "/chat";
+          tunnelStatus.textContent = "tunnel ulandi";
+          tunnelStatus.classList.add("text-green-500");
+          input.disabled = false;
+          sendBtn.disabled = false;
+          welcome.innerHTML = "Salom! Men mragentman.<br>Nima qilishimni xohlaysan?";
+          input.focus();
+        } else {
+          tunnelStatus.textContent = "tunnel topilmadi";
+          welcome.textContent = "Firestoreda tunnel URL yo‘q. Kompyuterda tunnelni yoqing.";
+        }
+      } catch (e) {
+        tunnelStatus.textContent = "Firestore xatosi";
+        welcome.textContent = "Firestorega ulanib bo‘lmadi.";
+        console.error(e);
+      }
+    }
+
+    async function sendMessage() {
+      if (!API_URL) return;
+      const message = input.value.trim();
+      if (!message) return;
+
+      const category = document.getElementById("category").value.trim() || "general";
+      const filename = document.getElementById("filename").value.trim() || "chat";
+
+      addMessage(message, true);
+      input.value = "";
+      sendBtn.disabled = true;
+      status.textContent = "javob kutyapman...";
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, category, filename })
+        });
+        const data = await res.json();
+        addMessage(data.response || data.error || "Javob yo‘q");
+      } catch (err) {
+        addMessage("Backendga ulanib bo‘lmadi.\nTunnel ishlayaptimi?");
+      } finally {
+        sendBtn.disabled = false;
+        status.textContent = "tayyor";
+        input.focus();
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    loadTunnelUrl();
+  </script>
+</body>
+</html>
