@@ -8,153 +8,141 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
   <style>
-    body { background: #000000; }
-    #chat { scrollbar-width: thin; scrollbar-color: #222 transparent; }
-    .bubble-user { background: #ffffff; color: #000000; }
-    .bubble-bot { background: #0a0a0a; border: 1px solid #1a1a1a; }
-    .bubble-pending { background: #1a1508; border: 1px solid #4a3a10; }
-    .glow-orb {
-      position: absolute;
-      width: 480px; height: 480px;
-      border-radius: 9999px;
-      filter: blur(120px);
-      opacity: 0.18;
-      pointer-events: none;
-    }
+    * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; }
+    body { background: #212121; }
+    #chat { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
+    #chat-history { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
+    .bubble-user { background: #2f2f2f; color: #ececec; }
+    .bubble-bot { color: #ececec; }
+    .bubble-pending { background: #2a2213; border: 1px solid #4a3a10; }
     .login-input {
-      background: #050505;
-      border: 1px solid #1c1c1c;
-      transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+      background: #2f2f2f;
+      border: 1px solid #4d4d4d;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
     .login-input:focus {
-      border-color: #3f3f46;
-      background: #0a0a0a;
-      box-shadow: 0 0 0 3px rgba(255,255,255,0.04);
+      border-color: #8e8e8e;
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.06);
     }
     .login-card {
-      background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
-      border: 1px solid #161616;
+      background: #212121;
+    }
+    .sidebar-item {
+      transition: background-color .12s ease;
     }
   </style>
 </head>
-<body class="text-gray-100 h-screen flex flex-col bg-black">
+<body class="text-[#ececec] h-screen flex flex-col" style="background:#212121;">
 
   <!-- =================== BOOT (auth tekshirilayotganda) =================== -->
-  <div id="boot-screen" class="h-screen w-screen flex items-center justify-center bg-black">
+  <div id="boot-screen" class="h-screen w-screen flex items-center justify-center" style="background:#212121;">
     <div class="flex flex-col items-center gap-3">
-      <div class="w-8 h-8 rounded-full border-2 border-gray-800 border-t-white animate-spin"></div>
-      <div class="text-gray-700 text-[11px] tracking-widest uppercase">yuklanmoqda</div>
+      <div class="w-6 h-6 rounded-full border-2 border-[#4d4d4d] border-t-[#ececec] animate-spin"></div>
     </div>
   </div>
 
   <!-- =================== LOGIN SCREEN =================== -->
-  <div id="login-screen" class="hidden h-screen w-screen relative flex items-center justify-center bg-black overflow-hidden">
-    <div class="glow-orb bg-white" style="top: -10%; left: -10%;"></div>
-    <div class="glow-orb bg-gray-500" style="bottom: -15%; right: -10%;"></div>
-
-    <form id="login-form" class="relative z-10 w-full max-w-sm login-card rounded-3xl p-9 space-y-6 shadow-2xl">
+  <div id="login-screen" class="hidden h-screen w-screen flex items-center justify-center" style="background:#212121;">
+    <form id="login-form" class="login-card w-full max-w-[400px] p-8 space-y-6">
       <div class="text-center space-y-2">
-        <div class="w-12 h-12 rounded-2xl bg-white flex items-center justify-center font-bold text-sm text-black mx-auto tracking-tight">M</div>
-        <h1 class="font-semibold text-xl tracking-tight">mragent</h1>
-        <p class="text-xs text-gray-600">Davom etish uchun ma'lumotlarni kiriting</p>
+        <div class="w-9 h-9 rounded-full bg-[#ececec] flex items-center justify-center font-semibold text-sm text-[#212121] mx-auto">M</div>
+        <h1 class="font-semibold text-2xl tracking-tight text-[#ececec]">mragent bilan davom eting</h1>
       </div>
 
-      <div class="space-y-4">
+      <div class="space-y-3">
         <div class="space-y-1.5">
-          <label class="text-[11px] uppercase tracking-wider text-gray-600 pl-0.5">Login parol</label>
           <input id="login-pass" type="password" autocomplete="current-password"
-                 class="login-input w-full rounded-xl px-3.5 py-3 text-sm focus:outline-none placeholder:text-gray-700"
-                 placeholder="••••••••••••••••" required />
+                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
+                 placeholder="Login parol" required />
         </div>
 
         <div class="space-y-1.5">
-          <label class="text-[11px] uppercase tracking-wider text-gray-600 pl-0.5">Auth token</label>
           <input id="login-token" type="password" autocomplete="off"
-                 class="login-input w-full rounded-xl px-3.5 py-3 text-sm focus:outline-none placeholder:text-gray-700"
-                 placeholder="server console'da chiqqan token" required />
+                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
+                 placeholder="Auth token" required />
         </div>
       </div>
 
-      <p id="login-error" class="text-xs text-red-400 hidden">Parol yoki token noto'g'ri, yoki backend javob bermadi.</p>
+      <p id="login-error" class="text-[13px] text-[#f2555a] hidden">Parol yoki token noto'g'ri, yoki backend javob bermadi.</p>
 
       <button type="submit" id="login-btn"
-              class="w-full bg-white hover:bg-gray-200 text-black rounded-xl py-3 text-sm font-semibold transition disabled:opacity-30">
-        Kirish
+              class="w-full bg-[#ececec] hover:bg-white text-[#212121] rounded-xl py-3 text-[15px] font-medium transition disabled:opacity-40">
+        Davom etish
       </button>
 
-      <p class="text-[11px] text-gray-700 text-center" id="login-tunnel-status">tunnel qidirilmoqda...</p>
+      <p class="text-[13px] text-[#8e8e8e] text-center" id="login-tunnel-status">tunnel qidirilmoqda...</p>
     </form>
   </div>
 
   <!-- =================== CHAT APP (login'dan keyin ko'rinadi) =================== -->
-  <div id="app-screen" class="hidden h-screen flex bg-black">
+  <div id="app-screen" class="hidden h-screen flex" style="background:#212121;">
 
     <!-- =================== SIDEBAR =================== -->
-    <aside class="w-64 shrink-0 bg-black border-r border-[#141414] flex flex-col">
-      <div class="px-4 py-4 flex items-center gap-2.5">
-        <div class="w-7 h-7 rounded-xl bg-white flex items-center justify-center font-bold text-xs text-black">M</div>
-        <span class="font-semibold text-sm tracking-tight">mragent</span>
-      </div>
-
-      <div class="px-3">
+    <aside class="w-64 shrink-0 flex flex-col" style="background:#171717;">
+      <div class="px-3 py-3">
         <button id="new-chat-btn"
-                class="w-full flex items-center gap-2 bg-[#0d0d0d] hover:bg-[#161616] border border-[#1c1c1c] rounded-xl px-3 py-2.5 text-sm transition text-gray-300">
-          <span class="text-base leading-none text-gray-500">＋</span> Yangi suhbat
+                class="sidebar-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#ececec] text-left">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+          </svg>
+          Yangi suhbat
         </button>
       </div>
 
-      <div class="px-3 mt-6">
-        <p class="text-[10px] uppercase tracking-widest text-gray-700 px-2 mb-1.5">Projects</p>
-        <div class="space-y-0.5 text-sm text-gray-400">
-          <button class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[#0d0d0d] transition flex items-center gap-2">
-            <span class="text-gray-600">📁</span> general
+      <div class="px-3 mt-2">
+        <p class="text-xs font-medium text-[#8e8e8e] px-3 mb-1">Projects</p>
+        <div class="text-sm text-[#d9d9d9]">
+          <button class="sidebar-item w-full text-left px-3 py-2 rounded-lg hover:bg-[#2a2a2a] flex items-center gap-2.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-[#8e8e8e]"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+            general
           </button>
-          <button class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[#0d0d0d] transition flex items-center gap-2">
-            <span class="text-gray-600">📁</span> chat
+          <button class="sidebar-item w-full text-left px-3 py-2 rounded-lg hover:bg-[#2a2a2a] flex items-center gap-2.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-[#8e8e8e]"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+            chat
           </button>
         </div>
       </div>
 
-      <div class="px-3 mt-6 flex-1 min-h-0 flex flex-col">
-        <p class="text-[10px] uppercase tracking-widest text-gray-700 px-2 mb-1.5">Chats</p>
-        <div id="chat-history" class="space-y-0.5 text-sm text-gray-400 overflow-y-auto flex-1 min-h-0">
+      <div class="px-3 mt-4 flex-1 min-h-0 flex flex-col">
+        <p class="text-xs font-medium text-[#8e8e8e] px-3 mb-1">Chats</p>
+        <div id="chat-history" class="text-sm text-[#d9d9d9] overflow-y-auto flex-1 min-h-0">
           <!-- JS to'ldiradi -->
         </div>
       </div>
 
-      <div class="border-t border-[#141414] px-3 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="w-7 h-7 rounded-full bg-[#1c1c1c] border border-[#2a2a2a] flex items-center justify-center text-[11px] font-semibold shrink-0 text-gray-300">MU</div>
+      <div class="px-2 py-2 flex items-center justify-between">
+        <div class="sidebar-item flex-1 flex items-center gap-2.5 rounded-lg px-2 py-2 min-w-0 hover:bg-[#2a2a2a]">
+          <div class="w-7 h-7 rounded-full bg-[#8e5cf7] flex items-center justify-center text-[11px] font-medium text-white shrink-0">MU</div>
           <div class="min-w-0">
-            <p class="text-xs truncate text-gray-300">mragent</p>
-            <p class="text-[10px] text-gray-600" id="tunnel-status">ulanmoqda...</p>
+            <p class="text-[13px] truncate text-[#ececec]">mragent</p>
+            <p class="text-[11px] text-[#8e8e8e]" id="tunnel-status">ulanmoqda...</p>
           </div>
         </div>
-        <button id="logout-btn" class="text-[11px] text-gray-600 border border-[#1c1c1c] rounded-lg px-2 py-1 hover:border-red-500/60 hover:text-red-400 transition shrink-0">
+        <button id="logout-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1.5 shrink-0">
           chiqish
         </button>
       </div>
     </aside>
 
     <!-- =================== MAIN CHAT =================== -->
-    <div class="flex-1 flex flex-col min-w-0 bg-black">
-      <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
-        <div class="text-center text-gray-600 text-sm py-10" id="welcome">
-          Salom! Men mragentman.<br>Nima qilishimni xohlaysan?
+    <div class="flex-1 flex flex-col min-w-0" style="background:#212121;">
+      <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full">
+        <div class="text-center text-[#ececec] text-2xl font-medium py-20" id="welcome">
+          Salom! Bugun nima qilamiz? 👋
         </div>
       </main>
 
-      <footer class="border-t border-[#141414] p-4">
-        <div class="max-w-3xl mx-auto mb-2 flex gap-3 text-xs text-gray-600">
-          <input id="category" type="text" value="general" class="bg-transparent border-b border-[#1c1c1c] w-28 focus:outline-none focus:border-gray-500 transition" />
-          <input id="filename" type="text" value="chat" class="bg-transparent border-b border-[#1c1c1c] w-28 focus:outline-none focus:border-gray-500 transition" />
+      <footer class="px-4 pb-6 pt-2">
+        <div class="max-w-[720px] mx-auto mb-2 flex gap-3 text-[12px] text-[#8e8e8e]">
+          <input id="category" type="text" value="general" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
+          <input id="filename" type="text" value="chat" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
         </div>
-        <div class="max-w-3xl mx-auto flex gap-3">
+        <div class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
           <input id="message" type="text" placeholder="Xabar yozing..."
-                 class="flex-1 bg-[#0a0a0a] border border-[#1c1c1c] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-gray-500 transition placeholder:text-gray-700"
+                 class="flex-1 bg-transparent px-2 py-2 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
                  autocomplete="off" />
-          <button id="send" class="bg-white hover:bg-gray-200 text-black px-5 rounded-xl text-sm font-semibold transition disabled:opacity-30">
-            Yuborish
+          <button id="send" class="bg-[#ececec] hover:bg-white text-[#212121] w-9 h-9 rounded-full flex items-center justify-center transition disabled:opacity-30 shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
       </footer>
@@ -232,7 +220,7 @@
       [...chats].reverse().forEach(c => {
         const btn = document.createElement("button");
         const isActive = c.id === activeChatId;
-        btn.className = `w-full text-left px-2 py-1.5 rounded-lg transition truncate ${isActive ? "bg-[#1e1e24] text-gray-100" : "hover:bg-[#17171b] text-gray-400"}`;
+        btn.className = `sidebar-item w-full text-left px-3 py-2 rounded-lg truncate ${isActive ? "bg-[#2a2a2a] text-[#ececec]" : "hover:bg-[#2a2a2a] text-[#d9d9d9]"}`;
         btn.textContent = c.title || "Yangi suhbat";
         btn.addEventListener("click", () => switchChat(c.id));
         chatHistoryEl.appendChild(btn);
@@ -243,7 +231,7 @@
       chat.innerHTML = "";
       const active = getActiveChat();
       if (!active || active.messages.length === 0) {
-        chat.innerHTML = `<div class="text-center text-gray-500 text-sm py-10" id="welcome">Salom! Men mragentman.<br>Nima qilishimni xohlaysan?</div>`;
+        chat.innerHTML = `<div class="text-center text-[#ececec] text-2xl font-medium py-20" id="welcome">Nima qilishimni xohlaysan?</div>`;
         return;
       }
       active.messages.forEach(m => addMessage(m.text, m.kind, false));
@@ -365,11 +353,18 @@
       const isUser = kind === "user";
       const isPending = kind === "pending";
       div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
-      const bubbleClass = isUser ? "bubble-user" : (isPending ? "bubble-pending" : "bubble-bot");
-      div.innerHTML = `
-        <div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${bubbleClass}">
-          <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
-        </div>`;
+      if (isUser) {
+        div.innerHTML = `
+          <div class="max-w-[85%] rounded-3xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user">
+            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+          </div>`;
+      } else {
+        const bubbleClass = isPending ? "bubble-pending rounded-2xl px-4 py-2.5" : "bubble-bot";
+        div.innerHTML = `
+          <div class="max-w-full w-full text-[15px] leading-relaxed ${bubbleClass}">
+            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+          </div>`;
+      }
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
 
@@ -387,11 +382,38 @@
       return div;
     }
 
+    const ACTION_LABELS = {
+      command: "💻 komanda",
+      read_file: "📄 o'qildi",
+      write_file: "✍️ yozildi",
+      list_dir: "📂 papka",
+      web_search: "🔎 qidiruv"
+    };
+
+    function addStepsTrail(steps) {
+      if (!steps || !steps.length) return;
+      const div = document.createElement("div");
+      div.className = "flex justify-start w-full";
+      const items = steps.map(s => {
+        const label = ACTION_LABELS[s.action] || s.action;
+        const target = s.command || s.path || s.query || "";
+        const result = (s.result || "").slice(0, 400);
+        return `
+          <details class="text-[13px] text-[#a8a8a8]">
+            <summary class="cursor-pointer select-none py-1 hover:text-[#ececec]">${label} — ${escapeHtml(target)}</summary>
+            <pre class="whitespace-pre-wrap font-mono text-[12px] text-[#8e8e8e] pl-4 pb-2">${escapeHtml(result)}</pre>
+          </details>`;
+      }).join("");
+      div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:#262626;">${items}</div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
     function addConfirmButton(commandId) {
       const div = document.createElement("div");
       div.className = "flex justify-start";
       div.innerHTML = `
-        <button class="bg-amber-600 hover:bg-amber-500 text-xs px-3 py-2 rounded-lg" data-cmdid="${commandId}">
+        <button class="bg-amber-600 hover:bg-amber-500 text-[13px] px-4 py-2 rounded-full transition" data-cmdid="${commandId}">
           ✓ Tasdiqlash va bajarish
         </button>`;
       div.querySelector("button").addEventListener("click", async (e) => {
@@ -474,6 +496,8 @@
         }
 
         const data = await res.json();
+
+        addStepsTrail(data.steps);
 
         if (data.type === "pending_confirmation") {
           addMessage(data.response, "pending");
