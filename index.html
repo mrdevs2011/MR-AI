@@ -33,7 +33,14 @@
                placeholder="••••••••••••••••" required />
       </div>
 
-      <p id="login-error" class="text-xs text-red-500 hidden">Parol noto'g'ri yoki backend javob bermadi.</p>
+      <div class="space-y-1">
+        <label class="text-xs text-gray-400">Auth token</label>
+        <input id="login-token" type="password" autocomplete="off"
+               class="w-full bg-[#1e1e24] border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+               placeholder="server console'da chiqqan token" required />
+      </div>
+
+      <p id="login-error" class="text-xs text-red-500 hidden">Parol yoki token noto'g'ri, yoki backend javob bermadi.</p>
 
       <button type="submit" id="login-btn"
               class="w-full bg-blue-600 hover:bg-blue-500 rounded-lg py-2.5 text-sm font-medium transition disabled:opacity-40">
@@ -96,12 +103,14 @@
     const db = firebase.firestore();
 
     let API_BASE = null;
+    let LOGIN_PASS = "";
     let AUTH_TOKEN = "";
 
     const loginScreen = document.getElementById("login-screen");
     const appScreen = document.getElementById("app-screen");
     const loginForm = document.getElementById("login-form");
     const loginPass = document.getElementById("login-pass");
+    const loginToken = document.getElementById("login-token");
     const loginError = document.getElementById("login-error");
     const loginBtn = document.getElementById("login-btn");
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
@@ -123,7 +132,9 @@
     function showLogin(errorMsg) {
       appScreen.classList.add("hidden");
       loginScreen.classList.remove("hidden");
+      LOGIN_PASS = "";
       AUTH_TOKEN = "";
+      localStorage.removeItem("mragent_pass");
       localStorage.removeItem("mragent_token");
       loginBtn.disabled = false;
       loginBtn.textContent = "Kirish";
@@ -134,6 +145,7 @@
         loginError.classList.add("hidden");
       }
       loginPass.value = "";
+      loginToken.value = "";
       loginPass.focus();
     }
 
@@ -141,12 +153,13 @@
     // shuning uchun /chat'ga bo'sh/ping xabar yuborib, 401 keladimi
     // yo'qmi shu orqali tekshiramiz. Bu haqiqiy komanda bajarmaydi,
     // faqat auth'ni tasdiqlaydi.
-    async function verifyToken(token) {
+    async function verifyToken(pass, token) {
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Auth-Token": token
+          "X-Auth-Token": token,
+          "X-Login-Pass": pass
         },
         body: JSON.stringify({ message: "__mragent_auth_check__", category: "_auth", filename: "check" })
       });
@@ -161,20 +174,23 @@
         return;
       }
       const pass = loginPass.value.trim();
-      if (!pass) return;
+      const token = loginToken.value.trim();
+      if (!pass || !token) return;
 
       loginBtn.disabled = true;
       loginBtn.textContent = "Tekshirilmoqda...";
       loginError.classList.add("hidden");
 
       try {
-        const ok = await verifyToken(pass);
+        const ok = await verifyToken(pass, token);
         if (ok) {
-          AUTH_TOKEN = pass;
+          LOGIN_PASS = pass;
+          AUTH_TOKEN = token;
+          localStorage.setItem("mragent_pass", LOGIN_PASS);
           localStorage.setItem("mragent_token", AUTH_TOKEN);
           showApp();
         } else {
-          showLogin("Parol noto'g'ri.");
+          showLogin("Parol yoki token noto'g'ri.");
         }
       } catch (err) {
         showLogin("Backendga ulanib bo'lmadi. Tunnel ishlayaptimi?");
@@ -244,7 +260,8 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Auth-Token": AUTH_TOKEN
+            "X-Auth-Token": AUTH_TOKEN,
+            "X-Login-Pass": LOGIN_PASS
           },
           body: JSON.stringify({ command_id: commandId })
         });
@@ -276,7 +293,8 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Auth-Token": AUTH_TOKEN
+            "X-Auth-Token": AUTH_TOKEN,
+            "X-Login-Pass": LOGIN_PASS
           },
           body: JSON.stringify({ message, category, filename })
         });
@@ -318,15 +336,17 @@
     // login qayta so'ralmaydi, refresh'dan keyin ham. Token yo'q yoki
     // noto'g'ri bo'lsa — login ekrani ko'rsatiladi.
     async function tryAutoLogin() {
-      const saved = localStorage.getItem("mragent_token");
-      if (!saved || !API_BASE) {
+      const savedPass = localStorage.getItem("mragent_pass");
+      const savedToken = localStorage.getItem("mragent_token");
+      if (!savedPass || !savedToken || !API_BASE) {
         showLogin();
         return;
       }
       try {
-        const ok = await verifyToken(saved);
+        const ok = await verifyToken(savedPass, savedToken);
         if (ok) {
-          AUTH_TOKEN = saved;
+          LOGIN_PASS = savedPass;
+          AUTH_TOKEN = savedToken;
           showApp();
         } else {
           showLogin();
