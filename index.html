@@ -27,7 +27,7 @@
       </div>
 
       <div class="space-y-1">
-        <label class="text-xs text-gray-400">Parol (AUTH_TOKEN)</label>
+        <label class="text-xs text-gray-400">Login parol</label>
         <input id="login-pass" type="password" autocomplete="current-password"
                class="w-full bg-[#1e1e24] border border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
                placeholder="••••••••••••••••" required />
@@ -96,11 +96,6 @@
     const db = firebase.firestore();
 
     let API_BASE = null;
-    // MUHIM: sessionStorage ishlatamiz, localStorage EMAS.
-    // sessionStorage tab yopilganda / brauzer refresh(F5)da ham yo'qoladi
-    // (aslida faqat tab yopilganda o'chadi, lekin biz refresh'da ham qayta
-    // so'rash uchun pastda maxsus login-gate mantiqi qo'ygan bo'lamiz —
-    // token har doim shu sessiyada birinchi marta login qilinganda tekshiriladi).
     let AUTH_TOKEN = "";
 
     const loginScreen = document.getElementById("login-screen");
@@ -129,7 +124,7 @@
       appScreen.classList.add("hidden");
       loginScreen.classList.remove("hidden");
       AUTH_TOKEN = "";
-      sessionStorage.removeItem("mragent_token");
+      localStorage.removeItem("mragent_token");
       loginBtn.disabled = false;
       loginBtn.textContent = "Kirish";
       if (errorMsg) {
@@ -176,7 +171,7 @@
         const ok = await verifyToken(pass);
         if (ok) {
           AUTH_TOKEN = pass;
-          sessionStorage.setItem("mragent_token", AUTH_TOKEN);
+          localStorage.setItem("mragent_token", AUTH_TOKEN);
           showApp();
         } else {
           showLogin("Parol noto'g'ri.");
@@ -243,7 +238,6 @@
         console.error(e);
       }
     }
-
     async function confirmCommand(commandId) {
       try {
         const res = await fetch(`${API_BASE}/confirm`, {
@@ -319,12 +313,33 @@
       }
     });
 
-    // Sahifa har ochilganda / refresh bo'lganda — LOGIN EKRANIDAN BOSHLAYMIZ.
-    // sessionStorage'da eski token bo'lsa ham ataylab ishlatmaymiz, chunki
-    // talab: "har safar mragent'ga kirsak parol so'rasin, hattoki refresh'da ham".
-    sessionStorage.removeItem("mragent_token");
-    showLogin();
-    loadTunnelUrl();
+    // Sahifa ochilganda: localStorage'da eski token bo'lsa, uni tekshirib
+    // ko'ramiz va to'g'ri bo'lsa TO'G'RIDAN-TO'G'RI chat ekraniga o'tamiz —
+    // login qayta so'ralmaydi, refresh'dan keyin ham. Token yo'q yoki
+    // noto'g'ri bo'lsa — login ekrani ko'rsatiladi.
+    async function tryAutoLogin() {
+      const saved = localStorage.getItem("mragent_token");
+      if (!saved || !API_BASE) {
+        showLogin();
+        return;
+      }
+      try {
+        const ok = await verifyToken(saved);
+        if (ok) {
+          AUTH_TOKEN = saved;
+          showApp();
+        } else {
+          showLogin();
+        }
+      } catch (err) {
+        showLogin();
+      }
+    }
+
+    (async () => {
+      await loadTunnelUrl();
+      await tryAutoLogin();
+    })();
   </script>
 </body>
 </html>
