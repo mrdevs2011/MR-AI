@@ -1,0 +1,8 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>mragent logo</title>
+  <desc>Rounded square badge with the letter M and a small purple orbiting node, representing an AI agent</desc>
+  <rect x="0" y="0" width="200" height="200" rx="44" fill="#ececec"/>
+  <path d="M46 148 L46 62 L74 62 L100 112 L126 62 L154 62 L154 148 L132 148 L132 92 L106 140 L94 140 L68 92 L68 148 Z" fill="#212121"/>
+  <circle cx="164" cy="40" r="15" fill="#8e5cf7"/>
+  <circle cx="164" cy="40" r="5" fill="#ececec"/>
+</svg>
