@@ -17,8 +17,13 @@
 </head>
 <body class="text-gray-100 h-screen flex flex-col">
 
+  <!-- =================== BOOT (auth tekshirilayotganda) =================== -->
+  <div id="boot-screen" class="h-screen w-screen flex items-center justify-center bg-[#0f0f11]">
+    <div class="text-gray-600 text-xs">yuklanmoqda...</div>
+  </div>
+
   <!-- =================== LOGIN SCREEN =================== -->
-  <div id="login-screen" class="h-screen w-screen flex items-center justify-center bg-[#0f0f11]">
+  <div id="login-screen" class="hidden h-screen w-screen flex items-center justify-center bg-[#0f0f11]">
     <form id="login-form" class="w-full max-w-sm bg-[#17171b] border border-gray-800 rounded-2xl p-8 space-y-5">
       <div class="text-center space-y-1">
         <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm mx-auto">M</div>
@@ -52,40 +57,78 @@
   </div>
 
   <!-- =================== CHAT APP (login'dan keyin ko'rinadi) =================== -->
-  <div id="app-screen" class="hidden h-screen flex flex-col">
-    <header class="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm">M</div>
-        <div>
-          <h1 class="font-semibold text-lg leading-none">mragent</h1>
-          <p class="text-xs text-gray-500" id="tunnel-status">ulanmoqda...</p>
-        </div>
-      </div>
-      <button id="logout-btn" class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 hover:border-red-500 hover:text-red-400">
-        chiqish
-      </button>
-    </header>
+  <div id="app-screen" class="hidden h-screen flex">
 
-    <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
-      <div class="text-center text-gray-500 text-sm py-10" id="welcome">
-        Salom! Men mragentman.<br>Nima qilishimni xohlaysan?
+    <!-- =================== SIDEBAR =================== -->
+    <aside class="w-64 shrink-0 bg-[#0a0a0c] border-r border-gray-800 flex flex-col">
+      <div class="px-3 py-4 flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-xs">M</div>
+        <span class="font-semibold text-sm">mragent</span>
       </div>
-    </main>
 
-    <footer class="border-t border-gray-800 p-4">
-      <div class="max-w-3xl mx-auto flex gap-3">
-        <input id="message" type="text" placeholder="Xabar yozing..."
-               class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
-               autocomplete="off" />
-        <button id="send" class="bg-blue-600 hover:bg-blue-500 px-5 rounded-xl text-sm font-medium transition disabled:opacity-40">
-          Yuborish
+      <div class="px-3">
+        <button id="new-chat-btn"
+                class="w-full flex items-center gap-2 bg-[#17171b] hover:bg-[#1e1e24] border border-gray-800 rounded-lg px-3 py-2 text-sm transition">
+          <span class="text-base leading-none">＋</span> Yangi suhbat
         </button>
       </div>
-      <div class="max-w-3xl mx-auto mt-2 flex gap-3 text-xs text-gray-500">
-        <input id="category" type="text" value="general" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
-        <input id="filename" type="text" value="chat" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+
+      <div class="px-3 mt-5">
+        <p class="text-[11px] uppercase tracking-wide text-gray-600 px-1 mb-1.5">Projects</p>
+        <div class="space-y-0.5 text-sm text-gray-300">
+          <button class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[#17171b] transition flex items-center gap-2">
+            <span class="text-gray-500">📁</span> general
+          </button>
+          <button class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[#17171b] transition flex items-center gap-2">
+            <span class="text-gray-500">📁</span> chat
+          </button>
+        </div>
       </div>
-    </footer>
+
+      <div class="px-3 mt-5 flex-1 min-h-0 flex flex-col">
+        <p class="text-[11px] uppercase tracking-wide text-gray-600 px-1 mb-1.5">Chats</p>
+        <div id="chat-history" class="space-y-0.5 text-sm text-gray-300 overflow-y-auto flex-1 min-h-0">
+          <!-- JS to'ldiradi -->
+        </div>
+      </div>
+
+      <div class="border-t border-gray-800 px-3 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-7 h-7 rounded-full bg-purple-600 flex items-center justify-center text-[11px] font-semibold shrink-0">MU</div>
+          <div class="min-w-0">
+            <p class="text-xs truncate">mragent</p>
+            <p class="text-[10px] text-gray-500" id="tunnel-status">ulanmoqda...</p>
+          </div>
+        </div>
+        <button id="logout-btn" class="text-[11px] text-gray-500 border border-gray-700 rounded px-2 py-1 hover:border-red-500 hover:text-red-400 shrink-0">
+          chiqish
+        </button>
+      </div>
+    </aside>
+
+    <!-- =================== MAIN CHAT =================== -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
+        <div class="text-center text-gray-500 text-sm py-10" id="welcome">
+          Salom! Men mragentman.<br>Nima qilishimni xohlaysan?
+        </div>
+      </main>
+
+      <footer class="border-t border-gray-800 p-4">
+        <div class="max-w-3xl mx-auto mb-2 flex gap-3 text-xs text-gray-500">
+          <input id="category" type="text" value="general" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+          <input id="filename" type="text" value="chat" class="bg-transparent border-b border-gray-700 w-28 focus:outline-none" />
+        </div>
+        <div class="max-w-3xl mx-auto flex gap-3">
+          <input id="message" type="text" placeholder="Xabar yozing..."
+                 class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
+                 autocomplete="off" />
+          <button id="send" class="bg-blue-600 hover:bg-blue-500 px-5 rounded-xl text-sm font-medium transition disabled:opacity-40">
+            Yuborish
+          </button>
+        </div>
+      </footer>
+    </div>
   </div>
 
   <script>
@@ -106,6 +149,7 @@
     let LOGIN_PASS = "";
     let AUTH_TOKEN = "";
 
+    const bootScreen = document.getElementById("boot-screen");
     const loginScreen = document.getElementById("login-screen");
     const appScreen = document.getElementById("app-screen");
     const loginForm = document.getElementById("login-form");
@@ -120,16 +164,98 @@
     const sendBtn = document.getElementById("send");
     const tunnelStatus = document.getElementById("tunnel-status");
     const logoutBtn = document.getElementById("logout-btn");
+    const newChatBtn = document.getElementById("new-chat-btn");
+    const chatHistoryEl = document.getElementById("chat-history");
+    const welcomeEl = document.getElementById("welcome");
+
+    // ---------------------------------------------------------------------
+    // CHAT TARIXI — komputerda (localStorage) saqlanadi, backendga bog'liq
+    // emas. Har bir suhbat: { id, title, messages: [{text, kind}] }
+    // ---------------------------------------------------------------------
+    const CHATS_KEY = "mragent_chats";
+    let chats = [];
+    let activeChatId = null;
+
+    function loadChats() {
+      try {
+        chats = JSON.parse(localStorage.getItem(CHATS_KEY) || "[]");
+      } catch {
+        chats = [];
+      }
+    }
+
+    function saveChats() {
+      localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+    }
+
+    function getActiveChat() {
+      return chats.find(c => c.id === activeChatId) || null;
+    }
+
+    function renderChatHistory() {
+      chatHistoryEl.innerHTML = "";
+      if (chats.length === 0) {
+        chatHistoryEl.innerHTML = `<p class="text-xs text-gray-600 px-2 py-1">suhbatlar yo'q</p>`;
+        return;
+      }
+      // eng yangisi tepada
+      [...chats].reverse().forEach(c => {
+        const btn = document.createElement("button");
+        const isActive = c.id === activeChatId;
+        btn.className = `w-full text-left px-2 py-1.5 rounded-lg transition truncate ${isActive ? "bg-[#1e1e24] text-gray-100" : "hover:bg-[#17171b] text-gray-400"}`;
+        btn.textContent = c.title || "Yangi suhbat";
+        btn.addEventListener("click", () => switchChat(c.id));
+        chatHistoryEl.appendChild(btn);
+      });
+    }
+
+    function renderMessages() {
+      chat.innerHTML = "";
+      const active = getActiveChat();
+      if (!active || active.messages.length === 0) {
+        chat.innerHTML = `<div class="text-center text-gray-500 text-sm py-10" id="welcome">Salom! Men mragentman.<br>Nima qilishimni xohlaysan?</div>`;
+        return;
+      }
+      active.messages.forEach(m => addMessage(m.text, m.kind, false));
+    }
+
+    function switchChat(id) {
+      activeChatId = id;
+      renderChatHistory();
+      renderMessages();
+      input.focus();
+    }
+
+    function createNewChat() {
+      const newChat = { id: Date.now().toString(36), title: "Yangi suhbat", messages: [] };
+      chats.push(newChat);
+      saveChats();
+      switchChat(newChat.id);
+    }
+
+    function ensureActiveChat() {
+      if (chats.length === 0) {
+        createNewChat();
+      } else if (!activeChatId) {
+        switchChat(chats[chats.length - 1].id);
+      }
+    }
+
+    newChatBtn.addEventListener("click", createNewChat);
 
     function showApp() {
+      bootScreen.classList.add("hidden");
       loginScreen.classList.add("hidden");
       appScreen.classList.remove("hidden");
       tunnelStatus.textContent = "ulandi";
       tunnelStatus.classList.add("text-green-500");
+      loadChats();
+      ensureActiveChat();
       input.focus();
     }
 
     function showLogin(errorMsg) {
+      bootScreen.classList.add("hidden");
       appScreen.classList.add("hidden");
       loginScreen.classList.remove("hidden");
       LOGIN_PASS = "";
@@ -204,7 +330,7 @@
       showLogin();
     });
 
-    function addMessage(text, kind = "bot") {
+    function addMessage(text, kind = "bot", persist = true) {
       const div = document.createElement("div");
       const isUser = kind === "user";
       const isPending = kind === "pending";
@@ -216,6 +342,18 @@
         </div>`;
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
+
+      if (persist) {
+        const active = getActiveChat();
+        if (active) {
+          active.messages.push({ text, kind });
+          if (isUser && active.title === "Yangi suhbat") {
+            active.title = text.slice(0, 40);
+            renderChatHistory();
+          }
+          saveChats();
+        }
+      }
       return div;
     }
 
