@@ -12,6 +12,7 @@
     #chat { scrollbar-width: thin; scrollbar-color: #333 transparent; }
     .bubble-user { background: #2563eb; }
     .bubble-bot { background: #1e1e24; border: 1px solid #2a2a32; }
+    .bubble-pending { background: #3a2a10; border: 1px solid #7a5a1a; }
   </style>
 </head>
 <body class="text-gray-100 h-screen flex flex-col">
@@ -24,7 +25,9 @@
         <p class="text-xs text-gray-500" id="tunnel-status">tunnel qidirilmoqda...</p>
       </div>
     </div>
-    <div class="text-xs text-gray-500" id="status">tayyor</div>
+    <button id="token-btn" class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 hover:border-gray-500">
+      token
+    </button>
   </header>
 
   <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-3xl mx-auto w-full">
@@ -35,8 +38,8 @@
 
   <footer class="border-t border-gray-800 p-4">
     <div class="max-w-3xl mx-auto flex gap-3">
-      <input id="message" type="text" placeholder="Xabar yozing..." 
-             class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition" 
+      <input id="message" type="text" placeholder="Xabar yozing..."
+             class="flex-1 bg-[#1e1e24] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition"
              autocomplete="off" disabled />
       <button id="send" class="bg-blue-600 hover:bg-blue-500 px-5 rounded-xl text-sm font-medium transition disabled:opacity-40" disabled>
         Yuborish
@@ -62,22 +65,52 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let API_URL = null;
+    let API_BASE = null;
+    let AUTH_TOKEN = localStorage.getItem("mragent_token") || "";
 
     const chat = document.getElementById("chat");
     const input = document.getElementById("message");
     const sendBtn = document.getElementById("send");
-    const status = document.getElementById("status");
     const tunnelStatus = document.getElementById("tunnel-status");
     const welcome = document.getElementById("welcome");
+    const tokenBtn = document.getElementById("token-btn");
 
-    function addMessage(text, isUser = false) {
+    tokenBtn.addEventListener("click", () => {
+      const t = prompt("Auth token (backend konsolida chiqadi):", AUTH_TOKEN);
+      if (t !== null) {
+        AUTH_TOKEN = t.trim();
+        localStorage.setItem("mragent_token", AUTH_TOKEN);
+      }
+    });
+
+    function addMessage(text, kind = "bot") {
       const div = document.createElement("div");
+      const isUser = kind === "user";
+      const isPending = kind === "pending";
       div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
+      const bubbleClass = isUser ? "bubble-user" : (isPending ? "bubble-pending" : "bubble-bot");
       div.innerHTML = `
-        <div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-bot"}">
+        <div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${bubbleClass}">
           <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
         </div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    function addConfirmButton(commandId) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <button class="bg-amber-600 hover:bg-amber-500 text-xs px-3 py-2 rounded-lg" data-cmdid="${commandId}">
+          ✓ Tasdiqlash va bajarish
+        </button>`;
+      div.querySelector("button").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = "bajarilmoqda...";
+        await confirmCommand(commandId);
+        div.remove();
+      });
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -90,50 +123,85 @@
       try {
         const doc = await db.collection("config").doc("tunnel").get();
         if (doc.exists && doc.data().url) {
-          API_URL = doc.data().url.replace(/\/$/, "") + "/chat";
+          API_BASE = doc.data().url.replace(/\/$/, "");
           tunnelStatus.textContent = "tunnel ulandi";
           tunnelStatus.classList.add("text-green-500");
           input.disabled = false;
           sendBtn.disabled = false;
           welcome.innerHTML = "Salom! Men mragentman.<br>Nima qilishimni xohlaysan?";
+          if (!AUTH_TOKEN) {
+            welcome.innerHTML += "<br><span class='text-amber-500'>Avval yuqoridagi 'token' tugmasi orqali auth tokenni kiriting.</span>";
+          }
           input.focus();
         } else {
           tunnelStatus.textContent = "tunnel topilmadi";
-          welcome.textContent = "Firestoreda tunnel URL yo‘q. Kompyuterda tunnelni yoqing.";
+          welcome.textContent = "Firestoreda tunnel URL yo'q. Kompyuterda tunnelni yoqing.";
         }
       } catch (e) {
         tunnelStatus.textContent = "Firestore xatosi";
-        welcome.textContent = "Firestorega ulanib bo‘lmadi.";
+        welcome.textContent = "Firestorega ulanib bo'lmadi.";
         console.error(e);
       }
     }
 
+    async function confirmCommand(commandId) {
+      try {
+        const res = await fetch(`${API_BASE}/confirm`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Auth-Token": AUTH_TOKEN
+          },
+          body: JSON.stringify({ command_id: commandId })
+        });
+        const data = await res.json();
+        addMessage(data.response || data.error || "Javob yo'q", "bot");
+      } catch (err) {
+        addMessage("Confirm so'rovi muvaffaqiyatsiz.", "bot");
+      }
+    }
+
     async function sendMessage() {
-      if (!API_URL) return;
+      if (!API_BASE) return;
       const message = input.value.trim();
       if (!message) return;
 
       const category = document.getElementById("category").value.trim() || "general";
       const filename = document.getElementById("filename").value.trim() || "chat";
 
-      addMessage(message, true);
+      addMessage(message, "user");
       input.value = "";
       sendBtn.disabled = true;
-      status.textContent = "javob kutyapman...";
 
       try {
-        const res = await fetch(API_URL, {
+        const res = await fetch(`${API_BASE}/chat`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Auth-Token": AUTH_TOKEN
+          },
           body: JSON.stringify({ message, category, filename })
         });
+
+        if (res.status === 401) {
+          addMessage("Auth xato. Token noto'g'ri yoki kiritilmagan (yuqoridagi 'token' tugmasi).", "bot");
+          return;
+        }
+
         const data = await res.json();
-        addMessage(data.response || data.error || "Javob yo‘q");
+
+        if (data.type === "pending_confirmation") {
+          addMessage(data.response, "pending");
+          addConfirmButton(data.command_id);
+        } else if (data.type === "blocked") {
+          addMessage(data.response, "pending");
+        } else {
+          addMessage(data.response || data.error || "Javob yo'q", "bot");
+        }
       } catch (err) {
-        addMessage("Backendga ulanib bo‘lmadi.\nTunnel ishlayaptimi?");
+        addMessage("Backendga ulanib bo'lmadi.\nTunnel ishlayaptimi?", "bot");
       } finally {
         sendBtn.disabled = false;
-        status.textContent = "tayyor";
         input.focus();
       }
     }
