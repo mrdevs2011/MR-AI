@@ -350,6 +350,10 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    // Ba'zi tarmoqlar/provayderlar Firestore'ning odatiy WebChannel
+    // (streaming) ulanishini sekinlashtiradi yoki bloklaydi — bu holatda
+    // uzoq muddatli long-polling'ga avtomatik o'tish barqarorlikni oshiradi.
+    db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 
     let API_BASE = null;
     let LOGIN_PASS = "";
@@ -731,7 +735,7 @@
         // 6 soniyadan keyin to'xtatamiz va aniq xabar + retry beramiz.
         const docPromise = db.collection("config").doc("tunnel").get();
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 6000)
+          setTimeout(() => reject(new Error("timeout")), 15000)
         );
         const doc = await Promise.race([docPromise, timeoutPromise]);
 
