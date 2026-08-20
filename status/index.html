@@ -127,29 +127,35 @@
     const sub = document.getElementById("sub");
     const logo = document.getElementById("logo");
 
-    // Heartbeat 20 soniyada bir marta yoziladi (bkg/main.py). Agar oxirgi
-    // yozuv 60 soniyadan eski bo'lsa, backend/kompyuter o'chgan deb hisoblanadi.
-    const STALE_AFTER_MS = 60 * 1000;
+    // Presence pattern: backend faqat status o'zgarganda yozadi
+    // (online/offline), sekundlab yozmaydi. onSnapshot() esa Firestore'ning
+    // real-time push kanali — polling (setInterval + get()) emas, shuning
+    // uchun o'zgarish millisekundlarda ko'rinadi va deyarli hech qanday
+    // qo'shimcha read/write sarflamaydi (bitta doimiy WebSocket ulanish).
+    let unsubscribe = null;
 
-    async function checkStatus() {
-      try {
-        const doc = await db.collection("config").doc("heartbeat").get();
-        if (!doc.exists || !doc.data().lastSeen) {
-          setOffline("Hech qachon ulanmagan");
-          return;
-        }
-        const lastSeen = doc.data().lastSeen.toDate();
-        const ageMs = Date.now() - lastSeen.getTime();
-        if (ageMs < STALE_AFTER_MS) {
-          setOnline(lastSeen);
-        } else {
-          setOffline(formatAgo(ageMs));
-        }
-      } catch (e) {
-        label.textContent = "Xatolik";
-        sub.textContent = "Firestore bilan bog'lanib bo'lmadi";
-        dot.className = "dot offline";
-      }
+    function startListening() {
+      unsubscribe = db.collection("config").doc("heartbeat")
+        .onSnapshot(
+          (doc) => {
+            if (!doc.exists || !doc.data().lastSeen) {
+              setOffline("Hech qachon ulanmagan");
+              return;
+            }
+            const data = doc.data();
+            const lastSeen = data.lastSeen.toDate();
+            if (data.status === "online") {
+              setOnline(lastSeen);
+            } else {
+              setOffline("Oxirgi marta ko'rilgan: " + lastSeen.toLocaleTimeString());
+            }
+          },
+          (err) => {
+            label.textContent = "Xatolik";
+            sub.textContent = "Firestore bilan bog'lanib bo'lmadi";
+            dot.className = "dot offline";
+          }
+        );
     }
 
     function setOnline(lastSeen) {
@@ -166,16 +172,7 @@
       sub.textContent = detail;
     }
 
-    function formatAgo(ms) {
-      const mins = Math.floor(ms / 60000);
-      if (mins < 1) return "Bir necha soniya oldin uzildi";
-      if (mins < 60) return mins + " daqiqa oldin oxirgi marta ko'rilgan";
-      const hours = Math.floor(mins / 60);
-      return hours + " soat oldin oxirgi marta ko'rilgan";
-    }
-
-    checkStatus();
-    setInterval(checkStatus, 10000); // har 10 soniyada qayta tekshiradi
+    startListening();
 
     // --- PASS kiritib AUTH_TOKEN olish ---
     // Backend URL'ni qo'lda yozmaymiz — Firestore'dagi config/tunnel
