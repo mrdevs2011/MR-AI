@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mragent — kompyuter holati</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f0f10;
+    color: #ececec;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    text-align: center;
+    padding: 48px 56px;
+    border-radius: 24px;
+    background: #18181a;
+    border: 1px solid #2a2a2c;
+  }
+  .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  .dot.online { background: #3ddc84; box-shadow: 0 0 12px #3ddc84; }
+  .dot.offline { background: #f2555a; box-shadow: 0 0 12px #f2555a; }
+  .dot.loading { background: #8e8e8e; }
+  .status-text {
+    font-size: 28px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+  }
+  .sub {
+    margin-top: 12px;
+    font-size: 14px;
+    color: #8e8e8e;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="status-text"><span class="dot loading" id="dot"></span><span id="label">Tekshirilmoqda...</span></div>
+    <div class="sub" id="sub">&nbsp;</div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDYkT1b_SOg5T76yhpyRuqnem9YsG53Qn0",
+      authDomain: "mragent-2d280.firebaseapp.com",
+      projectId: "mragent-2d280",
+      storageBucket: "mragent-2d280.firebasestorage.app",
+      messagingSenderId: "654437071743",
+      appId: "1:654437071743:web:7281d306d8c6cd054c784a",
+      measurementId: "G-MZEC0M55WH"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const dot = document.getElementById("dot");
+    const label = document.getElementById("label");
+    const sub = document.getElementById("sub");
+
+    // Heartbeat 20 soniyada bir marta yoziladi (bkg/main.py). Agar oxirgi
+    // yozuv 60 soniyadan eski bo'lsa, backend/kompyuter o'chgan deb hisoblanadi.
+    const STALE_AFTER_MS = 60 * 1000;
+
+    async function checkStatus() {
+      try {
+        const doc = await db.collection("config").doc("heartbeat").get();
+        if (!doc.exists || !doc.data().lastSeen) {
+          setOffline("Hech qachon ulanmagan");
+          return;
+        }
+        const lastSeen = doc.data().lastSeen.toDate();
+        const ageMs = Date.now() - lastSeen.getTime();
+        if (ageMs < STALE_AFTER_MS) {
+          setOnline(lastSeen);
+        } else {
+          setOffline(formatAgo(ageMs));
+        }
+      } catch (e) {
+        label.textContent = "Xatolik";
+        sub.textContent = "Firestore bilan bog'lanib bo'lmadi";
+        dot.className = "dot offline";
+      }
+    }
+
+    function setOnline(lastSeen) {
+      dot.className = "dot online";
+      label.textContent = "Kompyuter YONIQ";
+      sub.textContent = "Oxirgi signal: " + lastSeen.toLocaleTimeString();
+    }
+
+    function setOffline(detail) {
+      dot.className = "dot offline";
+      label.textContent = "Kompyuter O'CHIQ";
+      sub.textContent = detail;
+    }
+
+    function formatAgo(ms) {
+      const mins = Math.floor(ms / 60000);
+      if (mins < 1) return "Bir necha soniya oldin uzildi";
+      if (mins < 60) return mins + " daqiqa oldin oxirgi marta ko'rilgan";
+      const hours = Math.floor(mins / 60);
+      return hours + " soat oldin oxirgi marta ko'rilgan";
+    }
+
+    checkStatus();
+    setInterval(checkStatus, 10000); // har 10 soniyada qayta tekshiradi
+  </script>
+</body>
+</html>
