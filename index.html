@@ -6,6 +6,7 @@
   <title>mragent</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='44' fill='%23ececec'/%3E%3Cpath d='M46 148 L46 62 L74 62 L100 112 L126 62 L154 62 L154 148 L132 148 L132 92 L106 140 L94 140 L68 92 L68 148 Z' fill='%23212121'/%3E%3Ccircle cx='164' cy='40' r='15' fill='%238e5cf7'/%3E%3Ccircle cx='164' cy='40' r='5' fill='%23ececec'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
   <style>
@@ -89,6 +90,37 @@
       from { opacity: 0; transform: translateY(-3px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    /* ---- rendered markdown for bot replies (natural prose, not <pre>) ---- */
+    .prose-bot { line-height: 1.65; }
+    .prose-bot p { margin: 0 0 0.7em 0; }
+    .prose-bot p:last-child { margin-bottom: 0; }
+    .prose-bot strong { font-weight: 600; color: #fff; }
+    .prose-bot em { font-style: italic; }
+    .prose-bot ul, .prose-bot ol { margin: 0.3em 0 0.7em 1.3em; }
+    .prose-bot ul { list-style: disc; }
+    .prose-bot ol { list-style: decimal; }
+    .prose-bot li { margin: 0.15em 0; }
+    .prose-bot h1, .prose-bot h2, .prose-bot h3 {
+      font-weight: 600; color: #fff; margin: 0.8em 0 0.4em 0;
+    }
+    .prose-bot h1 { font-size: 1.25em; }
+    .prose-bot h2 { font-size: 1.15em; }
+    .prose-bot h3 { font-size: 1.05em; }
+    .prose-bot code {
+      background: #2f2f2f; padding: 0.15em 0.4em; border-radius: 5px;
+      font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.88em;
+    }
+    .prose-bot pre {
+      background: #1a1a1a; border: 1px solid #333; border-radius: 10px;
+      padding: 12px 14px; overflow-x: auto; margin: 0.5em 0;
+    }
+    .prose-bot pre code { background: none; padding: 0; font-size: 0.85em; }
+    .prose-bot blockquote {
+      border-left: 3px solid #4d4d4d; padding-left: 12px; color: #a8a8a8; margin: 0.5em 0;
+    }
+    .prose-bot a { color: #b98cff; text-decoration: underline; }
+    .prose-bot hr { border: none; border-top: 1px solid #3a3a3a; margin: 0.8em 0; }
   </style>
 </head>
 <body class="text-[#ececec] h-screen flex flex-col" style="background:#212121;">
@@ -435,12 +467,21 @@
           <div class="max-w-[85%] rounded-3xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user">
             <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
           </div>`;
-      } else {
-        const bubbleClass = isPending ? "bubble-pending rounded-2xl px-4 py-2.5" : "bubble-bot";
+      } else if (isPending) {
+        // Command/file confirmations show the raw command verbatim —
+        // monospace is correct here, this isn't prose.
         div.innerHTML = `
-          <div class="max-w-full w-full text-[15px] leading-relaxed ${bubbleClass}">
+          <div class="max-w-full w-full text-[15px] leading-relaxed bubble-pending rounded-2xl px-4 py-2.5">
             <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
           </div>`;
+      } else {
+        // Normal bot replies: render as markdown, like a real assistant
+        // reply instead of a terminal dump.
+        const html = (typeof marked !== "undefined")
+          ? marked.parse(text, { breaks: true })
+          : escapeHtml(text);
+        div.innerHTML = `
+          <div class="max-w-full w-full text-[15px] bubble-bot prose-bot">${html}</div>`;
       }
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
@@ -561,6 +602,55 @@
 
     function escapeHtml(text) {
       return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Cosmetic typewriter reveal for final bot replies. NOTE: this is a
+    // display trick, not real token streaming — the full text already
+    // arrived from the backend (the JSON-action format doesn't support
+    // streaming a "done" message mid-generation). It's here purely so the
+    // reply doesn't just "pop in" all at once, which reads as more natural.
+    function addMessageTyped(text) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      const inner = document.createElement("div");
+      inner.className = "max-w-full w-full text-[15px] bubble-bot prose-bot";
+      div.appendChild(inner);
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+
+      return new Promise(resolve => {
+        let i = 0;
+        // Time-based reveal (~28ms per character) instead of a fixed
+        // frame-count split — short replies now visibly type out too,
+        // instead of resolving in 1–2 frames.
+        const msPerChar = 28;
+        let lastTime = null;
+
+        function tick(now) {
+          if (lastTime === null) lastTime = now;
+          const elapsed = now - lastTime;
+          const charsToShow = Math.min(text.length, Math.floor(elapsed / msPerChar));
+          if (charsToShow > i) {
+            i = charsToShow;
+            const slice = text.slice(0, i);
+            inner.innerHTML = (typeof marked !== "undefined")
+              ? marked.parse(slice, { breaks: true })
+              : escapeHtml(slice);
+            chat.scrollTop = chat.scrollHeight;
+          }
+          if (i < text.length) {
+            requestAnimationFrame(tick);
+          } else {
+            const active = getActiveChat();
+            if (active) {
+              active.messages.push({ text, kind: "bot" });
+              saveChats();
+            }
+            resolve();
+          }
+        }
+        requestAnimationFrame(tick);
+      });
     }
 
     async function confirmCommand(commandId) {
@@ -687,7 +777,7 @@
                 addMessage(evt.response, "pending");
               } else {
                 addStepsTrail(evt.steps);
-                addMessage(evt.response || "No response", "bot");
+                await addMessageTyped(evt.response || "No response");
               }
             }
           }
