@@ -785,7 +785,13 @@
         // ulanishni qayta-qayta bloklab, retry-loop hosil qilsa — 30-60+
         // soniyagacha). Foydalanuvchini shuncha kutdirish o'rniga, o'zimiz
         // 6 soniyadan keyin to'xtatamiz va aniq xabar + retry beramiz.
-        const docPromise = db.collection("config").doc("tunnel").get();
+        // { source: "server" } — Firestore'ga mahalliy keshni (IndexedDB/
+        // memory cache) chetlab o'tib, HAR SAFAR to'g'ridan-to'g'ri
+        // serverdan o'qishni majburlaydi. Buni qo'shmasak, cloudflared
+        // tunnel har restart'da yangi URL chiqarganda, brauzer ba'zida
+        // eski (keshlangan) manzilni qaytarib yuborardi va "Failed to
+        // fetch" xatosi shundan kelib chiqardi.
+        const docPromise = db.collection("config").doc("tunnel").get({ source: "server" });
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error("timeout")), 15000)
         );
