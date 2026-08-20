@@ -454,6 +454,18 @@ textarea:focus-visible:not(.composer-textarea) {
 .thinking-dots {
   display: none;
 }
+#thinking-label {
+  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 35%, var(--ink) 50%, var(--muted) 65%, var(--muted) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinkingShimmer 1.8s linear infinite;
+}
+@keyframes thinkingShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 .thought-log {
   display: flex;
   flex-direction: column;

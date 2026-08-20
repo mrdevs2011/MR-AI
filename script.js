@@ -34,7 +34,8 @@
     const loginBtn = document.getElementById("login-btn");
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
 
-    const chat = document.getElementById("chat");
+    const chatScroll = document.getElementById("chat");
+    const chat = document.getElementById("chat-inner");
     const emptyState = document.getElementById("empty-state");
     const chatFooter = document.getElementById("chat-footer");
     const composerSlotEmpty = document.getElementById("composer-slot-empty");
@@ -792,7 +793,7 @@
           </div>`;
       }
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
 
       if (!isUser && !isPending && !isError) {
         wireCopyButton(div.querySelector(".copy-btn"), text);
@@ -837,7 +838,7 @@
           </div>
         </div>`;
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
 
       if (persist) {
         const active = getActiveChat();
@@ -886,7 +887,7 @@
           </div>
         </div>`;
       chat.appendChild(wrapper);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
 
       const logEl = wrapper.querySelector("#thought-log");
       const rowEl = wrapper.querySelector("#thinking-row");
@@ -896,7 +897,7 @@
         el: wrapper,
         setLabel(text) {
           labelEl.textContent = text;
-          chat.scrollTop = chat.scrollHeight;
+          chatScroll.scrollTop = chatScroll.scrollHeight;
         },
         commitLine(text) {
           // Freeze the current line into the log with a checkmark, then
@@ -905,7 +906,7 @@
           line.className = "thought-line";
           line.innerHTML = `<span class="check">·</span><span>${escapeHtml(text)}</span>`;
           logEl.appendChild(line);
-          chat.scrollTop = chat.scrollHeight;
+          chatScroll.scrollTop = chatScroll.scrollHeight;
         },
         remove() {
           wrapper.remove();
@@ -929,7 +930,7 @@
       }).join("");
       div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:#262626;">${items}</div>`;
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
     }
 
     // OpenRouter (bepul model) band bo'lib chaqiruv butunlay
@@ -951,7 +952,7 @@
         await sendMessage();
       });
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
     }
 
     function addConfirmButton(commandId) {
@@ -968,7 +969,7 @@
         div.remove();
       });
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
     }
 
     // Qaytarib bo'lmaydigan xavfli komandalar (sudo mode + hard-block
@@ -1026,7 +1027,7 @@
       });
 
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
     }
 
     function escapeHtml(text) {
@@ -1074,7 +1075,7 @@
       container.appendChild(inner);
       div.appendChild(container);
       chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+      chatScroll.scrollTop = chatScroll.scrollHeight;
 
       return new Promise(resolve => {
         let i = 0;
@@ -1094,7 +1095,7 @@
             inner.innerHTML = (typeof marked !== "undefined")
               ? marked.parse(slice, { breaks: true })
               : escapeHtml(slice);
-            chat.scrollTop = chat.scrollHeight;
+            chatScroll.scrollTop = chatScroll.scrollHeight;
           }
           if (i < text.length) {
             requestAnimationFrame(tick);
