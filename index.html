@@ -255,42 +255,24 @@
     </aside>
 
     <!-- =================== MAIN CHAT =================== -->
-    <div class="flex-1 flex flex-col min-w-0" style="background:#212121;">
-      <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full">
-        <div class="text-center text-[#ececec] text-2xl font-medium py-20" id="welcome">
-          Hey! What are we building today?
-        </div>
-      </main>
+    <div class="flex-1 flex flex-col min-w-0 relative" style="background:#212121;">
+      <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></main>
 
-      <footer class="px-4 pb-6 pt-2">
-        <div id="sudoBanner" class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
-          SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
-        </div>
-        <div class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
-          <div class="pill-select-wrap">
-            <span class="pill-dot" id="mode-dot"></span>
-            <select id="mode" class="pill-select" title="Xavfsizlik rejimi">
-              <option value="general" selected>General</option>
-              <option value="sudo">Sudo</option>
-            </select>
+      <!-- Empty-state: centered greeting + input, ChatGPT-style. Hidden the
+           moment the first message goes out; the bottom-pinned footer
+           below takes over from then on. -->
+      <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center px-4">
+        <div class="w-full max-w-[720px]">
+          <div class="text-center text-[#ececec] text-2xl font-medium mb-6" id="welcome">
+            Hey! What are we building today?
           </div>
-          <div class="pill-select-wrap ml-auto">
-            <span class="pill-dot" id="tier-dot"></span>
-            <select id="tier" class="pill-select" title="Model quality vs speed">
-              <option value="high">Yuqori — qwen2.5:7b</option>
-              <option value="medium" selected>O'rtacha — qwen2.5:1.5b</option>
-              <option value="low">Past/tez — qwen2.5:1.5b</option>
-            </select>
-          </div>
+          <div id="composer-slot-empty"></div>
         </div>
-        <div class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
-          <input id="message" type="text" placeholder="Type a message..."
-                 class="flex-1 bg-transparent px-2 py-2 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
-                 autocomplete="off" />
-          <button id="send" class="bg-[#ececec] hover:bg-white text-[#212121] w-9 h-9 rounded-full flex items-center justify-center transition disabled:opacity-30 shrink-0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
+      </div>
+
+      <!-- Bottom-pinned footer: shown once the conversation has messages. -->
+      <footer id="chat-footer" class="px-4 pb-6 pt-2 hidden">
+        <div id="composer-slot-footer"></div>
       </footer>
     </div>
   </div>
@@ -324,13 +306,59 @@
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
 
     const chat = document.getElementById("chat");
-    const input = document.getElementById("message");
-    const sendBtn = document.getElementById("send");
+    const emptyState = document.getElementById("empty-state");
+    const chatFooter = document.getElementById("chat-footer");
+    const composerSlotEmpty = document.getElementById("composer-slot-empty");
+    const composerSlotFooter = document.getElementById("composer-slot-footer");
     const tunnelStatus = document.getElementById("tunnel-status");
     const logoutBtn = document.getElementById("logout-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
-    const modeSelect = document.getElementById("mode");
     const sudoBanner = document.getElementById("sudoBanner");
+
+    // ---------------------------------------------------------------------
+    // COMPOSER — one physical set of controls (mode/tier/input/send) that
+    // gets moved between the centered empty-state slot and the bottom-
+    // pinned footer slot depending on whether the active chat has any
+    // messages yet. Avoids keeping two copies of the same inputs in sync.
+    // ---------------------------------------------------------------------
+    const composer = document.createElement("div");
+    composer.innerHTML = `
+      <div id="sudoBanner" data-composer-part class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
+        SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
+      </div>
+      <div data-composer-part class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
+        <div class="pill-select-wrap">
+          <span class="pill-dot" id="mode-dot"></span>
+          <select id="mode" class="pill-select" title="Xavfsizlik rejimi">
+            <option value="general" selected>General</option>
+            <option value="sudo">Sudo</option>
+          </select>
+        </div>
+        <div class="pill-select-wrap ml-auto">
+          <span class="pill-dot" id="tier-dot"></span>
+          <select id="tier" class="pill-select" title="Model quality vs speed">
+            <option value="high">Yuqori — qwen2.5:7b</option>
+            <option value="medium" selected>O'rtacha — qwen2.5:1.5b</option>
+            <option value="low">Past/tez — qwen2.5:1.5b</option>
+          </select>
+        </div>
+      </div>
+      <div data-composer-part class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
+        <input id="message" type="text" placeholder="Type a message..."
+               class="flex-1 bg-transparent px-2 py-2 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
+               autocomplete="off" />
+        <button id="send" class="bg-[#ececec] hover:bg-white text-[#212121] w-9 h-9 rounded-full flex items-center justify-center transition disabled:opacity-30 shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>`;
+    // Move all top-level children of the fragment into the empty-state slot
+    // initially; showComposerIn() relocates them later without re-creating
+    // anything, so listeners/state stay attached.
+    while (composer.firstChild) composerSlotEmpty.appendChild(composer.firstChild);
+
+    const input = document.getElementById("message");
+    const sendBtn = document.getElementById("send");
+    const modeSelect = document.getElementById("mode");
 
     function updateSudoBanner() {
       sudoBanner.classList.toggle("hidden", modeSelect.value !== "sudo");
@@ -350,6 +378,22 @@
     tierSelect.addEventListener("change", updateTierDot);
     updateModeDot();
     updateTierDot();
+
+    // Moves the composer's actual DOM node (the whole fragment we built
+    // above) between the centered slot and the footer slot.
+    function placeComposer(inFooter) {
+      const targetSlot = inFooter ? composerSlotFooter : composerSlotEmpty;
+      if (targetSlot.contains(input)) return; // already there
+      document.querySelectorAll('[data-composer-part]').forEach(n => targetSlot.appendChild(n));
+    }
+
+    function setEmptyState(isEmpty) {
+      emptyState.classList.toggle("hidden", !isEmpty);
+      chatFooter.classList.toggle("hidden", isEmpty);
+      placeComposer(!isEmpty);
+      if (isEmpty) input.focus();
+    }
+
     const chatHistoryEl = document.getElementById("chat-history");
     const welcomeEl = document.getElementById("welcome");
 
@@ -399,10 +443,9 @@
     function renderMessages() {
       chat.innerHTML = "";
       const active = getActiveChat();
-      if (!active || active.messages.length === 0) {
-        chat.innerHTML = `<div class="text-center text-[#ececec] text-2xl font-medium py-20" id="welcome">What do you want to get done?</div>`;
-        return;
-      }
+      const isEmpty = !active || active.messages.length === 0;
+      setEmptyState(isEmpty);
+      if (isEmpty) return;
       active.messages.forEach(m => addMessage(m.text, m.kind, false));
     }
 
@@ -855,6 +898,7 @@
       const mode = document.getElementById("mode").value || "general";
 
       addMessage(message, "user");
+      setEmptyState(false);
       input.value = "";
       sendBtn.disabled = true;
 
