@@ -353,7 +353,7 @@
     // Ba'zi tarmoqlar/provayderlar Firestore'ning odatiy WebChannel
     // (streaming) ulanishini sekinlashtiradi yoki bloklaydi — bu holatda
     // uzoq muddatli long-polling'ga avtomatik o'tish barqarorlikni oshiradi.
-    db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
+    db.settings({ experimentalForceLongPolling: true, merge: true });
 
     let API_BASE = null;
     let LOGIN_PASS = "";
