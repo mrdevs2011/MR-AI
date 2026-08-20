@@ -18,6 +18,75 @@
     body { background: #212121; }
     #chat { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
     #chat-history { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
+    /* one shared kastom scrollbar for every scrollable box in the app —
+       Firefox uses the scrollbar-width/-color rule above; Chrome/Safari/
+       Edge need the -webkit- pseudo-elements below. Applied broadly so
+       nothing falls back to the OS's default bar. */
+    #chat, #chat-history, .io-content, #term-container, .prose-bot pre {
+      scrollbar-width: thin;
+      scrollbar-color: #4d4d4d transparent;
+    }
+    #chat::-webkit-scrollbar,
+    #chat-history::-webkit-scrollbar,
+    .io-content::-webkit-scrollbar,
+    #term-container::-webkit-scrollbar,
+    .prose-bot pre::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    #chat::-webkit-scrollbar-track,
+    #chat-history::-webkit-scrollbar-track,
+    .io-content::-webkit-scrollbar-track,
+    #term-container::-webkit-scrollbar-track,
+    .prose-bot pre::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #chat::-webkit-scrollbar-thumb,
+    #chat-history::-webkit-scrollbar-thumb,
+    .io-content::-webkit-scrollbar-thumb,
+    #term-container::-webkit-scrollbar-thumb,
+    .prose-bot pre::-webkit-scrollbar-thumb {
+      background-color: #4d4d4d;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    #chat::-webkit-scrollbar-thumb:hover,
+    #chat-history::-webkit-scrollbar-thumb:hover,
+    .io-content::-webkit-scrollbar-thumb:hover,
+    #term-container::-webkit-scrollbar-thumb:hover,
+    .prose-bot pre::-webkit-scrollbar-thumb:hover {
+      background-color: #6a6a6a;
+    }
+
+    /* ---- kill Chrome's yellow/blue autofill background on inputs ---- */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+      -webkit-text-fill-color: #ececec;
+      -webkit-box-shadow: 0 0 0px 1000px #2f2f2f inset;
+      transition: background-color 9999s ease-in-out 0s;
+      caret-color: #ececec;
+    }
+
+    /* ---- one custom focus-ring standard for every interactive element,
+       instead of the browser's default blue outline (or none at all) ---- */
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    a:focus-visible {
+      outline: 2px solid #8e5cf7;
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+    .send-btn:focus-visible,
+    .composer-icon-btn:focus-visible,
+    #header-menu-btn:focus-visible,
+    #logout-btn:focus-visible {
+      outline-offset: 2px;
+      border-radius: 999px;
+    }
     .bubble-user { background: #2f2f2f; color: #ececec; }
     .bubble-bot { color: #ececec; }
     .bubble-pending { background: #2a2213; border: 1px solid #4a3a10; }
@@ -30,6 +99,7 @@
     .login-input:focus {
       border-color: #8e8e8e;
       box-shadow: 0 0 0 3px rgba(255,255,255,0.06);
+      outline: none;
     }
     .login-card {
       background: #212121;
@@ -137,14 +207,37 @@
       background: #2a2a2a;
       color: #ececec;
     }
-    /* flat variant: same select, no pill bg/border — used inside the
-       composer toolbar so it reads as text ("Fast ⌃"), not a badge */
+    /* flat variant: no pill bg/border, sits flush next to its neighbour
+       so "General Fast ⌄" reads as ONE continuous label, Claude-style —
+       only the last one shows a caret, the rest are plain dim text. */
     .pill-select-wrap.flat {
       background: transparent;
       border: none;
-      padding: 4px 2px;
+      border-radius: 6px;
+      padding: 3px 2px;
+      gap: 4px;
     }
-    .pill-select-wrap.flat:hover { background: #3a3a3a; border-radius: 999px; }
+    .pill-select-wrap.flat:hover { background: #3a3a3a; }
+    .pill-select-wrap.flat .pill-dot { display: none; }
+    .pill-select-wrap.flat .pill-select {
+      color: #b3b3b3;
+      font-size: 13px;
+      padding-right: 0;
+      background-image: none;
+    }
+    .pill-select-wrap.flat.has-caret .pill-select {
+      padding-right: 14px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e8e' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right center;
+    }
+    .composer-toolbar-right { gap: 0 !important; }
+    .composer-toolbar-right .divider-dot {
+      color: #6a6a6a;
+      font-size: 12px;
+      margin: 0 1px;
+    }
+    .composer-toolbar-right .send-btn { margin-left: 10px; }
 
     /* ---- composer: bordered box, textarea on top, icon toolbar below ---- */
     .composer-box {
@@ -599,7 +692,7 @@
                 <option value="sudo">Sudo</option>
               </select>
             </div>
-            <div class="pill-select-wrap flat" title="Model quality vs speed">
+            <div class="pill-select-wrap flat has-caret" title="Model quality vs speed">
               <select id="tier" class="pill-select" title="Model quality vs speed">
                 <option value="high">Smart</option>
                 <option value="medium" selected>Fast</option>
