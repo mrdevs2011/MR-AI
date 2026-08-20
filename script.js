@@ -1195,7 +1195,7 @@
             <pre class="whitespace-pre-wrap font-mono text-[12px] text-[#8e8e8e] pl-4 pb-2">${escapeHtml(result)}</pre>
           </details>`;
       }).join("");
-      div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:#262626;">${items}</div>`;
+        div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2">${items}</div>`;
       chat.appendChild(div);
       chatScroll.scrollTop = chatScroll.scrollHeight;
     }
