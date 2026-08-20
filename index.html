@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>mragent</title>
+  <title>MRagent</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="apple-touch-icon" href="splash.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -222,9 +222,9 @@
     <form id="login-form" class="login-card w-full max-w-[400px] p-8 space-y-6">
       <div class="text-center space-y-2">
         <div class="w-9 h-9 mx-auto">
-          <img src="mragent-logo.svg" alt="mragent" width="100%" height="100%" />
+          <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
         </div>
-        <h1 class="font-semibold text-2xl tracking-tight text-[#ececec]">Continue to mragent</h1>
+        <h1 class="font-semibold text-2xl tracking-tight text-[#ececec]">Continue to MRagent</h1>
       </div>
 
       <div class="space-y-3">
@@ -284,10 +284,10 @@
       <div class="px-2 py-2 flex items-center justify-between">
         <div class="sidebar-item flex-1 flex items-center gap-2.5 rounded-lg px-2 py-2 min-w-0 hover:bg-[#2a2a2a]">
           <div class="w-7 h-7 rounded-full overflow-hidden shrink-0" style="background:#ececec;">
-            <img src="mragent-logo.svg" alt="mragent" width="100%" height="100%" />
+            <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
           </div>
           <div class="min-w-0">
-            <p class="text-[13px] truncate text-[#ececec]">mragent</p>
+            <p class="text-[13px] truncate text-[#ececec]">MRagent</p>
             <p class="text-[11px] text-[#8e8e8e]" id="tunnel-status">connecting...</p>
           </div>
         </div>
@@ -339,9 +339,9 @@
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDYkT1b_SOg5T76yhpyRuqnem9YsG53Qn0",
-      authDomain: "mragent-2d280.firebaseapp.com",
-      projectId: "mragent-2d280",
-      storageBucket: "mragent-2d280.firebasestorage.app",
+      authDomain: "MRagent-2d280.firebaseapp.com",
+      projectId: "MRagent-2d280",
+      storageBucket: "MRagent-2d280.firebasestorage.app",
       messagingSenderId: "654437071743",
       appId: "1:654437071743:web:7281d306d8c6cd054c784a",
       measurementId: "G-MZEC0M55WH"
@@ -473,7 +473,7 @@
     // CHAT HISTORY — stored on-device (localStorage), independent of the
     // backend. Each chat: { id, title, messages: [{text, kind}] }
     // ---------------------------------------------------------------------
-    const CHATS_KEY = "mragent_chats";
+    const CHATS_KEY = "MRagent_chats";
     let chats = [];
     let activeChatId = null;
 
@@ -705,8 +705,8 @@
       loginScreen.classList.remove("hidden");
       LOGIN_PASS = "";
       AUTH_TOKEN = "";
-      localStorage.removeItem("mragent_pass");
-      localStorage.removeItem("mragent_token");
+      localStorage.removeItem("MRagent_pass");
+      localStorage.removeItem("MRagent_token");
       loginBtn.disabled = false;
       loginBtn.textContent = "Continue";
       if (errorMsg) {
@@ -746,7 +746,7 @@
           "X-Auth-Token": token,
           "X-Login-Pass": pass
         },
-        body: JSON.stringify({ message: "__mragent_auth_check__", category: "_auth", filename: "check" })
+        body: JSON.stringify({ message: "__MRagent_auth_check__", category: "_auth", filename: "check" })
       });
       return res.status !== 401;
     }
@@ -775,8 +775,8 @@
         if (ok) {
           LOGIN_PASS = pass;
           AUTH_TOKEN = token;
-          localStorage.setItem("mragent_pass", LOGIN_PASS);
-          localStorage.setItem("mragent_token", AUTH_TOKEN);
+          localStorage.setItem("MRagent_pass", LOGIN_PASS);
+          localStorage.setItem("MRagent_token", AUTH_TOKEN);
           showApp();
         } else {
           showLogin("Wrong password or token.");
@@ -1269,8 +1269,8 @@
     // straight into the chat screen — no re-login needed, even after a
     // refresh. Missing or invalid token -> show the login screen.
     async function tryAutoLogin() {
-      const savedPass = localStorage.getItem("mragent_pass");
-      const savedToken = localStorage.getItem("mragent_token");
+      const savedPass = localStorage.getItem("MRagent_pass");
+      const savedToken = localStorage.getItem("MRagent_token");
       if (!savedPass || !savedToken || !API_BASE) {
         showLogin();
         return;
