@@ -216,14 +216,23 @@
 
     function buildComboDropdown() {
       comboDropdown.innerHTML = "";
-      MODE_OPTS.forEach(m => {
+      MODE_OPTS.forEach((m, mi) => {
+        if (mi > 0) {
+          const divider = document.createElement("div");
+          divider.className = "combo-group-divider";
+          comboDropdown.appendChild(divider);
+        }
+        const label = document.createElement("div");
+        label.className = "combo-group-label";
+        label.textContent = m.label;
+        comboDropdown.appendChild(label);
         TIER_OPTS.forEach(t => {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "combo-item";
           btn.dataset.mode = m.value;
           btn.dataset.tier = t.value;
-          btn.innerHTML = `<span class="combo-item-dot" style="background:${MODE_COLORS[m.value]}"></span>${m.label} ${t.label}`;
+          btn.innerHTML = `<span class="combo-item-dot" style="background:${MODE_COLORS[m.value]}"></span>${t.label}`;
           btn.addEventListener("click", () => selectCombo(m.value, t.value));
           comboDropdown.appendChild(btn);
         });
