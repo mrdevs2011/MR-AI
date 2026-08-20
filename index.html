@@ -372,7 +372,6 @@
     const tunnelStatus = document.getElementById("tunnel-status");
     const logoutBtn = document.getElementById("logout-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
-    const sudoBanner = document.getElementById("sudoBanner");
 
     const chatPanel = document.getElementById("chat-panel");
     const bashBtn = document.getElementById("bash-btn");
@@ -426,6 +425,7 @@
     const input = document.getElementById("message");
     const sendBtn = document.getElementById("send");
     const modeSelect = document.getElementById("mode");
+    const sudoBanner = document.getElementById("sudoBanner");
 
     function updateSudoBanner() {
       sudoBanner.classList.toggle("hidden", modeSelect.value !== "sudo");
