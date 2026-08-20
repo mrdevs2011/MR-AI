@@ -228,9 +228,14 @@
       </main>
 
       <footer class="px-4 pb-6 pt-2">
-        <div class="max-w-[720px] mx-auto mb-2 flex gap-3 text-[12px] text-[#8e8e8e]">
+        <div class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
           <input id="category" type="text" value="general" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
           <input id="filename" type="text" value="chat" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
+          <select id="tier" class="bg-transparent border-b border-[#3a3a3a] focus:outline-none focus:border-[#8e8e8e] transition ml-auto" title="Model quality vs speed">
+            <option value="high" selected>⚡ Yuqori — qwen2.5:7b</option>
+            <option value="medium">⚙️ O'rtacha — qwen2.5:3b</option>
+            <option value="low">🚀 Past/tez — qwen2.5:1.5b</option>
+          </select>
         </div>
         <div class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
           <input id="message" type="text" placeholder="Type a message..."
@@ -703,6 +708,7 @@
 
       const category = document.getElementById("category").value.trim() || "general";
       const filename = document.getElementById("filename").value.trim() || "chat";
+      const tier = document.getElementById("tier").value || "high";
 
       addMessage(message, "user");
       input.value = "";
@@ -719,7 +725,7 @@
             "X-Auth-Token": AUTH_TOKEN,
             "X-Login-Pass": LOGIN_PASS
           },
-          body: JSON.stringify({ message, category, filename })
+          body: JSON.stringify({ message, category, filename, tier })
         });
 
         if (res.status === 401) {
