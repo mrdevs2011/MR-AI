@@ -1181,23 +1181,16 @@ function createThoughtPanel() {
       };
     }
 
+    // Har bir step endi to'liq Input/Output kartasi sifatida chiziladi
+    // (addIOCard bilan bir xil ko'rinish) — eski flat "label — target"
+    // ro'yxati o'rniga. command bo'lmagan step'lar (read_file/list_dir/
+    // web_search) uchun target Input o'rnida ko'rsatiladi.
     function addStepsTrail(steps) {
       if (!steps || !steps.length) return;
-      const div = document.createElement("div");
-      div.className = "flex justify-start w-full";
-      const items = steps.map(s => {
-        const label = ACTION_LABELS[s.action] || s.action;
-        const target = s.command || s.path || s.query || "";
-        const result = (s.result || "").slice(0, 400);
-        return `
-          <details class="text-[13px] text-[#a8a8a8]">
-            <summary class="cursor-pointer select-none py-1 hover:text-[#ececec]">${label} — ${escapeHtml(target)}</summary>
-            <pre class="whitespace-pre-wrap font-mono text-[12px] text-[#8e8e8e] pl-4 pb-2">${escapeHtml(result)}</pre>
-          </details>`;
-      }).join("");
-        div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2">${items}</div>`;
-      chat.appendChild(div);
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+      for (const s of steps) {
+        const inputText = s.command || s.path || s.query || "";
+        addIOCard(inputText, s.result || "", true);
+      }
     }
 
     // OpenRouter (bepul model) band bo'lib chaqiruv butunlay
