@@ -33,6 +33,55 @@
       transition: background-color .12s ease;
     }
 
+    /* ---- pill selects (mode / tier) ---- */
+    .pill-select-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      border-radius: 999px;
+      padding: 5px 10px 5px 9px;
+      transition: border-color .15s ease, background-color .15s ease;
+    }
+    .pill-select-wrap:hover {
+      border-color: #4d4d4d;
+    }
+    .pill-select-wrap:focus-within {
+      border-color: #8e5cf7;
+      box-shadow: 0 0 0 3px rgba(142,92,247,0.15);
+    }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #8e8e8e;
+      transition: background-color .15s ease;
+    }
+    .pill-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background: transparent;
+      border: none;
+      color: #d9d9d9;
+      font-size: 12px;
+      font-weight: 500;
+      padding-right: 14px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e8e' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right center;
+      cursor: pointer;
+    }
+    .pill-select:focus {
+      outline: none;
+    }
+    .pill-select option {
+      background: #2a2a2a;
+      color: #ececec;
+    }
+
     /* ---- thinking / live thought-process animation ---- */
     .thinking-row {
       display: flex;
@@ -182,20 +231,6 @@
         </button>
       </div>
 
-      <div class="px-3 mt-2">
-        <p class="text-xs font-medium text-[#8e8e8e] px-3 mb-1">Projects</p>
-        <div class="text-sm text-[#d9d9d9]">
-          <button class="sidebar-item w-full text-left px-3 py-2 rounded-lg hover:bg-[#2a2a2a] flex items-center gap-2.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-[#8e8e8e]"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
-            general
-          </button>
-          <button class="sidebar-item w-full text-left px-3 py-2 rounded-lg hover:bg-[#2a2a2a] flex items-center gap-2.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-[#8e8e8e]"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
-            chat
-          </button>
-        </div>
-      </div>
-
       <div class="px-3 mt-4 flex-1 min-h-0 flex flex-col">
         <p class="text-xs font-medium text-[#8e8e8e] px-3 mb-1">Chats</p>
         <div id="chat-history" class="text-sm text-[#d9d9d9] overflow-y-auto flex-1 min-h-0">
@@ -223,26 +258,30 @@
     <div class="flex-1 flex flex-col min-w-0" style="background:#212121;">
       <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full">
         <div class="text-center text-[#ececec] text-2xl font-medium py-20" id="welcome">
-          Hey! What are we building today? 👋
+          Hey! What are we building today?
         </div>
       </main>
 
       <footer class="px-4 pb-6 pt-2">
         <div id="sudoBanner" class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
-          ⚠️ SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
+          SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
         </div>
         <div class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
-          <input id="category" type="text" value="general" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
-          <input id="filename" type="text" value="chat" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
-          <select id="mode" class="bg-transparent border-b border-[#3a3a3a] focus:outline-none focus:border-[#8e8e8e] transition" title="Xavfsizlik rejimi">
-            <option value="general" selected>🛡️ General</option>
-            <option value="sudo">🔓 Sudo</option>
-          </select>
-          <select id="tier" class="bg-transparent border-b border-[#3a3a3a] focus:outline-none focus:border-[#8e8e8e] transition ml-auto" title="Model quality vs speed">
-            <option value="high" selected>⚡ Yuqori — qwen2.5:7b</option>
-            <option value="medium">⚙️ O'rtacha — qwen2.5:3b</option>
-            <option value="low">🚀 Past/tez — qwen2.5:1.5b</option>
-          </select>
+          <div class="pill-select-wrap">
+            <span class="pill-dot" id="mode-dot"></span>
+            <select id="mode" class="pill-select" title="Xavfsizlik rejimi">
+              <option value="general" selected>General</option>
+              <option value="sudo">Sudo</option>
+            </select>
+          </div>
+          <div class="pill-select-wrap ml-auto">
+            <span class="pill-dot" id="tier-dot"></span>
+            <select id="tier" class="pill-select" title="Model quality vs speed">
+              <option value="high">Yuqori — qwen2.5:7b</option>
+              <option value="medium" selected>O'rtacha — qwen2.5:3b</option>
+              <option value="low">Past/tez — qwen2.5:1.5b</option>
+            </select>
+          </div>
         </div>
         <div class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
           <input id="message" type="text" placeholder="Type a message..."
@@ -298,6 +337,19 @@
     }
     modeSelect.addEventListener("change", updateSudoBanner);
     updateSudoBanner();
+
+    // ---- pill dot colors: quick visual cue instead of emoji ----
+    const modeDot = document.getElementById("mode-dot");
+    const tierSelect = document.getElementById("tier");
+    const tierDot = document.getElementById("tier-dot");
+    const MODE_COLORS = { general: "#4caf7a", sudo: "#ff6b6b" };
+    const TIER_COLORS = { high: "#8e5cf7", medium: "#f5a623", low: "#6b6b6b" };
+    function updateModeDot() { modeDot.style.background = MODE_COLORS[modeSelect.value] || "#8e8e8e"; }
+    function updateTierDot() { tierDot.style.background = TIER_COLORS[tierSelect.value] || "#8e8e8e"; }
+    modeSelect.addEventListener("change", updateModeDot);
+    tierSelect.addEventListener("change", updateTierDot);
+    updateModeDot();
+    updateTierDot();
     const chatHistoryEl = document.getElementById("chat-history");
     const welcomeEl = document.getElementById("welcome");
 
@@ -322,7 +374,9 @@
     }
 
     function getActiveChat() {
-      return chats.find(c => c.id === activeChatId) || null;
+      const c = chats.find(c => c.id === activeChatId) || null;
+      if (c && !c.category) { c.category = "chat_" + c.id; c.filename = "session"; saveChats(); }
+      return c;
     }
 
     function renderChatHistory() {
@@ -360,7 +414,13 @@
     }
 
     function createNewChat() {
-      const newChat = { id: Date.now().toString(36), title: "New chat", messages: [] };
+      const newChat = {
+        id: Date.now().toString(36),
+        title: "New chat",
+        messages: [],
+        category: "chat_" + Date.now().toString(36),
+        filename: "session"
+      };
       chats.push(newChat);
       saveChats();
       switchChat(newChat.id);
@@ -521,11 +581,11 @@
     }
 
     const ACTION_LABELS = {
-      command: "💻 command",
-      read_file: "📄 read",
-      write_file: "✍️ write",
-      list_dir: "📂 folder",
-      web_search: "🔎 search"
+      command: "command",
+      read_file: "read",
+      write_file: "write",
+      list_dir: "folder",
+      web_search: "search"
     };
 
     const ACTION_VERBS = {
@@ -574,7 +634,7 @@
           // keep the animated row going for whatever comes next.
           const line = document.createElement("div");
           line.className = "thought-line";
-          line.innerHTML = `<span class="check">✓</span><span>${escapeHtml(text)}</span>`;
+          line.innerHTML = `<span class="check">·</span><span>${escapeHtml(text)}</span>`;
           logEl.appendChild(line);
           chat.scrollTop = chat.scrollHeight;
         },
@@ -608,7 +668,7 @@
       div.className = "flex justify-start";
       div.innerHTML = `
         <button class="bg-amber-600 hover:bg-amber-500 text-[13px] px-4 py-2 rounded-full transition" data-cmdid="${commandId}">
-          ✓ Confirm and run
+          Confirm and run
         </button>`;
       div.querySelector("button").addEventListener("click", async (e) => {
         e.target.disabled = true;
@@ -631,14 +691,14 @@
       div.innerHTML = `
         <div class="max-w-full w-full rounded-2xl px-4 py-3 space-y-2" style="background:#3a1414; border:1px solid #5c1f1f;">
           <div class="text-[13px] font-semibold" style="color:#ff6b6b;">
-            ⚠️ XAVFLI, QAYTARIB BO'LMAYDIGAN KOMANDA
+            XAVFLI, QAYTARIB BO'LMAYDIGAN KOMANDA
           </div>
           <div class="text-[13px] font-mono px-2 py-1.5 rounded" style="background:#1a0d0d; color:#ffb4b4; white-space:pre-wrap; word-break:break-all;">${escapeHtml(commandText)}</div>
           <div class="text-[12px]" style="color:#e8a0a0;">Tasdiqlash uchun komandani XATOSIZ qayta yoz:</div>
           <input type="text" class="danger-typed w-full bg-transparent border rounded px-2 py-1.5 text-[13px] font-mono focus:outline-none" style="border-color:#5c1f1f; color:#ffb4b4;" placeholder="${escapeHtml(commandText)}" autocomplete="off" spellcheck="false" />
           <div class="danger-error text-[12px] hidden" style="color:#ff6b6b;">Mos kelmadi yoki noto'g'ri — qaytadan urin.</div>
           <button class="danger-btn w-full bg-red-800 text-[13px] px-4 py-2 rounded-full transition opacity-40 cursor-not-allowed" disabled>
-            ✓ Tasdiqlab bajarish
+            Tasdiqlab bajarish
           </button>
         </div>`;
 
@@ -670,7 +730,7 @@
         } else {
           errorEl.classList.remove("hidden");
           btn.disabled = false;
-          btn.textContent = "✓ Tasdiqlab bajarish";
+          btn.textContent = "Tasdiqlab bajarish";
         }
       });
 
@@ -788,8 +848,9 @@
       const message = input.value.trim();
       if (!message) return;
 
-      const category = document.getElementById("category").value.trim() || "general";
-      const filename = document.getElementById("filename").value.trim() || "chat";
+      const active = getActiveChat();
+      const category = (active && active.category) || "general";
+      const filename = (active && active.filename) || "chat";
       const tier = document.getElementById("tier").value || "high";
       const mode = document.getElementById("mode").value || "general";
 
