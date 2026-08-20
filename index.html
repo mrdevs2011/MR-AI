@@ -737,6 +737,7 @@
 
         if (doc.exists && doc.data().url) {
           API_BASE = doc.data().url.replace(/\/$/, "");
+          localStorage.setItem("MRagent_tunnel", API_BASE);
           loginTunnelStatus.textContent = "tunnel connected, enter your password and token";
         } else {
           loginTunnelStatus.textContent = "tunnel not found (Firestore empty)";
@@ -1334,33 +1335,53 @@
       }
     });
 
-    // On load: if localStorage has a saved token, verify it and jump
-    // straight into the chat screen — no re-login needed, even after a
-    // refresh. Missing or invalid token -> show the login screen.
-    async function tryAutoLogin() {
+    // On load: if localStorage has a saved token, jump straight into the
+    // chat screen — no re-login, no network round-trip needed. The token
+    // is trusted purely from local storage; if it's actually invalid, the
+    // very first real /chat call will get a 401 from the backend and
+    // sendMessage()'s existing 401 handler bounces back to the login
+    // screen at that point — a dedicated "verify on boot" call added a
+    // network wait for no real benefit, since the backend checks the
+    // token on every request anyway.
+    function tryAutoLogin() {
       const savedPass = localStorage.getItem("MRagent_pass");
       const savedToken = localStorage.getItem("MRagent_token");
       if (!savedPass || !savedToken || !API_BASE) {
         showLogin();
         return;
       }
-      try {
-        const ok = await verifyToken(savedPass, savedToken);
-        if (ok) {
-          LOGIN_PASS = savedPass;
-          AUTH_TOKEN = savedToken;
-          showApp();
-        } else {
-          showLogin();
-        }
-      } catch (err) {
-        showLogin();
-      }
+      LOGIN_PASS = savedPass;
+      AUTH_TOKEN = savedToken;
+      showApp();
     }
 
     (async () => {
+      // Keshlangan tunnel URL bo'lsa — Firestore'ni umuman kutmasdan
+      // DARHOL shu bilan urinib ko'ramiz. Token har doim faqat
+      // localStorage'dan olinadi, hech qanday tarmoq tekshiruvi yo'q —
+      // bu ilgari har safar Firestore'ni kutib turadigan sekinlikni olib
+      // tashlaydi — chunki tunnel manzili odatda sessiyalar orasida
+      // o'zgarmaydi (backend qayta ishga tushmasa).
+      const cachedTunnel = localStorage.getItem("MRagent_tunnel");
+      const savedPass = localStorage.getItem("MRagent_pass");
+      const savedToken = localStorage.getItem("MRagent_token");
+
+      if (cachedTunnel && savedPass && savedToken) {
+        API_BASE = cachedTunnel;
+        LOGIN_PASS = savedPass;
+        AUTH_TOKEN = savedToken;
+        showApp();
+        // Kesh eskirgan bo'lishi mumkin (tunnel o'zgargan bo'lsa) —
+        // ekran allaqachon ochilgani uchun bu endi foydalanuvchini
+        // kutdirmaydi, orqa fonda jim yangilanadi. Agar keshlangan
+        // tunnel chindan o'lik bo'lsa, birinchi /chat so'rovi
+        // ulanolmay xato beradi — o'sha yerda ko'rinadi.
+        loadTunnelUrl();
+        return;
+      }
+
       await loadTunnelUrl();
-      await tryAutoLogin();
+      tryAutoLogin();
     })();
   </script>
 </body>
