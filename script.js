@@ -79,29 +79,59 @@
     // The icon's own screen position depends only on #chat-header's flex
     // layout, which never references #sidebar's width/position at all —
     // so the icon truly never shifts, no matter which state fires.
+    let previewFadeOutTimer = null;
+    let sidebarCloseTimer = null;
+    const PREVIEW_FADE_MS = 220; // CSS opacity transition davomiyligi bilan bir xil
+    const SIDEBAR_CLOSE_DELAY = 350; // ms — "sekin yopilish" uchun kutish vaqti
+
     function setSidebarPinned(pinned) {
+      // Pin/unpin har doim pending preview holatini butunlay hal qiladi —
+      // fade-out timer va sidebar-close timer ishlab turgan bo'lsa ham
+      // bekor qilinadi. Buni qilmasak, tez-tez bosilganda eski timerlar
+      // keyinroq ishga tushib klasslarni kutilmaganda o'zgartirib,
+      // "diqir-diqir" effekt beradi.
+      if (previewFadeOutTimer) { clearTimeout(previewFadeOutTimer); previewFadeOutTimer = null; }
+      if (sidebarCloseTimer) { clearTimeout(sidebarCloseTimer); sidebarCloseTimer = null; }
       sidebarEl.classList.toggle("pinned", pinned);
-      sidebarEl.classList.remove("hover-preview"); // pin/unpin always resolves any pending preview
+      sidebarEl.classList.remove("hover-preview", "preview-visible");
       sidebarBackdrop.classList.toggle("hidden", !pinned || !isMobileLayout());
+      requestAnimationFrame(positionHeaderMenuBtn);
     }
     function toggleSidebarPin() {
       setSidebarPinned(!sidebarEl.classList.contains("pinned"));
     }
+
     function showSidebarPreview() {
       if (sidebarEl.classList.contains("pinned")) return; // already fully open, nothing to preview
+      if (previewFadeOutTimer) { clearTimeout(previewFadeOutTimer); previewFadeOutTimer = null; }
       sidebarEl.classList.add("hover-preview");
+      // Bir frame kechikish bilan "preview-visible" qo'shiladi — shu orqali
+      // brauzer avval opacity:0 holatini "sezib qoladi", keyingina 1'ga
+      // o'tadi va CSS transition ishga tushadi (aks holda ikkalasi bitta
+      // frame'da qo'shilsa, transition sezilmay, darrov 1 bo'lib qoladi).
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => sidebarEl.classList.add("preview-visible"));
+      });
     }
     function hideSidebarPreview() {
-      sidebarEl.classList.remove("hover-preview");
+      if (!sidebarEl.classList.contains("hover-preview")) return;
+      // Avval faqat opacity'ni 0'ga tushiramiz (fade OUT boshlanadi) —
+      // "hover-preview" klassini darrov olib tashlamaymiz, aks holda
+      // position:absolute/width darrov yo'qolib, fade-out ko'rinmay
+      // qoladi. Fade tugagach (PREVIEW_FADE_MS) hover-preview'ni ham
+      // olib tashlaymiz — shundagina sidebar butunlay flow'dan chiqadi.
+      sidebarEl.classList.remove("preview-visible");
+      if (previewFadeOutTimer) clearTimeout(previewFadeOutTimer);
+      previewFadeOutTimer = setTimeout(() => {
+        sidebarEl.classList.remove("hover-preview");
+        previewFadeOutTimer = null;
+      }, PREVIEW_FADE_MS);
     }
 
     // ---- Hover bilan ochilish / sekin yopilish (faqat sichqonchali,
     // desktop qurilmalarda) — Claude.ai'dagi kabi. Touch qurilmalarda
     // (telefon/planshet) esa oddiy tap-toggle ishlaydi, chunki ularda
     // "hover" degan holat umuman yo'q. ----
-    let sidebarCloseTimer = null;
-    const SIDEBAR_CLOSE_DELAY = 350; // ms — "sekin yopilish" uchun kutish vaqti
-
     function cancelSidebarCloseTimer() {
       if (sidebarCloseTimer) { clearTimeout(sidebarCloseTimer); sidebarCloseTimer = null; }
     }
@@ -142,11 +172,98 @@
 
     sidebarBackdrop?.addEventListener("click", () => setSidebarPinned(false));
 
-    // Mobile boshlanishida sidebar yopiq (slide-over), desktopda ochiq
-    // (pinned). Mobile'da "preview" degan holat umuman yo'q — faqat pinned
-    // yoki yo'q, xuddi eski "collapsed" kabi, shuning uchun bu yerda ham
-    // pinned ishlatiladi: pinned=true means "open".
-    setSidebarPinned(!isMobileLayout());
+    // ---- Sidebar'ning o'ziga (hover-preview paytida) 1 marta bosilsa —
+    // shu preview PINNED holatga "qotib qoladi". Interaktiv elementlar
+    // (chat qatorlari, New chat, Bash, qidiruv, sign out va h.k.) o'zining
+    // click handleri bor — ular bosilganda pin qilish TALAB QILINMAYDI,
+    // aks holda masalan chat tanlash bilan pin qilish bir bosishda ikki
+    // ish qilib yuborardi. Shuning uchun faqat sidebar'ning "bo'sh joyi"ga
+    // (masalan overlay foni) bosilsa pin bo'ladi — closest("button, input,
+    // a") orqali interaktiv elementlar chetlab o'tiladi. ----
+    sidebarEl?.addEventListener("click", (e) => {
+      if (!sidebarEl.classList.contains("hover-preview")) return; // faqat preview holatida ishlaydi
+      if (e.target.closest("button, input, a, [role='button']")) return; // interaktiv elementlar o'z ishini qilsin
+      setSidebarPinned(true);
+    });
+
+    // ---- header-menu-btn: sidebar PINNED bo'lganda sidebar ICHIGA,
+    // uning o'ng chetiga smooth "uchib o'tadi".
+    //
+    // MUHIM TUZATISH: shunchaki translateX bilan icon FLEX OQIMIDA joy
+    // egallab qolaveradi (transform layout'ga ta'sir qilmaydi) — bu
+    // hisoblashda ikki marta hisoblanishga va iconning sidebar chegarasidan
+    // "otilib chiqishiga" olib kelgan (screenshot'dagi bug shu edi).
+    // Yechim: pinned bo'lganda icon `position: fixed`ga o'tkaziladi — bu
+    // uni butunlay flex oqimidan chiqarib tashlaydi va endi u faqat
+    // ekrandagi aniq x/y koordinataga qarab joylashadi (viewport'ga
+    // nisbatan), xuddi sidebar panelining bir qismidek. #chat-title esa
+    // icon bo'shatgan joyni margin-left bilan egallaydi (bu haqiqiy layout
+    // o'zgarishi, transform emas — shuning uchun aniq va barqaror).
+    const headerTitleEl = document.getElementById("chat-title");
+    const HEADER_BTN_SIZE = 36; // w-9 h-9 = 36px
+    const HEADER_BTN_MARGIN = 8; // sidebar o'ng chetidan bo'shliq
+
+    function positionHeaderMenuBtn() {
+      if (!headerMenuBtn || !sidebarEl) return;
+      const pinned = sidebarEl.classList.contains("pinned");
+      const brandEl = document.getElementById("sidebar-brand");
+      if (!pinned) {
+        headerMenuBtn.style.position = "";
+        headerMenuBtn.style.top = "";
+        headerMenuBtn.style.left = "";
+        if (headerTitleEl) headerTitleEl.style.marginLeft = "";
+        if (brandEl) brandEl.classList.add("hidden");
+        return;
+      }
+      const sbRect = sidebarEl.getBoundingClientRect();
+      const headerRect = document.getElementById("chat-header")?.getBoundingClientRect();
+      const topY = headerRect ? headerRect.top + (headerRect.height - HEADER_BTN_SIZE) / 2 : 10;
+      // Icon endi position:fixed — viewport koordinatasi bo'yicha, sidebar
+      // o'ng chetidan HEADER_BTN_MARGIN qadar ichkariga qo'yiladi.
+      headerMenuBtn.style.position = "fixed";
+      headerMenuBtn.style.top = `${topY}px`;
+      headerMenuBtn.style.left = `${sbRect.right - HEADER_BTN_SIZE - HEADER_BTN_MARGIN}px`;
+      // Title endi icon flow'dan chiqib ketgani uchun bo'shagan joyni
+      // margin-left bilan egallaydi — icon kengligi + orasidagi bo'shliq
+      // qadar chapdan bo'sh joy qoldiradi, shu bilan sidebar tagidan
+      // "sizib chiqib" o'z-o'zidan to'g'ri joyga o'tiradi.
+      if (headerTitleEl) {
+        headerTitleEl.style.marginLeft = `${HEADER_BTN_SIZE + 4}px`;
+      }
+      // Icon sidebar ICHIGA o'tib, o'ng chetga joylashgach — sidebar'ning
+      // o'zida "MRagent" logo+yozuv paydo bo'ladi (xuddi icon o'ng chetga
+      // o'tib, o'z o'rnini shu brendga bo'shatib bergandek).
+      if (brandEl) brandEl.classList.remove("hidden");
+    }
+
+    let headerBtnTrackRAF = null;
+    // Sidebar width'i CSS transition orqali .22s ichida 0 <-> 320px
+    // o'zgaradi. Icon/title shu bilan bir xil tezlikda "suzib" borishi
+    // uchun, bitta getBoundingClientRect emas — transition davomida har
+    // frame'da qayta o'lchab, positionHeaderMenuBtn'ni qayta chaqiramiz.
+    // ~260ms (transition + bir oz zaxira) dan keyin avtomatik to'xtaydi.
+    function trackHeaderMenuBtnDuringTransition() {
+      if (headerBtnTrackRAF) cancelAnimationFrame(headerBtnTrackRAF);
+      const start = performance.now();
+      const DURATION = 260;
+      function step(now) {
+        positionHeaderMenuBtn();
+        if (now - start < DURATION) {
+          headerBtnTrackRAF = requestAnimationFrame(step);
+        } else {
+          headerBtnTrackRAF = null;
+        }
+      }
+      headerBtnTrackRAF = requestAnimationFrame(step);
+    }
+
+    window.addEventListener("resize", () => positionHeaderMenuBtn());
+
+    // Default holat: sidebar YOPIQ boshlanadi — ham mobile, ham desktop'da.
+    // (Ilgari desktop'da pinned=true bo'lardi, endi hamma qurilmada yopiq
+    // holatdan boshlanadi; desktop foydalanuvchisi hover yoki click bilan
+    // ochadi.)
+    setSidebarPinned(false);
     // Ekran kengligi o'zgarsa (masalan, tablet burilganda) backdrop
     // holatini shunga moslab qayta hisoblaymiz.
     window.addEventListener("resize", () => {

@@ -167,8 +167,8 @@ textarea:focus-visible:not(.composer-textarea) {
   min-width: 0;
   overflow: hidden;
   position: relative;
-  transition: width .2s ease, min-width .2s ease, padding .2s ease,
-              background-color .15s ease;
+  /* Kenglik instant o'zgaradi — hech qanday slide/width animatsiyasi yo'q. */
+  transition: none;
 }
 
 /* PINNED — click bilan yoqilgan. Haqiqiy layout kengligi, chat panel
@@ -176,8 +176,8 @@ textarea:focus-visible:not(.composer-textarea) {
    #sidebar background override qoidasi yonida belgilangan — bir joyda
    bitta manba, ikki joyda takrorlanmasin deb. */
 .sidebar-collapsible.pinned {
-  width: 288px; /* w-72 ekvivalenti — asosiy, "doimiy ochiq" kenglik */
-  min-width: 288px;
+  width: 320px; /* preview kengligi bilan bir xil — click qilganda qisqarib ketmasin */
+  min-width: 320px;
 }
 
 /* HOVER-PREVIEW — faqat mouseenter bilan, pinned BO'LMAGANDA. Overlay:
@@ -193,16 +193,22 @@ textarea:focus-visible:not(.composer-textarea) {
   width: 320px;
   z-index: 45; /* chat-panel va uning header'idan tepada, ammo backdrop/modal'lardan past */
   box-shadow: 4px 0 24px rgba(0,0,0,.35), 1px 0 0 var(--border);
-  animation: sidebarPreviewIn .16s cubic-bezier(.16,1,.3,1);
+  /* Fade IN va fade OUT ikkalasi ham shu opacity transition orqali —
+     .preview-visible klassi JS tomonidan bir frame kechikish bilan
+     qo'shiladi/olib tashlanadi (pastdagi izohga qarang). */
+  opacity: 0;
+  transition: opacity .22s ease;
 }
-@keyframes sidebarPreviewIn {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
+.sidebar-collapsible.hover-preview.preview-visible:not(.pinned) {
+  opacity: 1;
 }
 
-.sidebar-fade {
-  transition: opacity .12s ease;
-  opacity: 1;
+/* Sidebar preview/pinned ochilganda ichki kontent (New chat, Bash va h.k.)
+   header'dagi hamburger icon bilan bir qatorda chiqmasin deb, header
+   balandligi (h-14 = 56px) qadar yuqoridan bo'sh joy qo'shiladi — shu
+   bo'sh joydan keyin "New chat" tugmasi boshlanadi. */
+.sidebar-collapsible > *:first-child {
+  margin-top: 56px;
 }
 /* Ichki kontent (matnlar, tugmalar) faqat sidebar chinakam kengaygan
    paytda ko'rinadi — default (icon-only) width:0 holatida befoyda
@@ -232,8 +238,7 @@ textarea:focus-visible:not(.composer-textarea) {
   #sidebar:not(.pinned) .sidebar-fade { opacity: 0; pointer-events: none; }
   #sidebar.pinned .sidebar-fade { opacity: 1; pointer-events: auto; }
   #sidebar-backdrop:not(.hidden) { display: block; }
-}
-#sidebar-backdrop {
+}#sidebar-backdrop {
   position: fixed; inset: 0; z-index: 30;
   background: rgba(61,57,41,0.35);
 }
@@ -247,7 +252,15 @@ textarea:focus-visible:not(.composer-textarea) {
 #header-menu-btn {
   position: relative;
   z-index: 50;
+  /* Hech qanday slide/harakat animatsiyasi yo'q — pozitsiya instant
+     o'zgaradi. Faqat fade (opacity) kerak bo'lgan joylarda ishlatiladi. */
+  transition: none;
 }
+#sidebar-brand {
+  transition: opacity .22s ease;
+}
+#sidebar-brand.hidden { display: none; }
+#sidebar-brand:not(.hidden) { display: flex; }
 #chat-title {
   opacity: 0;
   animation: chatTitleFadeIn .5s ease forwards;
@@ -867,7 +880,8 @@ body,
   background: var(--bg) !important;
 }
 #sidebar:not(.pinned) { background: var(--bg-sidebar) !important; }
-#sidebar.pinned { background: var(--bg-sidebar-pinned) !important; }
+#sidebar.pinned { background: #111111 !important; }
+#sidebar.hover-preview:not(.pinned) { background: #20201f !important; }
 
 /* avatar doiralari: inline style="background:#ececec" — terracotta qildik */
 [style*="background:#ececec"] { background: var(--accent) !important; }
