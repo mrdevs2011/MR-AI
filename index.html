@@ -21,6 +21,7 @@
     .bubble-user { background: #2f2f2f; color: #ececec; }
     .bubble-bot { color: #ececec; }
     .bubble-pending { background: #2a2213; border: 1px solid #4a3a10; }
+    .bubble-error { background: #2a1414; border: 1px solid #4a1f1f; color: #f2a1a1; }
     .login-input {
       background: #2f2f2f;
       border: 1px solid #4d4d4d;
@@ -721,18 +722,49 @@
     }
 
     async function loadTunnelUrl() {
+      loginTunnelStatus.textContent = "looking for tunnel...";
       try {
-        const doc = await db.collection("config").doc("tunnel").get();
+        // Firestore'ning o'z "offline" deb qaror qilishi ichki SDK
+        // darajasida juda uzoq davom etishi mumkin (ayniqsa ad-blocker
+        // ulanishni qayta-qayta bloklab, retry-loop hosil qilsa — 30-60+
+        // soniyagacha). Foydalanuvchini shuncha kutdirish o'rniga, o'zimiz
+        // 6 soniyadan keyin to'xtatamiz va aniq xabar + retry beramiz.
+        const docPromise = db.collection("config").doc("tunnel").get();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 6000)
+        );
+        const doc = await Promise.race([docPromise, timeoutPromise]);
+
         if (doc.exists && doc.data().url) {
           API_BASE = doc.data().url.replace(/\/$/, "");
           loginTunnelStatus.textContent = "tunnel connected, enter your password and token";
         } else {
           loginTunnelStatus.textContent = "tunnel not found (Firestore empty)";
+          showTunnelRetry();
         }
       } catch (e) {
-        loginTunnelStatus.textContent = "Firestore error";
+        const isTimeout = e && e.message === "timeout";
+        loginTunnelStatus.textContent = isTimeout
+          ? "connection is slow/blocked — check your ad-blocker, then retry"
+          : "Firestore error — check your connection";
         console.error(e);
+        showTunnelRetry();
       }
+    }
+
+    function showTunnelRetry() {
+      let btn = document.getElementById("tunnel-retry-btn");
+      if (btn) return; // allaqachon ko'rsatilgan
+      btn = document.createElement("button");
+      btn.id = "tunnel-retry-btn";
+      btn.type = "button";
+      btn.textContent = "Qayta urinib ko'rish";
+      btn.className = "w-full text-[13px] text-[#ececec] bg-[#2f2f2f] hover:bg-[#3a3a3a] rounded-xl py-2 mt-2 transition";
+      btn.addEventListener("click", () => {
+        btn.remove();
+        loadTunnelUrl();
+      });
+      loginTunnelStatus.insertAdjacentElement("afterend", btn);
     }
 
     // No dedicated endpoint exists just to check credentials, so we ping
@@ -799,6 +831,7 @@
       const div = document.createElement("div");
       const isUser = kind === "user";
       const isPending = kind === "pending";
+      const isError = kind === "error";
       div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
       if (isUser) {
         div.innerHTML = `
@@ -810,6 +843,14 @@
         // monospace is correct here, this isn't prose.
         div.innerHTML = `
           <div class="max-w-full w-full text-[15px] leading-relaxed bubble-pending rounded-2xl px-4 py-2.5">
+            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+          </div>`;
+      } else if (isError) {
+        // OpenRouter band/timeout bo'lganda backend shu turdagi xabar
+        // yuboradi — bu model javobi emas, tizim holati, shuning uchun
+        // alohida (qizil) ko'rinishda, oddiy chat pufagidan ajratib.
+        div.innerHTML = `
+          <div class="max-w-full w-full text-[15px] leading-relaxed bubble-error rounded-2xl px-4 py-2.5">
             <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
           </div>`;
       } else {
@@ -953,6 +994,28 @@
           </details>`;
       }).join("");
       div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:#262626;">${items}</div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // OpenRouter (bepul model) band bo'lib chaqiruv butunlay
+    // muvaffaqiyatsiz tugaganda backend "error" kind yuboradi. Bu odatda
+    // vaqtinchalik (navbat/rate-limit) bo'lgani uchun bir tugma bosib
+    // xuddi shu xabarni qayta yuborish imkonini beramiz.
+    function addRetryButton(originalMessage) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <button class="bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[13px] px-4 py-2 rounded-full transition">
+          Qayta urinib ko'rish
+        </button>`;
+      div.querySelector("button").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = "yuborilmoqda...";
+        div.remove();
+        input.value = originalMessage;
+        await sendMessage();
+      });
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -1236,6 +1299,12 @@
               } else if (evt.kind === "blocked") {
                 addStepsTrail(evt.steps);
                 addMessage(evt.response, "pending");
+              } else if (evt.kind === "error") {
+                addStepsTrail(evt.steps);
+                addMessage(evt.response, "error");
+                if (evt.retryable) {
+                  addRetryButton(message);
+                }
               } else {
                 addStepsTrail(evt.steps);
                 await addMessageTyped(evt.response || "No response");
