@@ -61,8 +61,32 @@
       opacity: 0;
       pointer-events: none;
     }
-    #sidebar-open-btn.visible {
-      display: flex;
+    /* ---- mobile: sidebar becomes a slide-over instead of pushing content ---- */
+    @media (max-width: 767px) {
+      #sidebar {
+        position: fixed;
+        top: 0; left: 0; bottom: 0;
+        z-index: 40;
+        width: 82vw !important;
+        max-width: 300px;
+        min-width: 0 !important;
+        transform: translateX(-100%);
+        transition: transform .22s ease;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+      #sidebar.collapsed { transform: translateX(-100%); }
+      #sidebar:not(.collapsed) { transform: translateX(0); }
+      #sidebar-backdrop:not(.hidden) { display: block; }
+    }
+    #sidebar-backdrop {
+      position: fixed; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.55);
+    }
+
+    /* ---- top header bar above the chat (menu icon + chat title) ---- */
+    #chat-header {
+      border-bottom: 1px solid #2a2a2a;
     }
 
     /* ---- pill selects (mode / tier) ---- */
@@ -113,6 +137,76 @@
       background: #2a2a2a;
       color: #ececec;
     }
+    /* flat variant: same select, no pill bg/border — used inside the
+       composer toolbar so it reads as text ("Fast ⌃"), not a badge */
+    .pill-select-wrap.flat {
+      background: transparent;
+      border: none;
+      padding: 4px 2px;
+    }
+    .pill-select-wrap.flat:hover { background: #3a3a3a; border-radius: 999px; }
+
+    /* ---- composer: bordered box, textarea on top, icon toolbar below ---- */
+    .composer-box {
+      border: 1px solid #3a3a3a;
+      border-radius: 26px;
+      background: #2f2f2f;
+      padding: 12px 12px 8px 16px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .composer-box:focus-within {
+      border-color: #5c5c5c;
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.04);
+    }
+    .composer-textarea {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      resize: none;
+      color: #ececec;
+      font-size: 15px;
+      line-height: 1.5;
+      max-height: 200px;
+      padding: 2px 0 10px 0;
+      font-family: inherit;
+    }
+    .composer-textarea::placeholder { color: #8e8e8e; }
+    .composer-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .composer-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .composer-icon-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #d9d9d9;
+      background: transparent;
+      border: 1px solid #4d4d4d;
+      transition: background-color .12s ease, border-color .12s ease;
+      flex-shrink: 0;
+    }
+    .composer-icon-btn:hover { background: #3a3a3a; }
+    .send-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #ececec;
+      color: #212121;
+      display: flex; align-items: center; justify-content: center;
+      border: none;
+      transition: background-color .12s ease, opacity .12s ease;
+      flex-shrink: 0;
+    }
+    .send-btn:hover { background: #fff; }
+    .send-btn:disabled { opacity: .3; }
 
     /* ---- thinking / live thought-process animation ---- */
     .thinking-row {
@@ -284,14 +378,10 @@
 
     <!-- =================== SIDEBAR =================== -->
     <aside id="sidebar" class="w-64 shrink-0 flex flex-col sidebar-collapsible" style="background:#171717;">
-      <div class="px-3 py-3 flex items-center gap-1">
-        <button id="sidebar-toggle-btn" title="Sidebar'ni yopish/ochish"
-                class="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <line x1="9" y1="4" x2="9" y2="20"/>
-          </svg>
-        </button>
+      <div class="px-3 py-3 flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full overflow-hidden shrink-0" style="background:#ececec;">
+          <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+        </div>
         <span id="sidebar-title" class="text-sm text-[#ececec] font-medium sidebar-fade">MRagent</span>
       </div>
       <div class="px-3 py-3 space-y-1 sidebar-fade">
@@ -335,24 +425,30 @@
       </div>
     </aside>
 
-    <!-- Sidebar yopiq holatda ekanida chatning yuqori chap burchagida
-         paydo bo'ladigan mustaqil ochish tugmasi (Claude'dagi kabi) -->
-    <button id="sidebar-open-btn" title="Sidebar'ni ochish"
-            class="hidden fixed top-3 left-3 z-20 items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="4" width="18" height="16" rx="2"/>
-        <line x1="9" y1="4" x2="9" y2="20"/>
-      </svg>
-    </button>
+    <!-- Darkened backdrop behind the sidebar when it's opened as a
+         slide-over on mobile; tapping it closes the sidebar again. -->
+    <div id="sidebar-backdrop" class="hidden"></div>
 
     <!-- =================== MAIN CHAT =================== -->
     <div id="chat-panel" class="flex-1 flex flex-col min-w-0 relative" style="background:#212121;">
+      <!-- Header: single menu icon (opens/closes the sidebar on any screen
+           size) + the active chat's title, matching the mockup. -->
+      <header id="chat-header" class="shrink-0 h-14 flex items-center gap-1 px-2">
+        <button id="header-menu-btn" title="Chats"
+                class="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <line x1="9" y1="4" x2="9" y2="20"/>
+          </svg>
+        </button>
+        <span id="chat-title" class="text-[15px] font-medium text-[#ececec] truncate px-1">MRagent</span>
+      </header>
       <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></main>
 
       <!-- Empty-state: centered greeting + input, ChatGPT-style. Hidden the
            moment the first message goes out; the bottom-pinned footer
            below takes over from then on. -->
-      <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center px-4">
+      <div id="empty-state" class="absolute inset-x-0 bottom-0 top-14 flex flex-col items-center justify-center px-4">
         <div class="w-full max-w-[720px]">
           <div class="text-center text-[#ececec] text-2xl font-medium mb-6" id="welcome">
             Hey! What are we building today?
@@ -437,16 +533,35 @@
     // yangilanishida sidebar ochiq holatda boshlanadi.
     // ---------------------------------------------------------------------
     const sidebarEl = document.getElementById("sidebar");
-    const sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
-    const sidebarOpenBtn = document.getElementById("sidebar-open-btn");
+    const headerMenuBtn = document.getElementById("header-menu-btn");
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+
+    function isMobileLayout() { return window.innerWidth < 768; }
 
     function setSidebarCollapsed(collapsed) {
       sidebarEl.classList.toggle("collapsed", collapsed);
-      sidebarOpenBtn.classList.toggle("visible", collapsed);
+      sidebarBackdrop.classList.toggle("hidden", collapsed || !isMobileLayout());
+    }
+    function toggleSidebar() {
+      setSidebarCollapsed(!sidebarEl.classList.contains("collapsed"));
     }
 
-    sidebarToggleBtn?.addEventListener("click", () => setSidebarCollapsed(true));
-    sidebarOpenBtn?.addEventListener("click", () => setSidebarCollapsed(false));
+    headerMenuBtn?.addEventListener("click", toggleSidebar);
+    sidebarBackdrop?.addEventListener("click", () => setSidebarCollapsed(true));
+
+    // Mobile boshlanishida sidebar yopiq (slide-over), desktopda ochiq.
+    setSidebarCollapsed(isMobileLayout());
+    // Ekran kengligi o'zgarsa (masalan, tablet burilganda) backdrop
+    // holatini shunga moslab qayta hisoblaymiz.
+    window.addEventListener("resize", () => {
+      if (!isMobileLayout()) sidebarBackdrop.classList.add("hidden");
+    });
+    // Mobil rejimda: chatga kirilganda (yangi chat yoki mavjud chat
+    // tanlanganda) sidebar avtomatik yopilsin — foydalanuvchi ChatGPT/
+    // Claude ilovalaridagidek to'g'ridan-to'g'ri suhbatga tushadi.
+    function closeSidebarOnMobile() {
+      if (isMobileLayout()) setSidebarCollapsed(true);
+    }
 
 
     const chatPanel = document.getElementById("chat-panel");
@@ -468,30 +583,34 @@
       <div id="sudoBanner" data-composer-part class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
         SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
       </div>
-      <div data-composer-part class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
-        <div class="pill-select-wrap">
-          <span class="pill-dot" id="mode-dot"></span>
-          <select id="mode" class="pill-select" title="Xavfsizlik rejimi">
-            <option value="general" selected>General</option>
-            <option value="sudo">Sudo</option>
-          </select>
+      <div data-composer-part class="max-w-[720px] mx-auto composer-box">
+        <textarea id="message" rows="1" placeholder="Write a message..."
+               class="composer-textarea" autocomplete="off"></textarea>
+        <div class="composer-toolbar">
+          <button id="attach-btn" type="button" title="Attach a file"
+                  class="composer-icon-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+          </button>
+          <div class="composer-toolbar-right">
+            <div class="pill-select-wrap flat" title="Xavfsizlik rejimi">
+              <span class="pill-dot" id="mode-dot"></span>
+              <select id="mode" class="pill-select" title="Xavfsizlik rejimi">
+                <option value="general" selected>General</option>
+                <option value="sudo">Sudo</option>
+              </select>
+            </div>
+            <div class="pill-select-wrap flat" title="Model quality vs speed">
+              <select id="tier" class="pill-select" title="Model quality vs speed">
+                <option value="high">Smart</option>
+                <option value="medium" selected>Fast</option>
+                <option value="low">Turbo</option>
+              </select>
+            </div>
+            <button id="send" class="send-btn transition disabled:opacity-30" title="Send">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
         </div>
-        <div class="pill-select-wrap ml-auto">
-          <span class="pill-dot" id="tier-dot"></span>
-          <select id="tier" class="pill-select" title="Model quality vs speed">
-            <option value="high">Yuqori — qwen2.5:7b</option>
-            <option value="medium" selected>O'rtacha — qwen2.5:1.5b</option>
-            <option value="low">Past/tez — qwen2.5:1.5b</option>
-          </select>
-        </div>
-      </div>
-      <div data-composer-part class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
-        <input id="message" type="text" placeholder="Type a message..."
-               class="flex-1 bg-transparent px-2 py-2 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
-               autocomplete="off" />
-        <button id="send" class="bg-[#ececec] hover:bg-white text-[#212121] w-9 h-9 rounded-full flex items-center justify-center transition disabled:opacity-30 shrink-0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
       </div>`;
     // Move all top-level children of the fragment into the empty-state slot
     // initially; showComposerIn() relocates them later without re-creating
@@ -515,8 +634,8 @@
     const tierDot = document.getElementById("tier-dot");
     const MODE_COLORS = { general: "#4caf7a", sudo: "#ff6b6b" };
     const TIER_COLORS = { high: "#8e5cf7", medium: "#f5a623", low: "#6b6b6b" };
-    function updateModeDot() { modeDot.style.background = MODE_COLORS[modeSelect.value] || "#8e8e8e"; }
-    function updateTierDot() { tierDot.style.background = TIER_COLORS[tierSelect.value] || "#8e8e8e"; }
+    function updateModeDot() { if (modeDot) modeDot.style.background = MODE_COLORS[modeSelect.value] || "#8e8e8e"; }
+    function updateTierDot() { if (tierDot) tierDot.style.background = TIER_COLORS[tierSelect.value] || "#8e8e8e"; }
     modeSelect.addEventListener("change", updateModeDot);
     tierSelect.addEventListener("change", updateTierDot);
     updateModeDot();
@@ -539,6 +658,7 @@
 
     const chatHistoryEl = document.getElementById("chat-history");
     const welcomeEl = document.getElementById("welcome");
+    const chatTitleEl = document.getElementById("chat-title");
 
     // ---------------------------------------------------------------------
     // CHAT HISTORY — lives on the backend (chats/<category>/<filename>
@@ -641,7 +761,14 @@
       activeChatId = id;
       renderChatHistory();
       renderMessages();
+      updateChatTitle();
+      closeSidebarOnMobile();
       input.focus();
+    }
+
+    function updateChatTitle() {
+      const active = getActiveChat();
+      chatTitleEl.textContent = (active && active.title) ? active.title : "MRagent";
     }
 
     function createNewChat() {
@@ -1000,6 +1127,7 @@
           if (isUser && active.title === "New chat") {
             active.title = text.slice(0, 40);
             renderChatHistory();
+            updateChatTitle();
           }
           saveChats();
         }
@@ -1354,6 +1482,7 @@
       addMessage(message, "user");
       setEmptyState(false);
       input.value = "";
+      autoResizeInput();
       sendBtn.disabled = true;
 
       const panel = createThoughtPanel();
@@ -1459,6 +1588,21 @@
         e.preventDefault();
         sendMessage();
       }
+    });
+
+    // ---- composer textarea auto-grow (1 line -> up to ~200px, then scrolls) ----
+    function autoResizeInput() {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 200) + "px";
+    }
+    input.addEventListener("input", autoResizeInput);
+    autoResizeInput();
+
+    // ---- "+" attach button: no upload endpoint on the backend yet, so
+    // this is an honest stub for now instead of a fake working button.
+    const attachBtn = document.getElementById("attach-btn");
+    attachBtn?.addEventListener("click", () => {
+      alert("Fayl yuklash hali backendda yo'q — bu tugma keyingi versiya uchun joyi tayyorlab qo'yildi.");
     });
 
     // On load: if localStorage has a saved token, jump straight into the
