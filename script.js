@@ -60,12 +60,39 @@
     // sidebar ochilish usuli farqlanadi.
     function isTouchDevice() { return window.matchMedia("(hover: none), (pointer: coarse)").matches; }
 
-    function setSidebarCollapsed(collapsed) {
-      sidebarEl.classList.toggle("collapsed", collapsed);
-      sidebarBackdrop.classList.toggle("hidden", collapsed || !isMobileLayout());
+    // ---- Claude.ai-style hover preview vs. pinned state -----------------
+    // Two independent flags on #sidebar, not one "collapsed" boolean:
+    //
+    //   .pinned        — sidebar takes real layout space (chat panel shifts
+    //                     over, width animates 0 -> normal). Set by CLICKING
+    //                     the toggle icon. Persists until clicked again.
+    //   .hover-preview — sidebar renders position:absolute ON TOP of the
+    //                     chat panel, taking zero layout space, so the
+    //                     toggle icon and everything behind the sidebar
+    //                     never move. Set by MOUSING OVER the toggle icon
+    //                     or the sidebar itself, and only while NOT pinned
+    //                     (if already pinned, hovering is a no-op — it's
+    //                     already fully open at full width, no preview
+    //                     needed, and preview width is intentionally wider
+    //                     than pinned width so this distinction matters).
+    //
+    // The icon's own screen position depends only on #chat-header's flex
+    // layout, which never references #sidebar's width/position at all —
+    // so the icon truly never shifts, no matter which state fires.
+    function setSidebarPinned(pinned) {
+      sidebarEl.classList.toggle("pinned", pinned);
+      sidebarEl.classList.remove("hover-preview"); // pin/unpin always resolves any pending preview
+      sidebarBackdrop.classList.toggle("hidden", !pinned || !isMobileLayout());
     }
-    function toggleSidebar() {
-      setSidebarCollapsed(!sidebarEl.classList.contains("collapsed"));
+    function toggleSidebarPin() {
+      setSidebarPinned(!sidebarEl.classList.contains("pinned"));
+    }
+    function showSidebarPreview() {
+      if (sidebarEl.classList.contains("pinned")) return; // already fully open, nothing to preview
+      sidebarEl.classList.add("hover-preview");
+    }
+    function hideSidebarPreview() {
+      sidebarEl.classList.remove("hover-preview");
     }
 
     // ---- Hover bilan ochilish / sekin yopilish (faqat sichqonchali,
@@ -81,36 +108,45 @@
     function scheduleSidebarClose() {
       cancelSidebarCloseTimer();
       sidebarCloseTimer = setTimeout(() => {
-        setSidebarCollapsed(true);
+        hideSidebarPreview();
         sidebarCloseTimer = null;
       }, SIDEBAR_CLOSE_DELAY);
     }
 
     if (isTouchDevice()) {
       // Touch: icon'ga tap qilinganda ochiladi, yana tap qilinganda yopiladi.
-      headerMenuBtn?.addEventListener("click", toggleSidebar);
+      // Touch qurilmada "preview" degan tushuncha yo'q (hover mavjud emas),
+      // shuning uchun tap to'g'ridan-to'g'ri pinned holatni almashtiradi.
+      headerMenuBtn?.addEventListener("click", toggleSidebarPin);
     } else {
-      // Desktop: icon ustiga hover qilinganda darrov ochiladi.
+      // Desktop: icon ustiga hover qilinganda darrov PREVIEW sifatida
+      // ochiladi (overlay, layout siljimaydi).
       headerMenuBtn?.addEventListener("mouseenter", () => {
         cancelSidebarCloseTimer();
-        setSidebarCollapsed(false);
+        showSidebarPreview();
       });
       // Sichqoncha icon'dan yoki sidebar'ning o'zidan chiqib ketsa —
-      // darrov emas, kichik kechikish bilan ("sekin") yopiladi. Shu
-      // kechikish ichida sichqoncha sidebar ichiga o'tsa, yopilish
+      // darrov emas, kichik kechikish bilan ("sekin") preview yopiladi.
+      // Shu kechikish ichida sichqoncha sidebar ichiga o'tsa, yopilish
       // bekor qilinadi — shuning uchun ikkalasiga ham eventlar bor.
+      // Agar sidebar allaqachon pinned bo'lsa, bu yopish hech narsaga
+      // ta'sir qilmaydi (setSidebarPinned bosqichida hover-preview klass
+      // allaqachon yo'q edi) — pinned holat faqat click bilan yopiladi.
       headerMenuBtn?.addEventListener("mouseleave", scheduleSidebarClose);
       sidebarEl?.addEventListener("mouseenter", cancelSidebarCloseTimer);
       sidebarEl?.addEventListener("mouseleave", scheduleSidebarClose);
-      // Icon'ga click ham backup sifatida qoladi (masalan klaviatura/
-      // accessibility uchun, yoki hover ishlamagan holatlarda).
-      headerMenuBtn?.addEventListener("click", toggleSidebar);
+      // Icon'ga click — PINNED holatni almashtiradi (doimiy ochiq/yopiq),
+      // preview'dan farqli. Bu — asosiy "layout joy egallaydi" holat.
+      headerMenuBtn?.addEventListener("click", toggleSidebarPin);
     }
 
-    sidebarBackdrop?.addEventListener("click", () => setSidebarCollapsed(true));
+    sidebarBackdrop?.addEventListener("click", () => setSidebarPinned(false));
 
-    // Mobile boshlanishida sidebar yopiq (slide-over), desktopda ochiq.
-    setSidebarCollapsed(isMobileLayout());
+    // Mobile boshlanishida sidebar yopiq (slide-over), desktopda ochiq
+    // (pinned). Mobile'da "preview" degan holat umuman yo'q — faqat pinned
+    // yoki yo'q, xuddi eski "collapsed" kabi, shuning uchun bu yerda ham
+    // pinned ishlatiladi: pinned=true means "open".
+    setSidebarPinned(!isMobileLayout());
     // Ekran kengligi o'zgarsa (masalan, tablet burilganda) backdrop
     // holatini shunga moslab qayta hisoblaymiz.
     window.addEventListener("resize", () => {
@@ -120,7 +156,7 @@
     // tanlanganda) sidebar avtomatik yopilsin — foydalanuvchi ChatGPT/
     // Claude ilovalaridagidek to'g'ridan-to'g'ri suhbatga tushadi.
     function closeSidebarOnMobile() {
-      if (isMobileLayout()) setSidebarCollapsed(true);
+      if (isMobileLayout()) setSidebarPinned(false);
     }
 
 
@@ -169,7 +205,16 @@
                   <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
-              <div id="combo-dropdown" class="combo-dropdown hidden"></div>
+              <div id="combo-dropdown" class="combo-dropdown hidden">
+                <div class="combo-group-label">General</div>
+                <div id="combo-items"></div>
+                <div class="combo-group-divider"></div>
+                <button type="button" id="sudo-toggle-row" class="combo-toggle-row">
+                  <span class="combo-item-dot" style="background:#ff6b6b"></span>
+                  <span class="combo-toggle-label">Sudo mode</span>
+                  <span id="sudo-switch" class="switch"><span class="switch-knob"></span></span>
+                </button>
+              </div>
             </div>
             <button id="send" class="send-btn transition disabled:opacity-30" title="Send">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -220,64 +265,69 @@
     const comboDropdown = document.getElementById("combo-dropdown");
     const comboLabel = document.getElementById("combo-label");
 
-    const MODE_OPTS = [
-      { value: "general", label: "General" },
-      { value: "sudo", label: "Sudo" },
-    ];
+    // Mode (general/sudo) and tier (omni/super/nano) are ORTHOGONAL state —
+    // one is a toggle, the other a 3-way pick. They used to be flattened into
+    // a 2x3 = 6-item combo list (one row per mode+tier pair), which meant
+    // duplicating every tier label under both "General" and "Sudo" groups.
+    // Now tier renders once as a real 3-item list, and mode lives as a single
+    // switch row underneath. Adding a 4th tier later is one array entry, not
+    // two new rows.
     const TIER_OPTS = [
       { value: "high", label: "Omni", model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" },
       { value: "medium", label: "Super", model: "nvidia/nemotron-3-super-120b-a12b:free" },
       { value: "low", label: "Nano", model: "nvidia/nemotron-3-nano-30b-a3b:free" },
     ];
+    const comboItemsWrap = document.getElementById("combo-items");
+    const sudoToggleRow = document.getElementById("sudo-toggle-row");
+    const sudoSwitch = document.getElementById("sudo-switch");
 
     function updateComboActiveState() {
       comboDropdown.querySelectorAll(".combo-item").forEach(btn => {
-        btn.classList.toggle(
-          "active",
-          btn.dataset.mode === modeSelect.value && btn.dataset.tier === tierSelect.value
-        );
+        btn.classList.toggle("active", btn.dataset.tier === tierSelect.value);
       });
+      sudoSwitch.classList.toggle("on", modeSelect.value === "sudo");
+      sudoToggleRow.classList.toggle("danger", modeSelect.value === "sudo");
     }
 
     function updateComboLabel() {
-      const m = MODE_OPTS.find(x => x.value === modeSelect.value);
+      const m = modeSelect.value === "sudo" ? "Sudo" : "General";
       const t = TIER_OPTS.find(x => x.value === tierSelect.value);
-      comboLabel.textContent = [m && m.label, t && t.label].filter(Boolean).join(" ");
+      comboLabel.textContent = [m, t && t.label].filter(Boolean).join(" ");
       updateComboActiveState();
     }
 
-    function selectCombo(modeValue, tierValue) {
-      modeSelect.value = modeValue;
+    // Tier pick and sudo toggle each update state + UI on their own — no
+    // shared "selectCombo(mode, tier)" needed since they no longer change
+    // together. Tier picks close the dropdown (it's a real choice); the
+    // toggle leaves it open (people flip it and immediately reconsider).
+    function selectTier(tierValue) {
       tierSelect.value = tierValue;
-      updateSudoBanner();
-      updateModeDot();
       updateTierDot();
       updateComboLabel();
       closeComboDropdown();
     }
 
+    function toggleSudo() {
+      modeSelect.value = modeSelect.value === "sudo" ? "general" : "sudo";
+      updateSudoBanner();
+      updateModeDot();
+      updateComboLabel();
+    }
+    sudoToggleRow.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSudo();
+    });
+
     function buildComboDropdown() {
-      comboDropdown.innerHTML = "";
-      MODE_OPTS.forEach((m, mi) => {
-        if (mi > 0) {
-          const divider = document.createElement("div");
-          divider.className = "combo-group-divider";
-          comboDropdown.appendChild(divider);
-        }
-        const label = document.createElement("div");
-        label.className = "combo-group-label";
-        label.textContent = m.label;
-        comboDropdown.appendChild(label);
-        TIER_OPTS.forEach(t => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "combo-item";
-          btn.dataset.mode = m.value;
-          btn.dataset.tier = t.value;
-          btn.innerHTML = `<span class="combo-item-dot" style="background:${MODE_COLORS[m.value]}"></span><span class="combo-item-text"><span class="combo-item-label">${t.label}</span><span class="combo-item-model">${t.model}</span></span>`;
-          btn.addEventListener("click", () => selectCombo(m.value, t.value));
-          comboDropdown.appendChild(btn);
-        });
+      comboItemsWrap.innerHTML = "";
+      TIER_OPTS.forEach(t => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "combo-item";
+        btn.dataset.tier = t.value;
+        btn.innerHTML = `<span class="combo-item-text"><span class="combo-item-label">${t.label}</span><span class="combo-item-model">${t.model}</span></span>`;
+        btn.addEventListener("click", () => selectTier(t.value));
+        comboItemsWrap.appendChild(btn);
       });
       updateComboActiveState();
     }

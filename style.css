@@ -8,6 +8,7 @@
 :root {
   --bg:            #151515;  /* asosiy fon — Claude.ai skrinshotdan olingan */
   --bg-sidebar:    #111111;  /* sidebar — Claude.ai skrinshotdan aniqlangan, tuzatildi */
+  --bg-sidebar-pinned: #1a1a1a; /* pinned holatda bir oz to'qroq/"top" — chat paneldan ajralib tursin */
   --bg-elevated:   #1B1B1B;  /* kartalar — taxminiy, skrinshot yo'q */
   --bg-hover:      #222120;  /* hover holat — taxminiy */
   --bg-code:       #0D0D0D;  /* kod bloklari — taxminiy */
@@ -151,29 +152,71 @@ textarea:focus-visible:not(.composer-textarea) {
   transition: background-color .12s ease;
 }
 
-/* ---- sidebar ochilish/yopilish animatsiyasi ---- */
+/* ---- sidebar: default (icon-only) / hover-preview (overlay) / pinned
+   (real layout space) — uch xil holat, Claude.ai'dagi kabi ----
+
+   Parent (#app-screen) flex container bo'lgani uchun #sidebar odatiy
+   holda flex-item: uning width'i qo'shni #chat-panel'ning kengligiga
+   bevosita ta'sir qiladi. Shu narsa aynan PINNED holatda kerak (chat
+   panel chinakam suriladi), lekin PREVIEW holatida kerak emas — shuning
+   uchun preview vaqtida position:absolute qo'yiladi, bu #sidebar'ni
+   flow'dan olib tashlaydi va uning width'i endi #chat-panel'ga umuman
+   ta'sir qilmaydi (garchi CSS width qiymati o'zi hali ishlaydi). */
 .sidebar-collapsible {
+  width: 0;
+  min-width: 0;
   overflow: hidden;
-  transition: width .2s ease, min-width .2s ease, padding .2s ease;
+  position: relative;
+  transition: width .2s ease, min-width .2s ease, padding .2s ease,
+              background-color .15s ease;
 }
-.sidebar-collapsible.collapsed {
-  width: 0 !important;
-  min-width: 0 !important;
-  padding-left: 0;
-  padding-right: 0;
-  border: none;
+
+/* PINNED — click bilan yoqilgan. Haqiqiy layout kengligi, chat panel
+   suriladi. Fon rangi (bir oz "to'qroq"/"top") pastroqda, umumiy
+   #sidebar background override qoidasi yonida belgilangan — bir joyda
+   bitta manba, ikki joyda takrorlanmasin deb. */
+.sidebar-collapsible.pinned {
+  width: 288px; /* w-72 ekvivalenti — asosiy, "doimiy ochiq" kenglik */
+  min-width: 288px;
 }
+
+/* HOVER-PREVIEW — faqat mouseenter bilan, pinned BO'LMAGANDA. Overlay:
+   position:absolute qo'yilgani uchun flex-parent'dagi width endi joy
+   egallamaydi (0 bo'lib qoladi), shuning uchun #chat-panel va undagi
+   toggle-icon hech qachon siljimaydi — sidebar ularning USTIGA chiqadi.
+   Kenglik pinned'dan atayin kengroq: "ancha ochroq bolsin" talabi shu —
+   preview holatda ko'proq matn/joy ko'rinsin, chunki bu vaqtinchalik va
+   layout hech kimga ta'sir qilmaydi, kengroq qilish arzon. */
+.sidebar-collapsible.hover-preview:not(.pinned) {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 320px;
+  z-index: 45; /* chat-panel va uning header'idan tepada, ammo backdrop/modal'lardan past */
+  box-shadow: 4px 0 24px rgba(0,0,0,.35), 1px 0 0 var(--border);
+  animation: sidebarPreviewIn .16s cubic-bezier(.16,1,.3,1);
+}
+@keyframes sidebarPreviewIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 .sidebar-fade {
   transition: opacity .12s ease;
   opacity: 1;
 }
-.sidebar-collapsible.collapsed .sidebar-fade {
+/* Ichki kontent (matnlar, tugmalar) faqat sidebar chinakam kengaygan
+   paytda ko'rinadi — default (icon-only) width:0 holatida befoyda
+   siqilib qolmasin deb, opacity bilan yashiriladi. */
+.sidebar-collapsible:not(.pinned):not(.hover-preview) .sidebar-fade {
   opacity: 0;
   pointer-events: none;
 }
+
 @media (max-width: 767px) {
+  /* Mobile'da "preview" degan tushuncha yo'q — faqat pinned/yopiq,
+     slide-over sifatida, eski xatti-harakat saqlanadi. */
   #sidebar {
-    position: fixed;
+    position: fixed !important;
     top: 0; left: 0; bottom: 0;
     z-index: 40;
     width: 82vw !important;
@@ -184,8 +227,10 @@ textarea:focus-visible:not(.composer-textarea) {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
-  #sidebar.collapsed { transform: translateX(-100%); }
-  #sidebar:not(.collapsed) { transform: translateX(0); }
+  #sidebar:not(.pinned) { transform: translateX(-100%); }
+  #sidebar.pinned { transform: translateX(0); }
+  #sidebar:not(.pinned) .sidebar-fade { opacity: 0; pointer-events: none; }
+  #sidebar.pinned .sidebar-fade { opacity: 1; pointer-events: auto; }
   #sidebar-backdrop:not(.hidden) { display: block; }
 }
 #sidebar-backdrop {
@@ -415,6 +460,48 @@ textarea:focus-visible:not(.composer-textarea) {
   background: var(--border);
   margin: 4px 2px;
 }
+
+/* Sudo toggle row: same button footprint as .combo-item, but it's a
+   switch, not a pick — a distinct type deserves distinct affordance. */
+.combo-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 13.5px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: background-color .1s ease, color .1s ease;
+  width: 100%;
+}
+.combo-toggle-row:hover { background: var(--bg-hover); color: var(--ink); }
+.combo-toggle-row.danger { background: rgba(255,107,107,.08); color: #ff9494; }
+.combo-toggle-row.danger:hover { background: rgba(255,107,107,.14); }
+.combo-toggle-label { flex: 1; text-align: left; }
+
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color .15s ease;
+}
+.switch-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--ink-secondary);
+  transition: transform .15s cubic-bezier(.4,0,.2,1), background-color .15s ease;
+}
+.switch.on { background: #ff6b6b; }
+.switch.on .switch-knob { transform: translateX(13px); background: #fff; }
 
 .composer-toolbar-right { gap: 0 !important; }
 .composer-toolbar-right .divider-dot {
@@ -772,7 +859,8 @@ body,
 #chat-panel {
   background: var(--bg) !important;
 }
-#sidebar { background: var(--bg-sidebar) !important; }
+#sidebar:not(.pinned) { background: var(--bg-sidebar) !important; }
+#sidebar.pinned { background: var(--bg-sidebar-pinned) !important; }
 
 /* avatar doiralari: inline style="background:#ececec" — terracotta qildik */
 [style*="background:#ececec"] { background: var(--accent) !important; }
