@@ -1,1561 +1,1424 @@
-import os
-import re
-import json
-import pty
-import fcntl
-import struct
-import termios
-import threading
-import time
-import select
-import subprocess
-import secrets
-from pathlib import Path
-from datetime import datetime, timezone
-
-from flask import Flask, request, jsonify, Response, stream_with_context
-from flask_cors import CORS
-from flask_sock import Sock
-import requests
-
-app = Flask(__name__)
-CORS(app)
-sock = Sock(app)
-
-BASE_DIR = Path.home() / "mragent"
-CHATS_DIR = BASE_DIR / "chats"
-ENV_FILE = BASE_DIR / ".env"
-PENDING_FILE = BASE_DIR / ".pending_commands.json"
-
-# ---------------------------------------------------------------------------
-# FIREBASE — heartbeat va AUTH_TOKEN'ni realtime Firestore'ga yozish uchun
-# umumiy client. Ikkalasi ham shu bitta ulanishni ishlatadi.
-# ---------------------------------------------------------------------------
-_firestore_db = None
-
-def _get_firestore_db():
-    global _firestore_db
-    if _firestore_db is not None:
-        return _firestore_db
-    try:
-        import firebase_admin
-        from firebase_admin import credentials, firestore
-        cred_path = BASE_DIR / "serviceAccountKey.json"
-        if not cred_path.exists():
-            return None
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(str(cred_path))
-            firebase_admin.initialize_app(cred)
-        _firestore_db = firestore.client()
-        return _firestore_db
-    except Exception as e:
-        print(f"Firestore ulanmadi: {e}")
-        return None
-
-
-def _push_auth_token_to_firestore(token: str):
-    """ESKI: token config/tunnel hujjatiga yozilardi. Endi bundan voz
-    kechildi — /login endpoint PASS orqali TOKEN'ni beradi, shuning
-    uchun TOKEN'ni Firestore'da (public o'qiladigan config to'plamida)
-    saqlashning hojati yo'q va u faqat qo'shimcha xavf edi: PASS'ni
-    bilmagan odam ham to'g'ridan-to'g'ri Firestore'dan TOKEN'ni o'qiy
-    olardi. Funksiya chaqiruvlari qolgan, lekin endi hech narsa yozmaydi."""
-    return
-
-
-def _start_heartbeat():
-    def loop():
-        db = _get_firestore_db()
-        if db is None:
-            return
-        while True:
-            try:
-                db.collection("config").document("heartbeat").set({
-                    "lastSeen": datetime.now(timezone.utc)
-                })
-            except Exception as e:
-                print(f"Heartbeat yozib bo'lmadi: {e}")
-            time.sleep(20)
-
-    threading.Thread(target=loop, daemon=True).start()
-
-_start_heartbeat()
-
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-
-def _get_openrouter_api_key() -> str:
-    """OPENROUTER_API_KEY ni avval OS environment'dan, topilmasa .env
-    fayldan o'qiydi. Key .env ichida saqlanadi — koddan hech qachon
-    hardcode qilinmaydi, git'ga tushmasligi uchun."""
-    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    if key:
-        return key
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            if line.startswith("OPENROUTER_API_KEY="):
-                val = line.split("=", 1)[1].strip()
-                if val:
-                    return val
-    raise RuntimeError(
-        "OPENROUTER_API_KEY topilmadi. .env fayliga qo'shing: "
-        "OPENROUTER_API_KEY=sk-or-v1-... (openrouter.ai/keys dan olinadi)"
-    )
-
-OPENROUTER_API_KEY = _get_openrouter_api_key()
-
-# ---------------------------------------------------------------------------
-# MODEL TIERS — OpenRouter orqali, hammasi bepul (":free" suffix), real
-# /v1/models javobidan tekshirilgan (2026-08-20). RAM/GPU yondirmaydi,
-# hammasi OpenRouter'ning serverida ishlaydi.
-#
-#   low    (fast)     -> Nemotron 3 Nano 30B    — eng yengil/tez, oddiy
-#                         buyruqlar uchun
-#   medium (balanced) -> Nemotron 3 Super 120B  — o'rtacha tezlik/chuqurlik
-#   high   (max)      -> Nemotron 3 Nano Omni 30B Reasoning — reasoning-ga
-#                         maxsus o'qitilgan, "avval o'yla keyin javob ber"
-#                         tabiatan ichida bor (Claude'dagi extended thinking
-#                         kabi) — shuning uchun kattaligi kichikroq bo'lsa
-#                         ham, structured/agentic qarorlarda 550B umumiy
-#                         modeldan ko'ra ishonchliroq
-# ---------------------------------------------------------------------------
-MODELS = {
-    "high": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "medium": "nvidia/nemotron-3-super-120b-a12b:free",
-    "low": "nvidia/nemotron-3-nano-30b-a3b:free",
-}
-DEFAULT_TIER = "medium"
-
-# Har tier uchun maksimal chiqish tokenlari. "high" reasoning modeliga
-# thinking tokenlari uchun ko'proq joy kerak. "low" ilgari 512 edi — bu
-# JSON qobig'i (~30-40 token) uchun yetarli, lekin ichidagi "message"
-# maydonida haqiqiy tushuntirish beradigan oddiy savolga javob 512
-# tokenda o'rtasida kesilib, JSON buzilib qolardi (parse xatosi ->
-# foydalanuvchiga chala/buzuq matn ko'rinardi). 1536 ga oshirildi —
-# tezlik deyarli bir xil qoladi (bepul modelda asosiy sekinlik navbat/
-# queue, output uzunligi emas), lekin oddiy javoblar endi kesilmaydi.
-TIER_MAX_TOKENS = {
-    "high": 6144,
-    "medium": 2048,
-    "low": 1536,
-}
-
-def resolve_tier(raw_tier) -> str:
-    """Har doim MODELS ichidagi haqiqiy kalitlardan birini qaytaradi."""
-    tier = str(raw_tier or "").strip().lower()
-    return tier if tier in MODELS else DEFAULT_TIER
-
-# ---------------------------------------------------------------------------
-# SAFETY MODES
-# "general" — hozirgi xatti-harakat: HARD_BLOCK_PATTERNS hech qachon,
-#             confirmation bilan ham ishlamaydi.
-# "sudo"    — HARD_BLOCK tekshiruvi o'tkazib yuboriladi, LEKIN baribir har
-#             doim confirmation card ko'rsatiladi (hech narsa click'siz
-#             ishlamaydi). Foydalanuvchi o'zi xohlab shu rejimni yoqadi.
-# Frontend har so'rovda "mode" maydonini yuboradi. Yubormasa yoki noto'g'ri
-# qiymat kelsa — DEFAULT_MODE ("general") ishlatiladi, hech qachon
-# kutilmaganda sudo yoqilib qolmaydi.
-# ---------------------------------------------------------------------------
-VALID_MODES = ("general", "sudo")
-DEFAULT_MODE = "general"
-
-def resolve_mode(raw_mode) -> str:
-    mode = str(raw_mode or "").strip().lower()
-    return mode if mode in VALID_MODES else DEFAULT_MODE
-
-CHATS_DIR.mkdir(parents=True, exist_ok=True)
-
-# ---------------------------------------------------------------------------
-# CWD STATE (terminal bilan 1:1 ishlashi uchun)
-# subprocess.run(shell=True) HAR SAFAR yangi, mustaqil shell ochadi — shuning
-# uchun "cd" komandasi hech qachon keyingi komandaga ta'sir qilmaydi, agar biz
-# buni o'zimiz qo'lda kuzatib bormasak. category+filename bo'yicha alohida
-# "joriy papka" saqlanadi, xuddi alohida terminal tab'lardek.
-# ---------------------------------------------------------------------------
-
-CWD_STATE_FILE = BASE_DIR / ".cwd_state.json"
-
-def load_cwd_state() -> dict:
-    if CWD_STATE_FILE.exists():
-        try:
-            return json.loads(CWD_STATE_FILE.read_text())
-        except Exception:
-            return {}
-    return {}
-
-def save_cwd_state(state: dict):
-    CWD_STATE_FILE.write_text(json.dumps(state, ensure_ascii=False))
-
-def get_session_key(category: str, filename: str) -> str:
-    return f"{category}::{filename}"
-
-def get_current_cwd(category: str, filename: str) -> str:
-    state = load_cwd_state()
-    key = get_session_key(category, filename)
-    return state.get(key, str(Path.home()))
-
-def set_current_cwd(category: str, filename: str, new_cwd: str):
-    state = load_cwd_state()
-    key = get_session_key(category, filename)
-    state[key] = new_cwd
-    save_cwd_state(state)
-
-def try_extract_cd(command: str, base_cwd: str):
-    """
-    Agar komanda faqat "cd <path>" bo'lsa (yoki "cd <path> && ..." ning
-    boshida), yangi absolute yo'lni hisoblab qaytaradi. Aks holda None.
-    Faqat sof "cd" holatini alohida ushlaymiz — murakkab pipeline'larni
-    (masalan "cd x && ls") oddiy execute_command orqali yuboraveramiz,
-    lekin oxirgi cwd'ni yangilashga urinamiz.
-    """
-    stripped = command.strip()
-    match = re.match(r"^cd\s+(.+)$", stripped)
-    if not match:
-        return None
-    target = match.group(1).strip().strip('"').strip("'")
-    if target in ("", "~"):
-        resolved = Path.home()
-    elif target.startswith("~/"):
-        resolved = Path.home() / target[2:]
-    elif target.startswith("/"):
-        resolved = Path(target)
-    else:
-        resolved = Path(base_cwd) / target
-    try:
-        resolved = resolved.resolve()
-    except Exception:
-        return None
-    return resolved
-
-# ---------------------------------------------------------------------------
-# AUTH TOKEN
-# Tunnel orqali kelgan har bir so'rov shu tokenni bilishi shart.
-# Birinchi ishga tushirishda .env fayl yo'q bo'lsa — o'zi generatsiya qiladi,
-# console'ga chiqaradi va faylga yozadi. Frontendga shu tokenni qo'lda ko'chirasan.
-# ---------------------------------------------------------------------------
-
-def set_env_value(key: str, value: str):
-    """
-    .env faylida KEY=value qatorini yangilaydi, boshqa qatorlarga
-    tegmaydi. Fayl yo'q bo'lsa yaratadi.
-    """
-    lines = ENV_FILE.read_text().splitlines() if ENV_FILE.exists() else []
-    found = False
-    new_lines = []
-    for line in lines:
-        if line.startswith(f"{key}="):
-            new_lines.append(f"{key}={value}")
-            found = True
-        else:
-            new_lines.append(line)
-    if not found:
-        new_lines.append(f"{key}={value}")
-    ENV_FILE.write_text("\n".join(new_lines) + "\n")
-    os.chmod(ENV_FILE, 0o600)
-
-
-def load_or_create_token() -> str:
-    """
-    AUTH_TOKEN — endi PASS kabi DOIMIY: .env dan o'qiladi, agar yo'q
-    bo'lsa bir marta random generatsiya qilinadi va .env ga yoziladi.
-    Backend qancha marta restart bo'lmasin, mragent-auth-token orqali
-    qo'lda o'zgartirilmaguncha bir xil qoladi.
-
-    Har backend ishga tushganda (token yangi yaratilgan yoki .env dan
-    o'qilgan bo'lishidan qat'i nazar) qiymat Firestore'ga ham darhol
-    yoziladi (config/tunnel.authToken) — shu bilan token faqat
-    mragent-start'ning tunnel bosqichiga bog'liq bo'lib qolmaydi,
-    balki backend ishga tushgan zahoti realtime yangilanadi.
-
-    ESLATMA: bu tanlov ataylab qilingan xavfsizlik murosasi — oldin
-    token har restart'da yangilanardi (agar u oshkor bo'lib qolsa,
-    keyingi restart uni avtomatik yopardi). Endi bunday emas.
-    """
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            if line.startswith("AUTH_TOKEN="):
-                val = line.split("=", 1)[1].strip()
-                if val:
-                    _push_auth_token_to_firestore(val)
-                    return val
-    token = secrets.token_hex(32)
-    set_env_value("AUTH_TOKEN", token)
-    print("=" * 70)
-    print("YANGI AUTH_TOKEN YARATILDI (bu doimiy, restart'da o'zgarmaydi):")
-    print(token)
-    print(f"O'zgartirish uchun: mragent-auth-token")
-    print("=" * 70)
-    _push_auth_token_to_firestore(token)
-    return token
-
-AUTH_TOKEN = load_or_create_token()
-
-
-def load_or_create_pass() -> str:
-    """
-    PASS — LOGIN parol. .env dan o'qiladi, agar yo'q bo'lsa bir marta
-    random generatsiya qilinadi va .env ga yoziladi. mragent-set-pass
-    orqali qo'lda o'zgartirilmaguncha, backend qancha marta restart
-    bo'lmasin — bir xil qoladi.
-    """
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            if line.startswith("PASS="):
-                val = line.split("=", 1)[1].strip()
-                if val:
-                    return val
-    val = secrets.token_hex(32)
-    set_env_value("PASS", val)
-    print("=" * 70)
-    print("YANGI LOGIN PAROL YARATILDI (bu doimiy, restart'da o'zgarmaydi):")
-    print(val)
-    print(f"O'zgartirish uchun: mragent-set-pass")
-    print("=" * 70)
-    return val
-
-LOGIN_PASS = load_or_create_pass()
-
-
-def require_auth(req) -> bool:
-    supplied_token = req.headers.get("X-Auth-Token", "")
-    supplied_pass = req.headers.get("X-Login-Pass", "")
-    token_ok = secrets.compare_digest(supplied_token, AUTH_TOKEN)
-    pass_ok = secrets.compare_digest(supplied_pass, LOGIN_PASS)
-    return token_ok and pass_ok
-
-
-def require_auth_ws(req) -> bool:
-    """Same check as require_auth, but for the WebSocket handshake —
-    browsers can't attach custom headers (X-Auth-Token / X-Login-Pass) to
-    a WebSocket connection, so auth travels as query params instead."""
-    supplied_token = req.args.get("token", "")
-    supplied_pass = req.args.get("pass", "")
-    token_ok = secrets.compare_digest(supplied_token, AUTH_TOKEN)
-    pass_ok = secrets.compare_digest(supplied_pass, LOGIN_PASS)
-    return token_ok and pass_ok
-
-
-# ---------------------------------------------------------------------------
-# REAL BASH TERMINAL (no AI involved)
-# A raw PTY (pseudo-terminal) running actual bash, bridged byte-for-byte
-# over a WebSocket. Every keystroke the browser sends goes straight to
-# bash's stdin; every byte bash writes goes straight back. This is full,
-# unmediated shell access to this machine — gated by the exact same
-# password + auth token as the rest of the app, so that token should be
-# treated with the same care as an SSH private key.
-# ---------------------------------------------------------------------------
-
-RESIZE_PREFIX = "\x01RESIZE:"
-
-
-@sock.route("/ws/term")
-def ws_term(ws):
-    if not require_auth_ws(request):
-        ws.close()
-        return
-
-    master_fd, slave_fd = pty.openpty()
-    env = os.environ.copy()
-    env["TERM"] = "xterm-256color"
-
-    proc = subprocess.Popen(
-        ["bash"],
-        stdin=slave_fd,
-        stdout=slave_fd,
-        stderr=slave_fd,
-        cwd=str(Path.home()),
-        env=env,
-        preexec_fn=os.setsid,  # own session -> pty becomes its controlling tty
-        close_fds=True,
-    )
-    # The child dup'd the slave fd into its own 0/1/2 already; our copy of
-    # it just needs to go away so master_fd gets a clean EOF when bash exits.
-    os.close(slave_fd)
-
-    closed = threading.Event()
-
-    def pump_pty_to_ws():
-        while not closed.is_set():
-            try:
-                ready, _, _ = select.select([master_fd], [], [], 0.05)
-            except (OSError, ValueError):
-                break
-            if master_fd in ready:
-                try:
-                    # Drain everything currently buffered in one go so big
-                    # bursts of output (find /, cat bigfile, htop redraw)
-                    # go out as fewer, larger ws.send() calls instead of a
-                    # long chain of 4KB round-trips.
-                    data = os.read(master_fd, 65536)
-                except OSError:
-                    break
-                if not data:
-                    break
-                try:
-                    ws.send(data.decode("utf-8", errors="replace"))
-                except Exception:
-                    break
-        closed.set()
-
-    reader = threading.Thread(target=pump_pty_to_ws, daemon=True)
-    reader.start()
-
-    try:
-        while True:
-            msg = ws.receive()
-            if msg is None:
-                break
-            if isinstance(msg, str) and msg.startswith(RESIZE_PREFIX):
-                try:
-                    cols_str, rows_str = msg[len(RESIZE_PREFIX):].split(",")
-                    fcntl.ioctl(
-                        master_fd,
-                        termios.TIOCSWINSZ,
-                        struct.pack("HHHH", int(rows_str), int(cols_str), 0, 0),
-                    )
-                except Exception:
-                    pass
-                continue
-            try:
-                os.write(master_fd, msg.encode("utf-8"))
-            except OSError:
-                break
-    except Exception:
-        pass
-    finally:
-        closed.set()
-        try:
-            proc.terminate()
-            proc.wait(timeout=2)
-        except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-        try:
-            os.close(master_fd)
-        except OSError:
-            pass
-
-
-# ---------------------------------------------------------------------------
-# COMMAND SAFETY
-# Ikki qavat himoya:
-#   1) HARD BLOCK — bu patternlar hech qachon, hech qanday confirmation bilan
-#      ham ishlamaydi. Diskni formatlash, recursive rm, fork bomb, va h.k.
-#   2) CONFIRMATION — qolgan har qanday komanda avval "pending" holatida
-#      qaytariladi. Foydalanuvchi confirm=true bilan aynan shu command_id'ni
-#      qayta yubormaguncha bajarilmaydi.
-# ---------------------------------------------------------------------------
-
-HARD_BLOCK_PATTERNS = [
-    r"\brm\s+.*-[a-zA-Z]*r[a-zA-Z]*f",   # rm -rf, rm -fr va variantlari
-    r"\brm\s+.*-[a-zA-Z]*f[a-zA-Z]*r",
-    r"\bmkfs\b",
-    r"\bdd\s+.*of=/dev/",
-    r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",  # fork bomb
-    r"\bshutdown\b",
-    r"\breboot\b",
-    r"\bpoweroff\b",
-    r"\bchmod\s+-R\s+777\s+/",
-    r"\bchown\s+-R\s+.*\s+/",
-    r">\s*/dev/sd[a-z]",
-    r"\bwipefs\b",
-    r"\bcryptsetup\s+luksFormat\b",
-    r"\buserdel\b",
-    r"\bpasswd\s+root\b",
-    r"curl.*\|\s*(sudo\s+)?bash",   # pipe-to-shell downloads
-    r"wget.*\|\s*(sudo\s+)?bash",
-]
-
-def is_hard_blocked(command: str) -> bool:
-    return any(re.search(p, command, re.IGNORECASE) for p in HARD_BLOCK_PATTERNS)
-
-
-def load_pending() -> dict:
-    if PENDING_FILE.exists():
-        try:
-            return json.loads(PENDING_FILE.read_text())
-        except Exception:
-            return {}
-    return {}
-
-def save_pending(pending: dict):
-    PENDING_FILE.write_text(json.dumps(pending, ensure_ascii=False))
-
-
-# ---------------------------------------------------------------------------
-# CHAT LOG
-# ---------------------------------------------------------------------------
-
-def append_to_chat(category: str, filename: str, role: str, content: str):
-    category_dir = CHATS_DIR / category
-    category_dir.mkdir(parents=True, exist_ok=True)
-    file_path = category_dir / filename
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    # Escape backslashes first, then real newlines, so multi-line content
-    # (e.g. raw command output) is stored as ONE physical line in the log
-    # file. Without this, get_recent_history's line-by-line parser below
-    # silently drops every line after the first one of any multi-line
-    # message — the model would then only ever see the first line of past
-    # command results/output, not the actual content, and hallucinate the
-    # rest when asked a follow-up like "natija qanday bo'ldi".
-    safe_content = content.replace("\\", "\\\\").replace("\n", "\\n")
-    with open(file_path, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {role}: {safe_content}\n")
-
-
-def get_recent_history(category: str, filename: str, max_turns: int = 6) -> str:
-    """Read the last few USER/ASSISTANT lines from this chat's log file so
-    the model has real conversation context, not just the current message.
-    Only USER and ASSISTANT roles are included — ACTION/PENDING/BLOCKED
-    lines are internal noise the model doesn't need to see again."""
-    file_path = CHATS_DIR / category / filename
-    if not file_path.exists():
-        return ""
-    try:
-        lines = file_path.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return ""
-
-    turns = []
-    for line in lines:
-        m = re.match(r"^\[[^\]]+\] (USER|ASSISTANT): (.*)$", line)
-        if m:
-            # Reverse of the escaping done in append_to_chat: unescape the
-            # \n token back into a real newline first, then \\ back into \.
-            content = m.group(2).replace("\\n", "\n").replace("\\\\", "\\")
-            turns.append(f"{m.group(1)}: {content}")
-
-    if not turns:
-        return ""
-    # Drop the very last USER line — that's the current message, added
-    # separately by the caller so it isn't duplicated.
-    if turns and turns[-1].startswith("USER:"):
-        turns = turns[:-1]
-    recent = turns[-(max_turns * 2):]
-    if not recent:
-        return ""
-    return "Recent conversation:\n" + "\n".join(recent) + "\n\n"
-
-
-# ---------------------------------------------------------------------------
-# OPENROUTER — system prompt'lar
-# ---------------------------------------------------------------------------
-
-SYSTEM_PROMPT = """You are mragent, a warm, genuinely helpful AI agent running locally on the user's Arch Linux computer. You talk like a close friend ("bratan"/"bratishka") who happens to be great at computers — casual, direct, never robotic or overly formal, no corporate stiffness. The user mostly writes in informal Uzbek — when they do, reply in that same informal Uzbek register (bratan, xop, bo'ldi-style short lines), not textbook-formal Uzbek. If they switch language, match that instead. Never lecture, never over-explain — say what's needed and move. NEVER use emoji, anywhere, in any message — not even one.
-
-You are AGENTIC: for tasks that take multiple steps, you don't just do one thing and stop — you think about what the next logical step is and keep going, one action at a time, until the user's actual goal is accomplished (or you hit something that needs their confirmation, at which point you pause).
-
-Each turn, you get: recent conversation history (if any), the user's current request, plus a running log of what's happened so far THIS turn (actions you've taken and their results). Always read the recent conversation history first — short replies like "no", "yes", "do it", "not that one" refer back to what was just discussed, so resolve them against that context instead of treating them as standalone requests. Decide the SINGLE next action.
-
-=====================================================================
-OUTPUT FORMAT — THIS IS THE #1 RULE, NEVER BREAK IT
-=====================================================================
-Your entire response must be EXACTLY ONE valid JSON object. Nothing else.
-- NO markdown code fences (no ```json, no ```)
-- NO text before the opening {
-- NO text after the closing }
-- NO explanation, commentary, or thinking outside the JSON
-- If you have something to say to the user, that text goes INSIDE the JSON, in the "message" field of a "done" action — it never appears as raw text outside the braces.
-
-Correct output looks like exactly this, character for character, nothing more:
-{"action": "done", "message": "Albatta, tayyorman!"}
-
-WRONG (never output anything like these):
-  Sure! {"action": "done", "message": "..."}          <- text before JSON
-  ```json
-  {"action": "done", "message": "..."}
-  ```                                                   <- markdown fence
-  {"action": "done", "message": "..."} Let me know!     <- text after JSON
-  I'll create the file for you.                         <- no JSON at all
-
-=====================================================================
-AVAILABLE ACTIONS
-=====================================================================
-1. Run a shell command:
-   {"action": "command", "command": "the exact shell command", "cwd": "/optional/absolute/working/directory"}
-2. Read a file's contents:
-   {"action": "read_file", "path": "/absolute/or/relative/path"}
-3. Write/overwrite a file:
-   {"action": "write_file", "path": "/absolute/or/relative/path", "content": "full file content"}
-4. List a directory:
-   {"action": "list_dir", "path": "/absolute/or/relative/path"}
-5. Search the web (returns short snippets, no browsing):
-   {"action": "web_search", "query": "search query"}
-6. You're finished with the task, or no action is needed at all — just talk to the user normally:
-   {"action": "done", "message": "your friendly final reply to the user, in their language"}
-
-General rules:
-- Always pick exactly ONE action per turn.
-- Keep chaining actions (command/read_file/write_file/list_dir/web_search) as long as there's a clear next step toward the goal.
-- Once the goal is achieved, respond with {"action": "done", "message": "..."} — this is your natural, friendly voice, so make it sound human and warm, not like a system log.
-- Never invent output — only refer to results you actually see in the action log.
-- CRITICAL: your "done" message is the ONLY thing that survives into future turns — the raw action log (exact paths, command output, file contents) is thrown away once you finish. So your final message must always include the concrete facts, not a vague confirmation. If you created/edited a file, state its FULL path. If you ran a command, state what it actually did/returned. Never reply with just "Yaratildi" or "Bajarildi" — always say what and where.
-- If the user's message is a short follow-up question about something you just did (e.g. "qaysi joyga?", "path?", "nima chiqdi?"), answer it using the concrete facts from Recent conversation — do not repeat your previous message verbatim.
-- For legacy compatibility you may also receive/produce the old format {"command": "...", "cwd": "..."} for a single command — prefer the "action" format above.
-
-=====================================================================
-DECISION GUIDE — read this before every single reply
-=====================================================================
-Ask yourself, in order:
-  1. Did the user just give a concrete, nameable instruction (create/delete/read/list/run/find something specific)? -> emit that action NOW. Do not ask for permission, do not describe what it will do, do not restate it back to them. They already told you — go.
-  2. Is the user's message vague, an opener, or just conversation with no actual task in it? -> {"action": "done", ...} and warmly ask what they want to do. Never guess a task and never web_search to "figure out" what a vague message might mean.
-  3. Is the user asking a plain factual/informational question that you already know the answer to (general knowledge, how something works, explaining a concept, translating, writing/fixing a snippet, math, advice)? -> answer it DIRECTLY and FULLY in {"action": "done", "message": "..."}. This is the most common case for simple questions — do NOT reach for web_search just because a question is "informational". web_search is ONLY for things you're genuinely unsure of or that need current/live data (today's news, current prices, something that changes over time).
-  4. Otherwise (greeting, thanks, small talk, already finished) -> {"action": "done", ...}.
-
-=====================================================================
-EXAMPLES — study the pattern, not just the words
-=====================================================================
-
-Example A — vague opener, no task yet:
-  User: "kompyuterimda ishlarim bor"
-  WRONG: {"action": "web_search", "query": "kompyuterda qanday ishlar qilinadi"}
-  RIGHT: {"action": "done", "message": "Albatta! Nima ustida ishlaymiz — aniq nima qilishim kerak?"}
-
-Example B — concrete file command:
-  User: "touch ~/index.html qilchi"
-  WRONG: {"action": "done", "message": "This creates index.html in your home folder, should I go ahead?"}
-  RIGHT: {"action": "command", "command": "touch ~/index.html"}
-
-Example C — concrete delete instruction:
-  User: "test.txt faylni o'chir"
-  WRONG: {"action": "done", "message": "test.txt faylni o'chirib yuboraymi?"}
-  RIGHT: {"action": "command", "command": "rm test.txt"}
-  (Note: the confirmation step happens automatically outside your control — you still just emit the command action, you don't ask twice yourself.)
-
-Example D — casual greeting, no task:
-  User: "salom"
-  RIGHT: {"action": "done", "message": "Salom! Qanday yordam bera olaman?"}
-
-Example I — plain factual question you already know -> answer directly, don't web_search:
-  User: "Python nima?"
-  WRONG: {"action": "web_search", "query": "Python nima"}
-  RIGHT: {"action": "done", "message": "Python — bu yuqori darajali, o'qish/yozish oson dasturlash tili. Web, avtomatlashtirish, ma'lumotlar tahlili, AI'da keng ishlatiladi..."}
-
-Example E — vague danger label, do not act on your own judgment:
-  User: "kompyuterimga virus.py degan fayl tushib qolgan"
-  WRONG: {"action": "command", "command": "rm virus.py"}   <- you decided it's dangerous on your own and acted without being told to
-  RIGHT: {"action": "done", "message": "Qayerda joylashgan? O'chiraymi yoki avval ko'rib chiqaymi?"}
-
-Example F — multi-step task, keep going without re-asking each time:
-  User: "Downloads papkasidagi barcha .txt fayllarni sanab ber"
-  Step 1 RIGHT: {"action": "command", "command": "cd Downloads"}
-  (after seeing the cd result in the action log)
-  Step 2 RIGHT: {"action": "command", "command": "ls *.txt"}
-  (after seeing the ls result)
-  Step 3 RIGHT: {"action": "done", "message": "Mana Downloads papkasidagi .txt fayllar: ..."}
-
-Example G — vague "done" message breaks the next turn, always include the concrete fact:
-  User: "index.html yarat"
-  WRONG done message: {"action": "done", "message": "Index.html yaratildi"}   <- no path, next turn can't answer "qaysi joyga?"
-  RIGHT done message: {"action": "done", "message": "Index.html yaratildi: /home/user/mragent/index.html"}
-
-Example H — follow-up question referring to your last action, answer from Recent conversation, don't repeat yourself:
-  Recent conversation:
-  USER: index.html yarat
-  ASSISTANT: Index.html yaratildi: /home/user/mragent/index.html
-  User: "qaysi joyga?"
-  WRONG: {"action": "done", "message": "Index.html yaratildi"}   <- ignores the question, repeats old message
-  RIGHT: {"action": "done", "message": "/home/user/mragent/ papkasiga, bratan."}
-"""
-
-# ---------------------------------------------------------------------------
-# COMPACT PROMPT — used for small models (medium/low tiers) instead of the
-# full prompt above. Smaller/weaker models lose reliability as the system
-# prompt grows — holding 8 worked examples alongside real task context is
-# more than a 1.5b/3b model can consistently track, and that's what caused
-# it to silently fall back to plain chit-chat instead of emitting an action
-# on clear, concrete instructions. This keeps every hard rule but trims the
-# example count down to the 4 that cover the most common failure modes.
-# ---------------------------------------------------------------------------
-SYSTEM_PROMPT_COMPACT = """You are mragent, a warm, genuinely helpful AI agent running locally on the user's Arch Linux computer. You talk like a close friend ("bratan"/"bratishka") — casual, direct, never robotic. The user mostly writes informal Uzbek — reply in that same informal register unless they switch language. NEVER use emoji.
-
-You are AGENTIC: for multi-step tasks, keep taking actions one at a time until the goal is done, or you hit something needing confirmation.
-
-Each turn you get: recent conversation history, the current request, and a log of actions taken so far THIS turn. Decide the SINGLE next action.
-
-=====================================================================
-OUTPUT FORMAT — THE #1 RULE, NEVER BREAK IT
-=====================================================================
-Your entire response must be EXACTLY ONE valid JSON object. Nothing else — no text before or after the braces, no markdown fences. If you have something to say, it goes in the "message" field of a "done" action.
-
-Correct: {"action": "done", "message": "Albatta, tayyorman!"}
-
-=====================================================================
-AVAILABLE ACTIONS
-=====================================================================
-1. {"action": "command", "command": "shell command", "cwd": "/optional/dir"}
-2. {"action": "read_file", "path": "..."}
-3. {"action": "write_file", "path": "...", "content": "..."}
-4. {"action": "list_dir", "path": "..."}
-5. {"action": "web_search", "query": "..."}
-6. {"action": "done", "message": "friendly final reply, in the user's language"}
-
-RULE: if the user gave a concrete, nameable instruction (create/delete/read/list/run/find something specific) — emit that action IMMEDIATELY. Do not ask permission, do not restate it back, do not just say "tayyorman"/"albatta" to a real instruction. They already told you what to do — act.
-
-RULE: if the user asks a plain factual/informational question you already know the answer to (general knowledge, explain a concept, translate, write/fix a snippet, math, advice) — answer it DIRECTLY and FULLY inside {"action": "done", "message": "..."}. Do NOT reach for web_search on ordinary questions — only use web_search when you're genuinely unsure or the answer needs live/current data.
-
-Once the goal is achieved, respond with {"action": "done", "message": "..."} — always state the concrete fact (full path, what a command actually did), never a vague "bajarildi" with no detail, since only this message survives into the next turn.
-
-=====================================================================
-EXAMPLES
-=====================================================================
-User: "kompyuterimda ishlarim bor" (vague, no task yet)
-RIGHT: {"action": "done", "message": "Albatta! Nima ustida ishlaymiz — aniq nima qilishim kerak?"}
-
-User: "touch ~/index.html qilchi" (concrete instruction)
-WRONG: {"action": "done", "message": "This creates index.html, should I go ahead?"}
-RIGHT: {"action": "command", "command": "touch ~/index.html"}
-
-User: "ls -la qilchi" (concrete instruction — ACT, don't just acknowledge)
-WRONG: {"action": "done", "message": "Albatta, tayyorman!"}
-RIGHT: {"action": "command", "command": "ls -la"}
-
-User: "salom" (greeting, no task)
-RIGHT: {"action": "done", "message": "Salom! Qanday yordam bera olaman?"}
-
-User: "Toshkentning aholisi qancha?" (plain factual question you know — answer directly)
-WRONG: {"action": "web_search", "query": "Toshkent aholisi"}
-RIGHT: {"action": "done", "message": "Taxminan 2.5-3 million atrofida, aniq raqam yiliga qarab o'zgaradi."}
-"""
-
-
-
-
-
-class OpenRouterError(Exception):
-    """Chaqiruv butunlay muvaffaqiyatsiz tugaganda (retry'lardan keyin ham)
-    ko'tariladi. user_message — foydalanuvchiga chatda ko'rsatiladigan
-    tushunarli (texnik bo'lmagan) xabar. retryable — chaqiruvchi tomonda
-    "qayta urinib ko'ring" tugmasi ko'rsatish kerakmi degan belgi."""
-
-    def __init__(self, user_message: str, retryable: bool = True, detail: str = ""):
-        self.user_message = user_message
-        self.retryable = retryable
-        self.detail = detail
-        super().__init__(detail or user_message)
-
-
-# Bepul (":free") modellar OpenRouter'da umumiy navbatda turadi —
-# 429 (rate limit) va vaqtinchalik 5xx xatolar kutilgan holat, xato emas.
-# Shuning uchun bularni jim qayta urinib ko'ramiz (backoff bilan) va
-# faqat hammasi ishlamasa foydalanuvchiga tushunarli xabar chiqaramiz —
-# xom Python exception matnini hech qachon chatga yubormaymiz.
-OPENROUTER_MAX_RETRIES = 3
-OPENROUTER_RETRY_BACKOFF = [2, 5, 10]  # soniya, urinishlar orasida
-
-
-def call_openrouter(prompt: str, extra_system: str = "", tier: str = DEFAULT_TIER, json_mode: bool = False) -> str:
-    resolved_tier = resolve_tier(tier)
-    model_name = MODELS[resolved_tier]
-    # "low"/"medium" get the compact system prompt — see the comment above
-    # SYSTEM_PROMPT_COMPACT for why. "high" (max accuracy, reasoning model)
-    # keeps the full prompt with all 8 examples, since it needs the most
-    # context to reason well.
-    base_prompt = SYSTEM_PROMPT if resolved_tier == "high" else SYSTEM_PROMPT_COMPACT
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        # OpenRouter asks free-tier callers to identify their app —
-        # doesn't affect function, just good citizenship on their platform.
-        "HTTP-Referer": "https://github.com/mragent",
-        "X-Title": "mragent",
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MRagent</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="splash.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <style>
+    * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; }
+    body { background: #212121; }
+    #chat { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
+    #chat-history { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
+    .bubble-user { background: #2f2f2f; color: #ececec; }
+    .bubble-bot { color: #ececec; }
+    .bubble-pending { background: #2a2213; border: 1px solid #4a3a10; }
+    .bubble-error { background: #2a1414; border: 1px solid #4a1f1f; color: #f2a1a1; }
+    .login-input {
+      background: #2f2f2f;
+      border: 1px solid #4d4d4d;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
-    payload = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": base_prompt + extra_system},
-            {"role": "user", "content": prompt},
-        ],
-        # temperature 0.1: this call decides a structured action, not
-        # creative prose — low temperature makes the model far more
-        # consistent/predictable instead of occasionally drifting into
-        # chatty text on a clear command.
-        "temperature": 0.1,
-        "max_tokens": TIER_MAX_TOKENS[resolved_tier],
+    .login-input:focus {
+      border-color: #8e8e8e;
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.06);
     }
-    if json_mode:
-        # Constrains the sampler to only ever emit valid JSON — stops
-        # weaker models from falling back to plain chit-chat on concrete
-        # commands instead of emitting an {"action": ...} object.
-        payload["response_format"] = {"type": "json_object"}
-
-    last_error_detail = ""
-    for attempt in range(OPENROUTER_MAX_RETRIES + 1):
-        try:
-            response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=90)
-            if response.status_code == 400 and "response_format" in payload:
-                # Some free models on OpenRouter reject strict JSON mode —
-                # retry once without it instead of hard-failing the request.
-                payload.pop("response_format", None)
-                response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=90)
-
-            # 429 (rate limit) / 502-504 (upstream busy) on a :free model —
-            # this is the normal congestion of a shared free pool, not a
-            # real failure. Back off and try again instead of surfacing it.
-            if response.status_code == 429 or response.status_code in (502, 503, 504):
-                last_error_detail = f"HTTP {response.status_code}"
-                if attempt < OPENROUTER_MAX_RETRIES:
-                    time.sleep(OPENROUTER_RETRY_BACKOFF[attempt])
-                    continue
-                raise OpenRouterError(
-                    f"{model_name.split('/')[-1].split(':')[0]} modeli hozir band "
-                    f"(bepul navbat to'lib ketgan). Bir oz kutib qayta urinib ko'ring, "
-                    f"yoki boshqa tier (past/yuqori) tanlang.",
-                    retryable=True,
-                    detail=last_error_detail,
-                )
-
-            response.raise_for_status()
-            data = response.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            if not content.strip():
-                # Model qaytardi, lekin bo'sh — free modellarda vaqti-vaqti
-                # bilan bo'ladi. Qayta urinib ko'ramiz, chunki bu ham
-                # odatda vaqtinchalik.
-                last_error_detail = "bo'sh javob"
-                if attempt < OPENROUTER_MAX_RETRIES:
-                    time.sleep(OPENROUTER_RETRY_BACKOFF[attempt])
-                    continue
-                raise OpenRouterError(
-                    "Model bo'sh javob qaytardi bir necha marta urinishdan keyin ham. "
-                    "Savolni boshqacha ifodalab qayta yuboring.",
-                    retryable=True,
-                    detail=last_error_detail,
-                )
-            return content.strip()
-
-        except requests.exceptions.Timeout:
-            last_error_detail = "timeout"
-            if attempt < OPENROUTER_MAX_RETRIES:
-                time.sleep(OPENROUTER_RETRY_BACKOFF[attempt])
-                continue
-            raise OpenRouterError(
-                f"{model_name.split('/')[-1].split(':')[0]} modeli javob bermadi (timeout). "
-                f"Bepul modellarda ba'zan shunday bo'ladi — qayta urinib ko'ring.",
-                retryable=True,
-                detail=last_error_detail,
-            )
-        except requests.exceptions.RequestException as e:
-            last_error_detail = str(e)
-            if attempt < OPENROUTER_MAX_RETRIES:
-                time.sleep(OPENROUTER_RETRY_BACKOFF[attempt])
-                continue
-            raise OpenRouterError(
-                "OpenRouter'ga ulanib bo'lmadi. Internet aloqasini tekshiring va qayta urinib ko'ring.",
-                retryable=True,
-                detail=last_error_detail,
-            )
-
-    # Bu yerga yetib kelmasligi kerak, lekin ehtiyot uchun:
-    raise OpenRouterError(
-        "Kutilmagan xatolik yuz berdi. Qayta urinib ko'ring.",
-        retryable=True,
-        detail=last_error_detail,
-    )
-
-
-def _extract_json_obj(text: str):
-    text = text.strip()
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except Exception:
-            pass
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except Exception:
-            # Greedy o'rniga aniqroq: birinchi "{" dan boshlab, qavslar
-            # balansini kuzatib, birinchi TO'LIQ yopilgan obyektni topamiz.
-            # Bu, masalan, model "done" javobida kod misoli yoki matematik
-            # to'plam ko'rsatib, qo'shimcha { } ishlatib qo'yganda ham
-            # to'g'ri ishlaydi — oldingi greedy regex butun matnni bitta
-            # buzuq "JSON" deb ushlab, model javobini butunlay chalkashtirib
-            # yuborardi.
-            start = text.find("{")
-            if start != -1:
-                depth = 0
-                in_string = False
-                escape = False
-                for i in range(start, len(text)):
-                    ch = text[i]
-                    if in_string:
-                        if escape:
-                            escape = False
-                        elif ch == "\\":
-                            escape = True
-                        elif ch == '"':
-                            in_string = False
-                        continue
-                    if ch == '"':
-                        in_string = True
-                    elif ch == "{":
-                        depth += 1
-                    elif ch == "}":
-                        depth -= 1
-                        if depth == 0:
-                            try:
-                                return json.loads(text[start:i + 1])
-                            except Exception:
-                                break
-    return None
-
-
-def try_parse_command(text: str):
-    """Legacy single-command format: {"command": "...", "cwd": "..."}"""
-    data = _extract_json_obj(text)
-    if isinstance(data, dict) and "command" in data and "action" not in data:
-        return data
-    return None
-
-
-def try_parse_action(text: str):
-    """
-    New agentic format: {"action": "command|read_file|write_file|list_dir|web_search|done", ...}
-    Also accepts the legacy {"command": "..."} shape and normalizes it to
-    {"action": "command", ...}. Returns None if the model just gave a plain
-    text answer (no JSON at all) — caller treats that as a "done" message.
-    """
-    data = _extract_json_obj(text)
-    if not isinstance(data, dict):
-        return None
-    if "action" in data:
-        return data
-    if "command" in data:
-        return {"action": "command", "command": data["command"], "cwd": data.get("cwd")}
-    # format=json guarantees *some* valid JSON object back, but not
-    # necessarily one matching our schema — a weak model can produce
-    # e.g. {"message": "..."} or {"response": "..."} with no "action"
-    # key at all. Rather than showing that raw JSON to the user, treat
-    # any plausible text field as a "done" message.
-    for key in ("message", "response", "text", "reply", "answer"):
-        if isinstance(data.get(key), str) and data[key].strip():
-            return {"action": "done", "message": data[key].strip()}
-    return None
-
-
-# ---------------------------------------------------------------------------
-# TOOLS (agentic actions beyond raw shell commands)
-# ---------------------------------------------------------------------------
-
-MAX_FILE_READ_BYTES = 200_000
-
-def resolve_path(path: str, base_cwd: str) -> Path:
-    p = Path(path).expanduser()
-    if not p.is_absolute():
-        p = Path(base_cwd) / p
-    return p
-
-def tool_read_file(path: str, base_cwd: str) -> str:
-    try:
-        p = resolve_path(path, base_cwd).resolve()
-        if not p.exists() or not p.is_file():
-            return f"File not found: {p}"
-        data = p.read_bytes()
-        truncated = len(data) > MAX_FILE_READ_BYTES
-        text = data[:MAX_FILE_READ_BYTES].decode("utf-8", errors="replace")
-        if truncated:
-            text += "\n\n[...truncated, file is larger than the read limit...]"
-        return text
-    except Exception as e:
-        return f"Error reading file: {e}"
-
-def tool_write_file(path: str, content: str, base_cwd: str) -> str:
-    try:
-        p = resolve_path(path, base_cwd).resolve()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content if content is not None else "", encoding="utf-8")
-        return f"Wrote {len(content or '')} chars to {p}"
-    except Exception as e:
-        return f"Error writing file: {e}"
-
-def tool_list_dir(path: str, base_cwd: str) -> str:
-    try:
-        p = resolve_path(path or ".", base_cwd).resolve()
-        if not p.exists() or not p.is_dir():
-            return f"Directory not found: {p}"
-        entries = sorted(p.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
-        lines = []
-        for e in entries[:500]:
-            marker = "/" if e.is_dir() else ""
-            lines.append(f"{e.name}{marker}")
-        return "\n".join(lines) if lines else "(empty directory)"
-    except Exception as e:
-        return f"Error listing directory: {e}"
-
-def tool_web_search(query: str) -> str:
-    try:
-        resp = requests.get(
-            "https://duckduckgo.com/html/",
-            params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0 (mragent)"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', resp.text, re.DOTALL)
-        snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', resp.text, re.DOTALL)
-        clean = lambda s: re.sub(r"<.*?>", "", s).strip()
-        results = []
-        for t, s in list(zip(titles, snippets))[:5]:
-            results.append(f"- {clean(t)}: {clean(s)}")
-        return "\n".join(results) if results else "No results found."
-    except Exception as e:
-        return f"Web search error: {e}"
-
-
-def execute_command(cmd_data: dict) -> str:
-    command = cmd_data.get("command", "").strip()
-    cwd = cmd_data.get("cwd")
-    if not command:
-        return "No command provided"
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=cwd if cwd else None,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        output = result.stdout
-        if result.stderr:
-            output += "\nSTDERR:\n" + result.stderr
-        if result.returncode != 0:
-            output += f"\n[Exit code: {result.returncode}]"
-        return output.strip() or "(no output)"
-    except subprocess.TimeoutExpired:
-        return "Command timed out after 60 seconds"
-    except Exception as e:
-        return f"Execution error: {str(e)}"
-
-
-SUMMARY_SYSTEM_PROMPT = """You just ran one shell command for the user and now tell them what happened, in ONE short, natural, plain-language line (or two, only if truly needed) — like a friend glancing at the terminal and casually reporting back. No emoji, no "Command executed:" / "Result:" log format, no repeating raw stdout dumps. Match the user's language (default: informal Uzbek, "bratan" register). If it succeeded, just say plainly what happened (created/deleted/found/ran — whatever fits) and, if relevant, the concrete path or key detail. If it failed, say what went wrong in plain words, briefly. Output ONLY that one line of plain text — no JSON, no markdown, no quotes around it."""
-
-
-def summarize_command_result(command: str, exec_result: str, tier: str = DEFAULT_TIER) -> str:
-    """Formats the raw command + its stdout/stderr as plain text, no LLM
-    call involved. Previously this asked the model itself to turn the raw
-    dump into a natural-language line, but that meant a SECOND blocking
-    LLM call on every single /confirm, adding pure waiting for something
-    as trivial as `ls -la`. Not worth it even on fast cloud inference: raw output is instant
-    and just as readable. tier kept in the signature for backward compat
-    with call sites, unused now."""
-    return f"`{command}`\n\n```\n{exec_result}\n```"
-
-
-# ---------------------------------------------------------------------------
-# ROUTES
-# ---------------------------------------------------------------------------
-
-def sse(data: dict) -> str:
-    """Format one Server-Sent-Event frame carrying a JSON payload."""
-    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-def sse_final(data: dict, tier: str, mode: str = DEFAULT_MODE) -> str:
-    """Same as sse(), but stamps every 'final' frame with which tier/model
-    actually answered this turn, plus which safety mode was active —
-    frontend uses this to label the reply and show the sudo-mode warning
-    badge without guessing."""
-    return sse({**data, "tier": tier, "model": MODELS[tier], "mode": mode})
-
-
-def parse_chat_file(category: str, filename: str) -> list:
-    """Reads one chat log file and returns a list of {role, content, ts}
-    messages, USER/ASSISTANT roles only (ACTION/PENDING/BLOCKED/ERROR are
-    internal noise the frontend doesn't need). Reverses the same escaping
-    done in append_to_chat (\\n token -> real newline, \\\\ -> \\)."""
-    file_path = CHATS_DIR / category / filename
-    if not file_path.exists():
-        return []
-    messages = []
-    try:
-        lines = file_path.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return []
-    for line in lines:
-        m = re.match(r"^\[([^\]]+)\] (USER|ASSISTANT): (.*)$", line)
-        if not m:
-            continue
-        ts, role, content = m.group(1), m.group(2), m.group(3)
-        content = content.replace("\\n", "\n").replace("\\\\", "\\")
-        messages.append({"role": role, "content": content, "ts": ts})
-    return messages
-
-
-@app.route("/chats", methods=["GET"])
-def list_chats():
-    """Returns every stored chat, grouped by category/filename, so the
-    frontend can render a chat list without touching localStorage at all.
-    Response: [{"category": ..., "filename": ..., "messages": [...]}]"""
-    if not require_auth(request):
-        return jsonify({"error": "unauthorized"}), 401
-
-    result = []
-    if not CHATS_DIR.exists():
-        return jsonify(result)
-
-    for category_dir in sorted(CHATS_DIR.iterdir()):
-        if not category_dir.is_dir():
-            continue
-        category = category_dir.name
-        if category == "_auth":
-            continue  # internal auth-check pings, not a real chat
-        for chat_file in sorted(category_dir.iterdir()):
-            if not chat_file.is_file():
-                continue
-            messages = parse_chat_file(category, chat_file.name)
-            if not messages:
-                continue
-            result.append({
-                "category": category,
-                "filename": chat_file.name,
-                "messages": messages,
-            })
-    return jsonify(result)
-
-
-@app.route("/chats/<category>/<filename>", methods=["GET"])
-def get_chat(category, filename):
-    """Returns the message history for one specific chat file."""
-    if not require_auth(request):
-        return jsonify({"error": "unauthorized"}), 401
-
-    safe_category = re.sub(r"[^\w\-]", "_", category)
-    safe_filename = re.sub(r"[^\w\-.]", "_", filename)
-    messages = parse_chat_file(safe_category, safe_filename)
-    return jsonify({
-        "category": safe_category,
-        "filename": safe_filename,
-        "messages": messages,
-    })
-
-
-@app.route("/chats/<category>/<filename>", methods=["DELETE"])
-def delete_chat(category, filename):
-    """Deletes one chat's log file entirely."""
-    if not require_auth(request):
-        return jsonify({"error": "unauthorized"}), 401
-
-    safe_category = re.sub(r"[^\w\-]", "_", category)
-    safe_filename = re.sub(r"[^\w\-.]", "_", filename)
-    file_path = CHATS_DIR / safe_category / safe_filename
-    try:
-        if file_path.exists() and file_path.is_file():
-            file_path.unlink()
-        cwd_state = load_cwd_state()
-        cwd_state.pop(get_session_key(safe_category, safe_filename), None)
-        save_cwd_state(cwd_state)
-        return jsonify({"deleted": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/login", methods=["POST"])
-def login():
-    """PASS (X-Login-Pass) to'g'ri kelsa AUTH_TOKEN'ni qaytaradi.
-    Diqqat: bu endpoint qasddan faqat PASS so'raydi, TOKEN emas — chunki
-    uning butun maqsadi TOKEN'ni bilmagan holatda PASS orqali OLISH.
-    Shu sabab bu yerda require_auth() (ikkovini ham talab qiladigan)
-    ishlatilmaydi — faqat PASS solishtiriladi."""
-    data = request.get_json(silent=True) or {}
-    supplied_pass = str(data.get("pass", request.headers.get("X-Login-Pass", ""))).strip()
-    if not secrets.compare_digest(supplied_pass, LOGIN_PASS):
-        return jsonify({"error": "unauthorized"}), 401
-    return jsonify({"token": AUTH_TOKEN})
-
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    if not require_auth(request):
-        return jsonify({"error": "unauthorized"}), 401
-
-    data = request.get_json(silent=True)
-    if not data or "message" not in data:
-        return jsonify({"error": "message is required"}), 400
-
-    message = str(data["message"]).strip()
-    if not message:
-        return jsonify({"error": "message cannot be empty"}), 400
-
-    category = re.sub(r"[^\w\-]", "_", str(data.get("category", "general")))
-    filename = re.sub(r"[^\w\-.]", "_", str(data.get("filename", "chat")))
-    tier = resolve_tier(data.get("tier"))
-    mode = resolve_mode(data.get("mode"))
-
-    # The login screen pings this special message to verify credentials
-    # without calling OpenRouter at all — answer instantly, no streaming needed.
-    if message == "__mragent_auth_check__":
-        return jsonify({"response": "ok", "type": "text"})
-
-    def generate():
-        # Grab prior turns BEFORE writing this message to the log, so it
-        # doesn't include the current message twice.
-        history_block = get_recent_history(category, filename)
-        append_to_chat(category, filename, "USER", message)
-
-        MAX_STEPS = 8
-        steps_taken = []  # kept for the frontend, so it can show the trail of actions
-        session_cwd = get_current_cwd(category, filename)
-
-        for step_num in range(MAX_STEPS):
-            # Build a running log of what's happened so far this turn, so the
-            # model can decide the next action with full context. Prior
-            # conversation turns are always included so short replies like
-            # "no" or "do it" resolve against what was actually said before.
-            if not steps_taken:
-                prompt = f"{history_block}Current request: {message}"
-            else:
-                log_lines = [history_block.rstrip(), "", f"Current request: {message}", "", "Actions so far:"]
-                for i, s in enumerate(steps_taken, 1):
-                    log_lines.append(f"{i}. action={s['action']} -> {s.get('result', '')}")
-                log_lines.append("\nWhat's the next single action? (or 'done' if finished)")
-                prompt = "\n".join(log_lines)
-
-            # Real thinking indicator: the model is about to be called, and
-            # this is the slow part (CPU inference). The frontend shows an
-            # animated "thinking" state from this event until the next one.
-            yield sse({"type": "thinking", "step": step_num + 1, "max_steps": MAX_STEPS, "tier": tier, "model": MODELS[tier], "mode": mode})
-
-            # OpenRouter'ning o'zi (retry'lardan keyin ham) butunlay
-            # ishlamay qolsa — bu bepul model band/ishlamayapti degani.
-            # Xom exception matnini hech qachon "assistant javobi" qilib
-            # ko'rsatmaymiz — foydalanuvchiga aniq, harakat qilsa
-            # bo'ladigan xabar beramiz va shu yerda to'xtaymiz.
-            try:
-                model_response = call_openrouter(prompt, tier=tier, json_mode=True)
-            except OpenRouterError as e:
-                append_to_chat(category, filename, "ERROR", f"{e.user_message} ({e.detail})")
-                yield sse_final({
-                    "type": "final",
-                    "kind": "error",
-                    "response": e.user_message,
-                    "retryable": e.retryable,
-                    "steps": steps_taken,
-                    "cwd": session_cwd,
-                }, tier, mode)
-                return
-            action_data = try_parse_action(model_response)
-
-            # First attempt gave nothing usable -> retry ONCE with a sharper
-            # nudge before giving up and showing plain text. Small models
-            # occasionally emit JSON that doesn't match our schema at all
-            # (e.g. {"thought": "..."}) even with format=json forcing valid
-            # JSON syntax — a single retry with a stricter reminder catches
-            # most of those without adding real latency to the common case.
-            if not action_data:
-                retry_prompt = (
-                    prompt
-                    + "\n\nYour last reply was not a valid action object. "
-                    + "Reply with ONLY one JSON object using the \"action\" "
-                    + "field — one of: command, read_file, write_file, "
-                    + "list_dir, web_search, done. No other keys at the top level."
-                )
-                try:
-                    model_response = call_openrouter(retry_prompt, tier=tier, json_mode=True)
-                except OpenRouterError as e:
-                    append_to_chat(category, filename, "ERROR", f"{e.user_message} ({e.detail})")
-                    yield sse_final({
-                        "type": "final",
-                        "kind": "error",
-                        "response": e.user_message,
-                        "retryable": e.retryable,
-                        "steps": steps_taken,
-                        "cwd": session_cwd,
-                    }, tier, mode)
-                    return
-                action_data = try_parse_action(model_response)
-
-            # Still no valid action after retry -> treat as the model's
-            # plain, friendly final answer rather than looping forever.
-            if not action_data:
-                append_to_chat(category, filename, "ASSISTANT", model_response)
-                yield sse_final({
-                    "type": "final",
-                    "kind": "text",
-                    "response": model_response,
-                    "steps": steps_taken,
-                    "cwd": session_cwd,
-                }, tier, mode)
-                return
-
-            action = action_data.get("action", "command")
-
-            # ---- done: model is finished, give the friendly final message ----
-            if action == "done":
-                final_msg = action_data.get("message") or "Done!"
-                append_to_chat(category, filename, "ASSISTANT", final_msg)
-                yield sse_final({
-                    "type": "final",
-                    "kind": "text",
-                    "response": final_msg,
-                    "steps": steps_taken,
-                    "cwd": session_cwd,
-                }, tier, mode)
-                return
-
-            # ---- read_file / list_dir / web_search: safe, run immediately ----
-            if action == "read_file":
-                path = action_data.get("path", "")
-                yield sse({"type": "action", "action": "read_file", "target": path})
-                result = tool_read_file(path, session_cwd)
-                append_to_chat(category, filename, "ACTION", f"read_file {path}")
-                step = {"action": "read_file", "path": path, "result": result}
-                steps_taken.append(step)
-                yield sse({"type": "step_result", **step})
-                continue
-
-            if action == "list_dir":
-                path = action_data.get("path", ".")
-                yield sse({"type": "action", "action": "list_dir", "target": path})
-                result = tool_list_dir(path, session_cwd)
-                append_to_chat(category, filename, "ACTION", f"list_dir {path}")
-                step = {"action": "list_dir", "path": path, "result": result}
-                steps_taken.append(step)
-                yield sse({"type": "step_result", **step})
-                continue
-
-            if action == "web_search":
-                query = action_data.get("query", "")
-                yield sse({"type": "action", "action": "web_search", "target": query})
-                result = tool_web_search(query)
-                append_to_chat(category, filename, "ACTION", f"web_search {query}")
-                step = {"action": "web_search", "query": query, "result": result}
-                steps_taken.append(step)
-                yield sse({"type": "step_result", **step})
-                continue
-
-            # ---- write_file: touches disk -> needs confirmation, like commands ----
-            if action == "write_file":
-                path = action_data.get("path", "")
-                content = action_data.get("content", "")
-                command_id = secrets.token_hex(8)
-                pending = load_pending()
-                pending[command_id] = {
-                    "type": "write_file",
-                    "path": path,
-                    "content": content,
-                    "cwd": session_cwd,
-                    "category": category,
-                    "filename": filename,
-                    "steps": steps_taken,
-                    "tier": tier,
-                    "mode": mode,
-                }
-                save_pending(pending)
-                msg = f"Confirm writing to this file?\n\n{path}"
-                append_to_chat(category, filename, "PENDING", f"{command_id} :: write_file {path}")
-                yield sse_final({
-                    "type": "final",
-                    "kind": "pending_confirmation",
-                    "response": msg,
-                    "action": "write_file",
-                    "path": path,
-                    "command_id": command_id,
-                    "steps": steps_taken,
-                }, tier, mode)
-                return
-
-            # ---- command: shell command, same safety rules as before ----
-            command = (action_data.get("command") or "").strip()
-            if not command:
-                # Nothing actionable — bail out gracefully rather than looping.
-                append_to_chat(category, filename, "ASSISTANT", model_response)
-                yield sse_final({
-                    "type": "final",
-                    "kind": "text",
-                    "response": model_response,
-                    "steps": steps_taken,
-                    "cwd": session_cwd,
-                }, tier, mode)
-                return
-
-            cwd_for_cmd = action_data.get("cwd") or session_cwd
-
-            # 0) A pure "cd <path>" is safe, needs no confirmation, runs
-            #    immediately, and updates the session's current folder.
-            cd_target = try_extract_cd(command, session_cwd)
-            if cd_target is not None:
-                yield sse({"type": "action", "action": "command", "target": command})
-                if not cd_target.exists() or not cd_target.is_dir():
-                    result = f"Folder not found: {cd_target}"
-                else:
-                    set_current_cwd(category, filename, str(cd_target))
-                    session_cwd = str(cd_target)
-                    result = f"Current folder: {cd_target}"
-                append_to_chat(category, filename, "ACTION", f"cd -> {result}")
-                step = {"action": "command", "command": command, "result": result}
-                steps_taken.append(step)
-                yield sse({"type": "step_result", **step})
-                continue
-
-            # 1) Hard block — in "general" mode this never runs, even with
-            #    confirmation. In "sudo" mode the user has explicitly opted
-            #    out of this check — the command still goes through the
-            #    normal confirmation card below, nothing skips that.
-            if mode == "general" and is_hard_blocked(command):
-                msg = f"BLOCKED (dangerous command, not executed):\n{command}"
-                append_to_chat(category, filename, "BLOCKED", command)
-                yield sse_final({
-                    "type": "final",
-                    "kind": "blocked",
-                    "response": msg,
-                    "command": command,
-                    "steps": steps_taken,
-                }, tier, mode)
-                return
-
-            # 2) Needs confirmation — we don't run it yet, loop stops here.
-            #    Once the user confirms, /confirm does NOT continue with more
-            #    steps (for safety) — but we keep steps_taken so context
-            #    isn't lost.
-            # In "sudo" mode a command matching HARD_BLOCK_PATTERNS is
-            # irreversible-dangerous (rm -rf, disk wipe, fork bomb, etc) —
-            # a single click isn't enough. The frontend must show a red
-            # card and the user must retype the exact command by hand,
-            # same as GitHub's "type the repo name" delete confirmation.
-            danger_confirm = (mode == "sudo") and is_hard_blocked(command)
-
-            command_id = secrets.token_hex(8)
-            pending = load_pending()
-            pending[command_id] = {
-                "type": "command",
-                "command": command,
-                "cwd": cwd_for_cmd,
-                "category": category,
-                "filename": filename,
-                "steps": steps_taken,
-                "tier": tier,
-                "mode": mode,
-                "requires_typed_confirmation": danger_confirm,
-            }
-            save_pending(pending)
-
-            msg = f"Run this command?\n\n{command}"
-            append_to_chat(category, filename, "PENDING", f"{command_id} :: {command}")
-
-            yield sse_final({
-                "type": "final",
-                "kind": "pending_confirmation",
-                "response": msg,
-                "command": command,
-                "command_id": command_id,
-                "steps": steps_taken,
-                "requires_typed_confirmation": danger_confirm,
-            }, tier, mode)
-            return
-
-        # Hit the step limit — stop here to avoid an endless loop.
-        msg = "This task is taking too many steps, so I'm stopping here with what I've done so far. Let me know if you'd like me to keep going."
-        append_to_chat(category, filename, "ASSISTANT", msg)
-        yield sse_final({"type": "final", "kind": "text", "response": msg, "steps": steps_taken, "cwd": session_cwd}, tier, mode)
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
+    .login-card {
+      background: #212121;
+    }
+    .sidebar-item {
+      transition: background-color .12s ease;
+    }
+
+    /* ---- pill selects (mode / tier) ---- */
+    .pill-select-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      border-radius: 999px;
+      padding: 5px 10px 5px 9px;
+      transition: border-color .15s ease, background-color .15s ease;
+    }
+    .pill-select-wrap:hover {
+      border-color: #4d4d4d;
+    }
+    .pill-select-wrap:focus-within {
+      border-color: #8e5cf7;
+      box-shadow: 0 0 0 3px rgba(142,92,247,0.15);
+    }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #8e8e8e;
+      transition: background-color .15s ease;
+    }
+    .pill-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background: transparent;
+      border: none;
+      color: #d9d9d9;
+      font-size: 12px;
+      font-weight: 500;
+      padding-right: 14px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e8e8e' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right center;
+      cursor: pointer;
+    }
+    .pill-select:focus {
+      outline: none;
+    }
+    .pill-select option {
+      background: #2a2a2a;
+      color: #ececec;
+    }
+
+    /* ---- thinking / live thought-process animation ---- */
+    .thinking-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+      color: #a8a8a8;
+      font-size: 13.5px;
+    }
+    .thinking-dot-orb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #b98cff, #8e5cf7 70%);
+      box-shadow: 0 0 8px rgba(142, 92, 247, 0.55);
+      animation: orbPulse 1.1s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes orbPulse {
+      0%, 100% { transform: scale(0.75); opacity: 0.55; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+    .thinking-dots span {
+      animation: dotBlink 1.2s infinite;
+      opacity: 0.2;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotBlink {
+      0%, 80%, 100% { opacity: 0.2; }
+      40% { opacity: 1; }
+    }
+    .thought-log {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      border-left: 2px solid #3a3a3a;
+      padding-left: 12px;
+      margin-bottom: 4px;
+    }
+    .thought-line {
+      font-size: 12.5px;
+      color: #6f6f6f;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      animation: fadeInThought .25s ease;
+    }
+    .thought-line.current { color: #a8a8a8; }
+    .thought-line .check {
+      color: #7fd68b;
+      flex-shrink: 0;
+    }
+    @keyframes fadeInThought {
+      from { opacity: 0; transform: translateY(-3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- rendered markdown for bot replies (natural prose, not <pre>) ---- */
+    .prose-bot { line-height: 1.65; }
+    .prose-bot p { margin: 0 0 0.7em 0; }
+    .prose-bot p:last-child { margin-bottom: 0; }
+    .prose-bot strong { font-weight: 600; color: #fff; }
+    .prose-bot em { font-style: italic; }
+    .prose-bot ul, .prose-bot ol { margin: 0.3em 0 0.7em 1.3em; }
+    .prose-bot ul { list-style: disc; }
+    .prose-bot ol { list-style: decimal; }
+    .prose-bot li { margin: 0.15em 0; }
+    .prose-bot h1, .prose-bot h2, .prose-bot h3 {
+      font-weight: 600; color: #fff; margin: 0.8em 0 0.4em 0;
+    }
+    .prose-bot h1 { font-size: 1.25em; }
+    .prose-bot h2 { font-size: 1.15em; }
+    .prose-bot h3 { font-size: 1.05em; }
+    .prose-bot code {
+      background: #2f2f2f; padding: 0.15em 0.4em; border-radius: 5px;
+      font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.88em;
+    }
+    .prose-bot pre {
+      background: #1a1a1a; border: 1px solid #333; border-radius: 10px;
+      padding: 12px 14px; overflow-x: auto; margin: 0.5em 0;
+    }
+    .prose-bot pre code { background: none; padding: 0; font-size: 0.85em; }
+    .prose-bot blockquote {
+      border-left: 3px solid #4d4d4d; padding-left: 12px; color: #a8a8a8; margin: 0.5em 0;
+    }
+    .prose-bot a { color: #b98cff; text-decoration: underline; }
+    .prose-bot hr { border: none; border-top: 1px solid #3a3a3a; margin: 0.8em 0; }
+
+    /* ---- INPUT / OUTPUT card for executed commands ---- */
+    .io-card {
+      border: 1px solid #3a3a3a;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #1a1a1a;
+    }
+    .io-section:not(:last-child) { border-bottom: 1px solid #3a3a3a; }
+    .io-header {
+      background: #111111;
+      color: #ececec;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 6px 14px;
+      text-transform: uppercase;
+    }
+    .io-content {
+      margin: 0;
+      padding: 12px 14px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: #d9d9d9;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .io-content.io-output-err { color: #ff9c9c; }
+  </style>
+</head>
+<body class="text-[#ececec] h-screen flex flex-col" style="background:#212121;">
+
+  <!-- =================== BOOT (checking auth) =================== -->
+  <div id="boot-screen" class="h-screen w-screen flex items-center justify-center" style="background:#212121;">
+    <div class="flex flex-col items-center gap-3">
+      <div class="w-6 h-6 rounded-full border-2 border-[#4d4d4d] border-t-[#ececec] animate-spin"></div>
+    </div>
+  </div>
+
+  <!-- =================== LOGIN SCREEN =================== -->
+  <div id="login-screen" class="hidden h-screen w-screen flex items-center justify-center" style="background:#212121;">
+    <form id="login-form" class="login-card w-full max-w-[400px] p-8 space-y-6">
+      <div class="text-center space-y-2">
+        <div class="w-9 h-9 mx-auto">
+          <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+        </div>
+        <h1 class="font-semibold text-2xl tracking-tight text-[#ececec]">Continue to MRagent</h1>
+      </div>
+
+      <div class="space-y-3">
+        <div class="space-y-1.5">
+          <input id="login-pass" type="password" autocomplete="current-password"
+                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
+                 placeholder="Login password" required />
+        </div>
+        <div class="space-y-1.5">
+          <input id="login-token" type="password" autocomplete="off"
+                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
+                 placeholder="Auth token" required />
+        </div>
+      </div>
+
+      <p id="login-error" class="text-[13px] text-[#f2555a] hidden">Wrong password, or the backend didn't respond.</p>
+
+      <button type="submit" id="login-btn"
+              class="w-full bg-[#ececec] hover:bg-white text-[#212121] rounded-xl py-3 text-[15px] font-medium transition disabled:opacity-40">
+        Continue
+      </button>
+
+      <p class="text-[13px] text-[#8e8e8e] text-center" id="login-tunnel-status">looking for tunnel...</p>
+    </form>
+  </div>
+
+  <!-- =================== CHAT APP (shown after login) =================== -->
+  <div id="app-screen" class="hidden h-screen flex" style="background:#212121;">
+
+    <!-- =================== SIDEBAR =================== -->
+    <aside class="w-64 shrink-0 flex flex-col" style="background:#171717;">
+      <div class="px-3 py-3 space-y-1">
+        <button id="new-chat-btn"
+                class="sidebar-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#ececec] text-left">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+          </svg>
+          New chat
+        </button>
+        <button id="bash-btn"
+                class="sidebar-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#ececec] text-left">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+            <polyline points="4 17 10 11 4 5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="19" x2="20" y2="19" stroke-linecap="round"/>
+          </svg>
+          Bash
+        </button>
+      </div>
+
+      <div class="px-3 mt-4 flex-1 min-h-0 flex flex-col">
+        <p class="text-xs font-medium text-[#8e8e8e] px-3 mb-1">Chats</p>
+        <div id="chat-history" class="text-sm text-[#d9d9d9] overflow-y-auto flex-1 min-h-0">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <div class="px-2 py-2 flex items-center justify-between">
+        <div class="sidebar-item flex-1 flex items-center gap-2.5 rounded-lg px-2 py-2 min-w-0 hover:bg-[#2a2a2a]">
+          <div class="w-7 h-7 rounded-full overflow-hidden shrink-0" style="background:#ececec;">
+            <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+          </div>
+          <div class="min-w-0">
+            <p class="text-[13px] truncate text-[#ececec]">MRagent</p>
+            <p class="text-[11px] text-[#8e8e8e]" id="tunnel-status">connecting...</p>
+          </div>
+        </div>
+        <button id="logout-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1.5 shrink-0">
+          sign out
+        </button>
+      </div>
+    </aside>
+
+    <!-- =================== MAIN CHAT =================== -->
+    <div id="chat-panel" class="flex-1 flex flex-col min-w-0 relative" style="background:#212121;">
+      <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></main>
+
+      <!-- Empty-state: centered greeting + input, ChatGPT-style. Hidden the
+           moment the first message goes out; the bottom-pinned footer
+           below takes over from then on. -->
+      <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center px-4">
+        <div class="w-full max-w-[720px]">
+          <div class="text-center text-[#ececec] text-2xl font-medium mb-6" id="welcome">
+            Hey! What are we building today?
+          </div>
+          <div id="composer-slot-empty"></div>
+        </div>
+      </div>
+
+      <!-- Bottom-pinned footer: shown once the conversation has messages. -->
+      <footer id="chat-footer" class="px-4 pb-6 pt-2 hidden">
+        <div id="composer-slot-footer"></div>
+      </footer>
+    </div>
+
+    <!-- =================== REAL BASH TERMINAL =================== -->
+    <!-- Raw PTY over WebSocket straight to the machine, bypassing the AI
+         entirely. Hidden by default; toggled by the "Bash" sidebar button. -->
+    <div id="term-panel" class="hidden flex-1 flex flex-col min-w-0" style="background:#0b0b0b;">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b shrink-0" style="border-color:#2a2a2a;">
+        <div class="flex items-center gap-2 text-[13px] text-[#a8a8a8]">
+          <span class="w-2 h-2 rounded-full shrink-0" id="term-status-dot" style="background:#f2555a;"></span>
+          <span id="term-status-text">connecting...</span>
+        </div>
+        <button id="term-close-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1">
+          close
+        </button>
+      </div>
+      <div id="term-container" class="flex-1 min-h-0 p-2"></div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDYkT1b_SOg5T76yhpyRuqnem9YsG53Qn0",
+      authDomain: "mragent-2d280.firebaseapp.com",
+      projectId: "mragent-2d280",
+      storageBucket: "mragent-2d280.firebasestorage.app",
+      messagingSenderId: "654437071743",
+      appId: "1:654437071743:web:7281d306d8c6cd054c784a",
+      measurementId: "G-MZEC0M55WH"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    // Ba'zi tarmoqlar/provayderlar Firestore'ning odatiy WebChannel
+    // (streaming) ulanishini sekinlashtiradi yoki bloklaydi — bu holatda
+    // uzoq muddatli long-polling'ga avtomatik o'tish barqarorlikni oshiradi.
+    db.settings({ experimentalForceLongPolling: true, experimentalAutoDetectLongPolling: false });
+
+    let API_BASE = null;
+    let LOGIN_PASS = "";
+    let AUTH_TOKEN = "";
+    // Eski usul: token Firestore'dan avtomatik olinardi. Endi backend
+    // (main.py) endi TOKEN'ni Firestore'ga yozmaydi — xavfsizlik uchun,
+    // PASS bilmagan odam ham Firestore'dan o'qiy olmasin deb. Shuning
+    // uchun endi login formasi PASS bilan birga TOKEN'ni ham qo'lda
+    // so'raydi.
+
+    const bootScreen = document.getElementById("boot-screen");
+    const loginScreen = document.getElementById("login-screen");
+    const appScreen = document.getElementById("app-screen");
+    const loginForm = document.getElementById("login-form");
+    const loginPass = document.getElementById("login-pass");
+    const loginToken = document.getElementById("login-token");
+    const loginError = document.getElementById("login-error");
+    const loginBtn = document.getElementById("login-btn");
+    const loginTunnelStatus = document.getElementById("login-tunnel-status");
+
+    const chat = document.getElementById("chat");
+    const emptyState = document.getElementById("empty-state");
+    const chatFooter = document.getElementById("chat-footer");
+    const composerSlotEmpty = document.getElementById("composer-slot-empty");
+    const composerSlotFooter = document.getElementById("composer-slot-footer");
+    const tunnelStatus = document.getElementById("tunnel-status");
+    const logoutBtn = document.getElementById("logout-btn");
+    const newChatBtn = document.getElementById("new-chat-btn");
+
+    const chatPanel = document.getElementById("chat-panel");
+    const bashBtn = document.getElementById("bash-btn");
+    const termPanel = document.getElementById("term-panel");
+    const termContainer = document.getElementById("term-container");
+    const termCloseBtn = document.getElementById("term-close-btn");
+    const termStatusDot = document.getElementById("term-status-dot");
+    const termStatusText = document.getElementById("term-status-text");
+
+    // ---------------------------------------------------------------------
+    // COMPOSER — one physical set of controls (mode/tier/input/send) that
+    // gets moved between the centered empty-state slot and the bottom-
+    // pinned footer slot depending on whether the active chat has any
+    // messages yet. Avoids keeping two copies of the same inputs in sync.
+    // ---------------------------------------------------------------------
+    const composer = document.createElement("div");
+    composer.innerHTML = `
+      <div id="sudoBanner" data-composer-part class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
+        SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
+      </div>
+      <div data-composer-part class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
+        <div class="pill-select-wrap">
+          <span class="pill-dot" id="mode-dot"></span>
+          <select id="mode" class="pill-select" title="Xavfsizlik rejimi">
+            <option value="general" selected>General</option>
+            <option value="sudo">Sudo</option>
+          </select>
+        </div>
+        <div class="pill-select-wrap ml-auto">
+          <span class="pill-dot" id="tier-dot"></span>
+          <select id="tier" class="pill-select" title="Model quality vs speed">
+            <option value="high">Yuqori — qwen2.5:7b</option>
+            <option value="medium" selected>O'rtacha — qwen2.5:1.5b</option>
+            <option value="low">Past/tez — qwen2.5:1.5b</option>
+          </select>
+        </div>
+      </div>
+      <div data-composer-part class="max-w-[720px] mx-auto flex items-center gap-2 rounded-3xl px-3 py-2" style="background:#2f2f2f;">
+        <input id="message" type="text" placeholder="Type a message..."
+               class="flex-1 bg-transparent px-2 py-2 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
+               autocomplete="off" />
+        <button id="send" class="bg-[#ececec] hover:bg-white text-[#212121] w-9 h-9 rounded-full flex items-center justify-center transition disabled:opacity-30 shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>`;
+    // Move all top-level children of the fragment into the empty-state slot
+    // initially; showComposerIn() relocates them later without re-creating
+    // anything, so listeners/state stay attached.
+    while (composer.firstChild) composerSlotEmpty.appendChild(composer.firstChild);
+
+    const input = document.getElementById("message");
+    const sendBtn = document.getElementById("send");
+    const modeSelect = document.getElementById("mode");
+    const sudoBanner = document.getElementById("sudoBanner");
+
+    function updateSudoBanner() {
+      sudoBanner.classList.toggle("hidden", modeSelect.value !== "sudo");
+    }
+    modeSelect.addEventListener("change", updateSudoBanner);
+    updateSudoBanner();
+
+    // ---- pill dot colors: quick visual cue instead of emoji ----
+    const modeDot = document.getElementById("mode-dot");
+    const tierSelect = document.getElementById("tier");
+    const tierDot = document.getElementById("tier-dot");
+    const MODE_COLORS = { general: "#4caf7a", sudo: "#ff6b6b" };
+    const TIER_COLORS = { high: "#8e5cf7", medium: "#f5a623", low: "#6b6b6b" };
+    function updateModeDot() { modeDot.style.background = MODE_COLORS[modeSelect.value] || "#8e8e8e"; }
+    function updateTierDot() { tierDot.style.background = TIER_COLORS[tierSelect.value] || "#8e8e8e"; }
+    modeSelect.addEventListener("change", updateModeDot);
+    tierSelect.addEventListener("change", updateTierDot);
+    updateModeDot();
+    updateTierDot();
+
+    // Moves the composer's actual DOM node (the whole fragment we built
+    // above) between the centered slot and the footer slot.
+    function placeComposer(inFooter) {
+      const targetSlot = inFooter ? composerSlotFooter : composerSlotEmpty;
+      if (targetSlot.contains(input)) return; // already there
+      document.querySelectorAll('[data-composer-part]').forEach(n => targetSlot.appendChild(n));
+    }
+
+    function setEmptyState(isEmpty) {
+      emptyState.classList.toggle("hidden", !isEmpty);
+      chatFooter.classList.toggle("hidden", isEmpty);
+      placeComposer(!isEmpty);
+      if (isEmpty) input.focus();
+    }
+
+    const chatHistoryEl = document.getElementById("chat-history");
+    const welcomeEl = document.getElementById("welcome");
+
+    // ---------------------------------------------------------------------
+    // CHAT HISTORY — lives on the backend (chats/<category>/<filename>
+    // log files), NOT in localStorage. Every /chat and /confirm call
+    // already appends to those files server-side; this section just reads
+    // them back via GET /chats so a page refresh or a different browser
+    // sees the exact same history. Each chat in memory:
+    // { id, title, messages: [{text, kind}], category, filename }
+    // ---------------------------------------------------------------------
+    let chats = [];
+    let activeChatId = null;
+
+    // Backend roles are USER/ASSISTANT; the UI's own message shape uses
+    // kind "user"/"bot". This maps one to the other on load.
+    function backendMessagesToUi(messages) {
+      return (messages || []).map(m => ({
+        text: m.content,
+        kind: m.role === "USER" ? "user" : "bot",
+      }));
+    }
+
+    async function loadChats() {
+      try {
+        const res = await fetch(`${API_BASE}/chats`, {
+          headers: { "X-Auth-Token": AUTH_TOKEN, "X-Login-Pass": LOGIN_PASS },
+        });
+        if (res.status === 401) {
+          forceLogoutInvalidToken();
+          return;
+        }
+        if (!res.ok) throw new Error("bad status " + res.status);
+        const data = await res.json();
+        chats = data.map(c => ({
+          id: `${c.category}::${c.filename}`,
+          title: (c.messages.find(m => m.role === "USER") || {}).content || "New chat",
+          category: c.category,
+          filename: c.filename,
+          messages: backendMessagesToUi(c.messages),
+        }));
+      } catch (e) {
+        console.error("Chatlarni yuklab bo'lmadi:", e);
+        chats = [];
+      }
+    }
+
+    // No-op kept only so existing call sites (createNewChat, message push
+    // after send/confirm) don't need to change — history is already
+    // persisted server-side by /chat and /confirm on every turn, so there
+    // is nothing left to write here.
+    function saveChats() {}
+
+    function getActiveChat() {
+      return chats.find(c => c.id === activeChatId) || null;
+    }
+
+    async function deleteChat(category, filename) {
+      try {
+        await fetch(`${API_BASE}/chats/${encodeURIComponent(category)}/${encodeURIComponent(filename)}`, {
+          method: "DELETE",
+          headers: { "X-Auth-Token": AUTH_TOKEN, "X-Login-Pass": LOGIN_PASS },
+        });
+      } catch (e) {
+        console.error("Chatni o'chirib bo'lmadi:", e);
+      }
+    }
+
+    function renderChatHistory() {
+      chatHistoryEl.innerHTML = "";
+      if (chats.length === 0) {
+        chatHistoryEl.innerHTML = `<p class="text-xs text-gray-600 px-2 py-1">no chats yet</p>`;
+        return;
+      }
+      // newest first
+      [...chats].reverse().forEach(c => {
+        const btn = document.createElement("button");
+        const isActive = c.id === activeChatId;
+        btn.className = `sidebar-item w-full text-left px-3 py-2 rounded-lg truncate ${isActive ? "bg-[#2a2a2a] text-[#ececec]" : "hover:bg-[#2a2a2a] text-[#d9d9d9]"}`;
+        btn.textContent = c.title || "New chat";
+        btn.addEventListener("click", () => switchChat(c.id));
+        chatHistoryEl.appendChild(btn);
+      });
+    }
+
+    function renderMessages() {
+      chat.innerHTML = "";
+      const active = getActiveChat();
+      const isEmpty = !active || active.messages.length === 0;
+      setEmptyState(isEmpty);
+      if (isEmpty) return;
+      active.messages.forEach(m => {
+        if (m.kind === "io") {
+          addIOCard(m.input, m.output, false);
+        } else {
+          addMessage(m.text, m.kind, false);
+        }
+      });
+    }
+
+    function switchChat(id) {
+      activeChatId = id;
+      renderChatHistory();
+      renderMessages();
+      input.focus();
+    }
+
+    function createNewChat() {
+      // Not written to the backend yet — chats/<category>/<filename>.log
+      // is only created server-side the moment the first real message is
+      // sent via /chat. Until then this only exists in memory so the UI
+      // has somewhere to type into.
+      const category = "chat_" + Date.now().toString(36);
+      const newChat = {
+        id: `${category}::session`,
+        title: "New chat",
+        messages: [],
+        category,
+        filename: "session"
+      };
+      chats.push(newChat);
+      switchChat(newChat.id);
+    }
+
+    function ensureActiveChat() {
+      if (chats.length === 0) {
+        createNewChat();
+      } else if (!activeChatId) {
+        switchChat(chats[chats.length - 1].id);
+      }
+    }
+
+    newChatBtn.addEventListener("click", createNewChat);
+
+    // -----------------------------------------------------------------
+    // REAL BASH TERMINAL — no AI involved anywhere in this path.
+    // Opens a WebSocket straight to a PTY (pseudo-terminal) running real
+    // bash on the machine, through the same cloudflared tunnel as
+    // everything else. Every keystroke goes to bash's stdin, every byte
+    // bash writes comes straight back — this is functionally SSH over
+    // the tunnel, gated by the same password + auth token.
+    // -----------------------------------------------------------------
+    let termInstance = null;
+    let termFitAddon = null;
+    let termSocket = null;
+    let termResizeHandler = null;
+
+    function setTermStatus(text, color) {
+      termStatusText.textContent = text;
+      termStatusDot.style.background = color;
+    }
+
+    function openTerminal() {
+      if (!API_BASE) return;
+      chatPanel.classList.add("hidden");
+      termPanel.classList.remove("hidden");
+      termPanel.classList.add("flex");
+
+      if (termSocket) return; // already connected/connecting, just switched view back to it
+
+      termContainer.innerHTML = "";
+      termInstance = new Terminal({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: "'SF Mono', Menlo, Consolas, monospace",
+        scrollback: 5000,
+        theme: {
+          background: "#0b0b0b",
+          foreground: "#ececec",
+          cursor: "#ececec",
+          cursorAccent: "#0b0b0b",
+          selectionBackground: "#3a3a3a",
+          black: "#0b0b0b",
+          red: "#f2555a",
+          green: "#3fb950",
+          yellow: "#e0a020",
+          blue: "#4c9dff",
+          magenta: "#c678dd",
+          cyan: "#39c5cf",
+          white: "#d4d4d4",
+          brightBlack: "#6a6a6a",
+          brightRed: "#ff7b80",
+          brightGreen: "#56d364",
+          brightYellow: "#f0c040",
+          brightBlue: "#6fb3ff",
+          brightMagenta: "#e0a0f0",
+          brightCyan: "#5ee6f2",
+          brightWhite: "#ffffff",
         },
-    )
+      });
+      termFitAddon = new FitAddon.FitAddon();
+      termInstance.loadAddon(termFitAddon);
+      termInstance.open(termContainer);
+      termFitAddon.fit();
 
+      setTermStatus("connecting...", "#e0a020");
 
-@app.route("/confirm", methods=["POST"])
-def confirm():
-    if not require_auth(request):
-        return jsonify({"error": "unauthorized"}), 401
+      // Browser WebSocket API can't set custom headers on the handshake,
+      // so auth travels as query params here instead of the X-Auth-Token /
+      // X-Login-Pass headers the rest of the app uses.
+      const wsBase = API_BASE.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+      const wsUrl = `${wsBase}/ws/term?token=${encodeURIComponent(AUTH_TOKEN)}&pass=${encodeURIComponent(LOGIN_PASS)}`;
+      const socket = new WebSocket(wsUrl);
+      termSocket = socket;
 
-    data = request.get_json(silent=True)
-    if not data or "command_id" not in data:
-        return jsonify({"error": "command_id is required"}), 400
+      socket.addEventListener("open", () => {
+        setTermStatus("connected", "#3fb950");
+        const { cols, rows } = termInstance;
+        socket.send(`\x01RESIZE:${cols},${rows}`);
+        termInstance.focus();
+      });
+      socket.addEventListener("message", (evt) => {
+        termInstance.write(evt.data);
+      });
+      socket.addEventListener("close", () => {
+        setTermStatus("disconnected", "#f2555a");
+        termSocket = null;
+      });
+      socket.addEventListener("error", () => {
+        setTermStatus("connection error", "#f2555a");
+      });
 
-    command_id = str(data["command_id"])
-    pending = load_pending()
-    entry = pending.get(command_id)
+      termInstance.onData((data) => {
+        if (socket.readyState === WebSocket.OPEN) socket.send(data);
+      });
 
-    if not entry:
-        return jsonify({"error": "unknown or already-used command_id"}), 404
+      termResizeHandler = () => {
+        if (!termFitAddon) return;
+        termFitAddon.fit();
+        if (socket.readyState === WebSocket.OPEN) {
+          const { cols, rows } = termInstance;
+          socket.send(`\x01RESIZE:${cols},${rows}`);
+        }
+      };
+      window.addEventListener("resize", termResizeHandler);
+    }
 
-    # Irreversible-dangerous commands (sudo mode + hard-block pattern) need
-    # the user to retype the exact command by hand — same idea as GitHub's
-    # "type the repo name" delete confirmation. If it doesn't match yet,
-    # we do NOT consume the pending entry, so the user can just retry
-    # typing it correctly without asking the model all over again.
-    if entry.get("requires_typed_confirmation"):
-        typed = str(data.get("typed_confirmation", ""))
-        if not secrets.compare_digest(typed, entry.get("command", "")):
-            return jsonify({
-                "error": "typed_confirmation_mismatch",
-                "message": "Xavfli komanda — uni aniq, xatosiz qayta yozib tasdiqlashing kerak.",
-                "command": entry.get("command", ""),
-            }), 400
+    function closeTerminal() {
+      termPanel.classList.add("hidden");
+      termPanel.classList.remove("flex");
+      chatPanel.classList.remove("hidden");
+    }
 
-    pending.pop(command_id, None)
-    save_pending(pending)
+    function teardownTerminal() {
+      if (termSocket) {
+        termSocket.close();
+        termSocket = null;
+      }
+      if (termResizeHandler) {
+        window.removeEventListener("resize", termResizeHandler);
+        termResizeHandler = null;
+      }
+      if (termInstance) {
+        termInstance.dispose();
+        termInstance = null;
+      }
+      termFitAddon = null;
+    }
 
-    category, filename = entry["category"], entry["filename"]
-    entry_type = entry.get("type", "command")
-    entry_tier = resolve_tier(entry.get("tier"))
-    entry_mode = resolve_mode(entry.get("mode"))
+    bashBtn.addEventListener("click", openTerminal);
+    termCloseBtn.addEventListener("click", () => {
+      teardownTerminal();
+      closeTerminal();
+    });
 
-    if entry_type == "write_file":
-        path = entry["path"]
-        content = entry.get("content", "")
-        exec_result = tool_write_file(path, content, entry.get("cwd") or str(Path.home()))
-        final_response = summarize_command_result(f"write file: {path}", exec_result, entry_tier)
-        append_to_chat(category, filename, "ASSISTANT", final_response)
-        append_to_chat(category, filename, "ACTION", f"write_file {path}")
-        append_to_chat(category, filename, "RESULT", exec_result)
-        return jsonify({
-            "response": final_response,
-            "type": "write_file",
-            "path": path,
-            "result": exec_result,
-            "tier": entry_tier,
-            "model": MODELS[entry_tier],
-            "mode": entry_mode,
-        })
+    async function showApp() {
+      bootScreen.classList.add("hidden");
+      loginScreen.classList.add("hidden");
+      appScreen.classList.remove("hidden");
+      tunnelStatus.textContent = "connected";
+      tunnelStatus.classList.add("text-green-500");
+      chatHistoryEl.innerHTML = `<p class="text-xs text-gray-600 px-2 py-1">loading chats...</p>`;
+      await loadChats();
+      ensureActiveChat();
+      input.focus();
+    }
 
-    command = entry["command"]
+    function showLogin(errorMsg) {
+      bootScreen.classList.add("hidden");
+      appScreen.classList.add("hidden");
+      loginScreen.classList.remove("hidden");
+      LOGIN_PASS = "";
+      AUTH_TOKEN = "";
+      localStorage.removeItem("MRagent_pass");
+      localStorage.removeItem("MRagent_token");
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Continue";
+      if (errorMsg) {
+        loginError.textContent = errorMsg;
+        loginError.classList.remove("hidden");
+      } else {
+        loginError.classList.add("hidden");
+      }
+      loginPass.value = "";
+      loginToken.value = "";
+      loginPass.focus();
+    }
 
-    # Confirmation vaqtida ham hard-block qayta tekshiriladi (defense in
-    # depth) — LEKIN faqat "general" mode uchun. Bu yozuv "sudo" mode'da
-    # yaratilgan bo'lsa, foydalanuvchi buni ongli tanlagan va card orqali
-    # allaqachon tasdiqlagan — shu bosqichda qayta bloklash mode tanlovini
-    # bekor qilib qo'yardi.
-    if entry_mode == "general" and is_hard_blocked(command):
-        return jsonify({"error": "command is blocked", "command": command}), 403
+    // Backend token'ni qayta yaratgan/o'zgartirgan bo'lsa (mragent-auth-token),
+    // saqlangan eski token endi noto'g'ri hisoblanadi. Har qanday /chat,
+    // /confirm yoki /chats so'rovi 401 qaytarsa, shu funksiya darhol
+    // chaqiriladi — login ekraniga qaytaradi va eski token/parolni tozalaydi.
+    function forceLogoutInvalidToken() {
+      showLogin("Token o'zgargan — qaytadan kirishing.");
+    }
 
-    exec_result = execute_command({"command": command, "cwd": entry.get("cwd")})
-    final_response = summarize_command_result(command, exec_result, entry_tier)
+    async function loadTunnelUrl() {
+      loginTunnelStatus.textContent = "looking for tunnel...";
+      try {
+        // Firestore'ning o'z "offline" deb qaror qilishi ichki SDK
+        // darajasida juda uzoq davom etishi mumkin (ayniqsa ad-blocker
+        // ulanishni qayta-qayta bloklab, retry-loop hosil qilsa — 30-60+
+        // soniyagacha). Foydalanuvchini shuncha kutdirish o'rniga, o'zimiz
+        // 6 soniyadan keyin to'xtatamiz va aniq xabar + retry beramiz.
+        const docPromise = db.collection("config").doc("tunnel").get();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 15000)
+        );
+        const doc = await Promise.race([docPromise, timeoutPromise]);
 
-    append_to_chat(category, filename, "ASSISTANT", final_response)
-    append_to_chat(category, filename, "COMMAND", command)
-    append_to_chat(category, filename, "RESULT", exec_result)
+        if (doc.exists && doc.data().url) {
+          API_BASE = doc.data().url.replace(/\/$/, "");
+          loginTunnelStatus.textContent = "tunnel connected, enter your password and token";
+        } else {
+          loginTunnelStatus.textContent = "tunnel not found (Firestore empty)";
+          showTunnelRetry();
+        }
+      } catch (e) {
+        const isTimeout = e && e.message === "timeout";
+        loginTunnelStatus.textContent = isTimeout
+          ? "connection is slow/blocked — check your ad-blocker, then retry"
+          : "Firestore error — check your connection";
+        console.error(e);
+        showTunnelRetry();
+      }
+    }
 
-    return jsonify({
-        "response": final_response,
-        "type": "command",
-        "command": command,
-        "result": exec_result,
-        "tier": entry_tier,
-        "model": MODELS[entry_tier],
-        "mode": entry_mode,
-    })
+    function showTunnelRetry() {
+      let btn = document.getElementById("tunnel-retry-btn");
+      if (btn) return; // allaqachon ko'rsatilgan
+      btn = document.createElement("button");
+      btn.id = "tunnel-retry-btn";
+      btn.type = "button";
+      btn.textContent = "Qayta urinib ko'rish";
+      btn.className = "w-full text-[13px] text-[#ececec] bg-[#2f2f2f] hover:bg-[#3a3a3a] rounded-xl py-2 mt-2 transition";
+      btn.addEventListener("click", () => {
+        btn.remove();
+        loadTunnelUrl();
+      });
+      loginTunnelStatus.insertAdjacentElement("afterend", btn);
+    }
 
+    // No dedicated endpoint exists just to check credentials, so we ping
+    // /chat with a harmless sentinel message and read the status code.
+    // This never triggers a real action, it only confirms auth.
+    async function verifyToken(pass, token) {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Auth-Token": token,
+          "X-Login-Pass": pass
+        },
+        body: JSON.stringify({ message: "__mragent_auth_check__", category: "_auth", filename: "check" })
+      });
+      return res.status !== 401;
+    }
 
-if __name__ == "__main__":
-    # threaded=True is required: the /chat SSE stream and the /ws/term
-    # WebSocket both hold their connection open for a while, and without
-    # this the single-threaded dev server would stall every other request
-    # (including other users' chats) while either one is active.
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!API_BASE) {
+        loginError.textContent = "Tunnel not found yet, wait a moment and try again.";
+        loginError.classList.remove("hidden");
+        return;
+      }
+      const pass = loginPass.value.trim();
+      const token = loginToken.value.trim();
+      if (!pass || !token) {
+        loginError.textContent = "Password and auth token are both required.";
+        loginError.classList.remove("hidden");
+        return;
+      }
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Checking...";
+      loginError.classList.add("hidden");
+
+      try {
+        const ok = await verifyToken(pass, token);
+        if (ok) {
+          LOGIN_PASS = pass;
+          AUTH_TOKEN = token;
+          localStorage.setItem("MRagent_pass", LOGIN_PASS);
+          localStorage.setItem("MRagent_token", AUTH_TOKEN);
+          await showApp();
+        } else {
+          showLogin("Wrong password or token.");
+        }
+      } catch (err) {
+        showLogin("Couldn't reach the backend. Is the tunnel up?");
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Continue";
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      teardownTerminal();
+      closeTerminal();
+      showLogin();
+    });
+
+    function addMessage(text, kind = "bot", persist = true) {
+      const div = document.createElement("div");
+      const isUser = kind === "user";
+      const isPending = kind === "pending";
+      const isError = kind === "error";
+      div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
+      if (isUser) {
+        div.innerHTML = `
+          <div class="max-w-[85%] rounded-3xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user">
+            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+          </div>`;
+      } else if (isPending) {
+        // Command/file confirmations show the raw command verbatim —
+        // monospace is correct here, this isn't prose.
+        div.innerHTML = `
+          <div class="max-w-full w-full text-[15px] leading-relaxed bubble-pending rounded-2xl px-4 py-2.5">
+            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+          </div>`;
+      } else if (isError) {
+        // OpenRouter band/timeout bo'lganda backend shu turdagi xabar
+        // yuboradi — bu model javobi emas, tizim holati, shuning uchun
+        // alohida (qizil) ko'rinishda, oddiy chat pufagidan ajratib.
+        div.innerHTML = `
+          <div class="max-w-full w-full text-[15px] leading-relaxed bubble-error rounded-2xl px-4 py-2.5">
+            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+          </div>`;
+      } else {
+        // Normal bot replies: render as markdown, like a real assistant
+        // reply instead of a terminal dump.
+        const html = (typeof marked !== "undefined")
+          ? marked.parse(text, { breaks: true })
+          : escapeHtml(text);
+        div.innerHTML = `
+          <div class="max-w-full w-full text-[15px] bubble-bot prose-bot">${html}</div>`;
+      }
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+
+      if (persist) {
+        const active = getActiveChat();
+        if (active) {
+          active.messages.push({ text, kind });
+          if (isUser && active.title === "New chat") {
+            active.title = text.slice(0, 40);
+            renderChatHistory();
+          }
+          saveChats();
+        }
+      }
+      return div;
+    }
+
+    // -----------------------------------------------------------------
+    // INPUT / OUTPUT CARD
+    // Shows exactly what the AI ran (input) and exactly what the
+    // terminal returned (output) as two clearly separated boxes, instead
+    // of folding the command + result into one prose-style bot bubble.
+    // Persisted with kind "io" so it survives switching between chats.
+    // -----------------------------------------------------------------
+    function addIOCard(inputText, outputText, persist = true) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start w-full";
+      const out = (outputText && outputText.trim()) ? outputText : "(no output)";
+      const isErr = /\[Exit code: [1-9]/.test(out) || /^Execution error:/.test(out) || /^Command timed out/.test(out);
+      div.innerHTML = `
+        <div class="max-w-full w-full io-card">
+          <div class="io-section">
+            <div class="io-header">Input</div>
+            <pre class="io-content">${escapeHtml(inputText || "")}</pre>
+          </div>
+          <div class="io-section">
+            <div class="io-header">Output</div>
+            <pre class="io-content${isErr ? " io-output-err" : ""}">${escapeHtml(out)}</pre>
+          </div>
+        </div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+
+      if (persist) {
+        const active = getActiveChat();
+        if (active) {
+          active.messages.push({ kind: "io", input: inputText, output: outputText });
+          saveChats();
+        }
+      }
+      return div;
+    }
+
+    const ACTION_LABELS = {
+      command: "command",
+      read_file: "read",
+      write_file: "write",
+      list_dir: "folder",
+      web_search: "search"
+    };
+
+    const ACTION_VERBS = {
+      command: "Running command",
+      read_file: "Reading file",
+      write_file: "Writing file",
+      list_dir: "Listing folder",
+      web_search: "Searching the web"
+    };
+
+    // -----------------------------------------------------------------
+    // LIVE THOUGHT-PROCESS PANEL
+    // Backend streams real Server-Sent Events for every step of its
+    // agent loop: "thinking" while the model is deciding, "action" once
+    // it picked something, "step_result" once that action finished. This
+    // renders that live, instead of a fake spinner — every line reflects
+    // something that is actually happening on the backend right now.
+    // -----------------------------------------------------------------
+    function createThoughtPanel() {
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex justify-start w-full";
+      wrapper.innerHTML = `
+        <div class="max-w-full w-full rounded-2xl px-4 py-3" style="background:#262626;">
+          <div class="thought-log" id="thought-log"></div>
+          <div class="thinking-row" id="thinking-row">
+            <div class="thinking-dot-orb"></div>
+            <span id="thinking-label">Thinking</span>
+            <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
+          </div>
+        </div>`;
+      chat.appendChild(wrapper);
+      chat.scrollTop = chat.scrollHeight;
+
+      const logEl = wrapper.querySelector("#thought-log");
+      const rowEl = wrapper.querySelector("#thinking-row");
+      const labelEl = wrapper.querySelector("#thinking-label");
+
+      return {
+        el: wrapper,
+        setLabel(text) {
+          labelEl.textContent = text;
+          chat.scrollTop = chat.scrollHeight;
+        },
+        commitLine(text) {
+          // Freeze the current line into the log with a checkmark, then
+          // keep the animated row going for whatever comes next.
+          const line = document.createElement("div");
+          line.className = "thought-line";
+          line.innerHTML = `<span class="check">·</span><span>${escapeHtml(text)}</span>`;
+          logEl.appendChild(line);
+          chat.scrollTop = chat.scrollHeight;
+        },
+        remove() {
+          wrapper.remove();
+        }
+      };
+    }
+
+    function addStepsTrail(steps) {
+      if (!steps || !steps.length) return;
+      const div = document.createElement("div");
+      div.className = "flex justify-start w-full";
+      const items = steps.map(s => {
+        const label = ACTION_LABELS[s.action] || s.action;
+        const target = s.command || s.path || s.query || "";
+        const result = (s.result || "").slice(0, 400);
+        return `
+          <details class="text-[13px] text-[#a8a8a8]">
+            <summary class="cursor-pointer select-none py-1 hover:text-[#ececec]">${label} — ${escapeHtml(target)}</summary>
+            <pre class="whitespace-pre-wrap font-mono text-[12px] text-[#8e8e8e] pl-4 pb-2">${escapeHtml(result)}</pre>
+          </details>`;
+      }).join("");
+      div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:#262626;">${items}</div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // OpenRouter (bepul model) band bo'lib chaqiruv butunlay
+    // muvaffaqiyatsiz tugaganda backend "error" kind yuboradi. Bu odatda
+    // vaqtinchalik (navbat/rate-limit) bo'lgani uchun bir tugma bosib
+    // xuddi shu xabarni qayta yuborish imkonini beramiz.
+    function addRetryButton(originalMessage) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <button class="bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[13px] px-4 py-2 rounded-full transition">
+          Qayta urinib ko'rish
+        </button>`;
+      div.querySelector("button").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = "yuborilmoqda...";
+        div.remove();
+        input.value = originalMessage;
+        await sendMessage();
+      });
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function addConfirmButton(commandId) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <button class="bg-amber-600 hover:bg-amber-500 text-[13px] px-4 py-2 rounded-full transition" data-cmdid="${commandId}">
+          Confirm and run
+        </button>`;
+      div.querySelector("button").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = "running...";
+        await confirmCommand(commandId);
+        div.remove();
+      });
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Qaytarib bo'lmaydigan xavfli komandalar (sudo mode + hard-block
+    // pattern) uchun: oddiy tugma yetarli emas, foydalanuvchi komandani
+    // ANIQ, xatosiz qayta o'zi qo'lda yozishi kerak — xuddi GitHub'ning
+    // "type the repo name to delete" tasdig'i kabi. Tugma matn mos
+    // kelmaguncha disabled turadi.
+    function addDangerConfirmCard(commandId, commandText) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <div class="max-w-full w-full rounded-2xl px-4 py-3 space-y-2" style="background:#3a1414; border:1px solid #5c1f1f;">
+          <div class="text-[13px] font-semibold" style="color:#ff6b6b;">
+            XAVFLI, QAYTARIB BO'LMAYDIGAN KOMANDA
+          </div>
+          <div class="text-[13px] font-mono px-2 py-1.5 rounded" style="background:#1a0d0d; color:#ffb4b4; white-space:pre-wrap; word-break:break-all;">${escapeHtml(commandText)}</div>
+          <div class="text-[12px]" style="color:#e8a0a0;">Tasdiqlash uchun komandani XATOSIZ qayta yoz:</div>
+          <input type="text" class="danger-typed w-full bg-transparent border rounded px-2 py-1.5 text-[13px] font-mono focus:outline-none" style="border-color:#5c1f1f; color:#ffb4b4;" placeholder="${escapeHtml(commandText)}" autocomplete="off" spellcheck="false" />
+          <div class="danger-error text-[12px] hidden" style="color:#ff6b6b;">Mos kelmadi yoki noto'g'ri — qaytadan urin.</div>
+          <button class="danger-btn w-full bg-red-800 text-[13px] px-4 py-2 rounded-full transition opacity-40 cursor-not-allowed" disabled>
+            Tasdiqlab bajarish
+          </button>
+        </div>`;
+
+      const input = div.querySelector(".danger-typed");
+      const btn = div.querySelector(".danger-btn");
+      const errorEl = div.querySelector(".danger-error");
+
+      function refreshBtnState() {
+        const match = input.value === commandText;
+        btn.disabled = !match;
+        btn.classList.toggle("opacity-40", !match);
+        btn.classList.toggle("cursor-not-allowed", !match);
+        btn.classList.toggle("bg-red-800", !match);
+        btn.classList.toggle("bg-red-600", match);
+        btn.classList.toggle("hover:bg-red-500", match);
+      }
+      input.addEventListener("input", () => {
+        errorEl.classList.add("hidden");
+        refreshBtnState();
+      });
+
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = "running...";
+        const ok = await confirmCommand(commandId, input.value);
+        if (ok) {
+          div.remove();
+        } else {
+          errorEl.classList.remove("hidden");
+          btn.disabled = false;
+          btn.textContent = "Tasdiqlab bajarish";
+        }
+      });
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Cosmetic typewriter reveal for final bot replies. NOTE: this is a
+    // display trick, not real token streaming — the full text already
+    // arrived from the backend (the JSON-action format doesn't support
+    // streaming a "done" message mid-generation). It's here purely so the
+    // reply doesn't just "pop in" all at once, which reads as more natural.
+    function addMessageTyped(text) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      const inner = document.createElement("div");
+      inner.className = "max-w-full w-full text-[15px] bubble-bot prose-bot";
+      div.appendChild(inner);
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+
+      return new Promise(resolve => {
+        let i = 0;
+        // Time-based reveal (~28ms per character) instead of a fixed
+        // frame-count split — short replies now visibly type out too,
+        // instead of resolving in 1–2 frames.
+        const msPerChar = 28;
+        let lastTime = null;
+
+        function tick(now) {
+          if (lastTime === null) lastTime = now;
+          const elapsed = now - lastTime;
+          const charsToShow = Math.min(text.length, Math.floor(elapsed / msPerChar));
+          if (charsToShow > i) {
+            i = charsToShow;
+            const slice = text.slice(0, i);
+            inner.innerHTML = (typeof marked !== "undefined")
+              ? marked.parse(slice, { breaks: true })
+              : escapeHtml(slice);
+            chat.scrollTop = chat.scrollHeight;
+          }
+          if (i < text.length) {
+            requestAnimationFrame(tick);
+          } else {
+            const active = getActiveChat();
+            if (active) {
+              active.messages.push({ text, kind: "bot" });
+              saveChats();
+            }
+            resolve();
+          }
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+
+    async function confirmCommand(commandId, typedConfirmation) {
+      try {
+        const body = { command_id: commandId };
+        if (typedConfirmation !== undefined) body.typed_confirmation = typedConfirmation;
+        const res = await fetch(`${API_BASE}/confirm`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Auth-Token": AUTH_TOKEN,
+            "X-Login-Pass": LOGIN_PASS
+          },
+          body: JSON.stringify(body)
+        });
+        if (res.status === 401) {
+          forceLogoutInvalidToken();
+          return false;
+        }
+        const data = await res.json();
+        if (res.status === 400 && data.error === "typed_confirmation_mismatch") {
+          // Not consumed on the backend — caller (danger card) shows an
+          // inline error and lets the user retry typing.
+          return false;
+        }
+        if (data.error && !data.type) {
+          addMessage(data.error, "bot");
+          return true;
+        }
+        // Show exactly what ran (input) and exactly what came back
+        // (output) as two separate boxes, instead of one prose bubble.
+        if (data.type === "command") {
+          addIOCard(data.command, data.result);
+        } else if (data.type === "write_file") {
+          addIOCard(`write_file: ${data.path}`, data.result);
+        } else {
+          addMessage(data.response || data.error || "No response", "bot");
+        }
+        return true;
+      } catch (err) {
+        addMessage("The confirm request failed.", "bot");
+        return false;
+      }
+    }
+
+    // Parses one or more "data: {...}\n\n" SSE frames out of a raw text
+    // buffer, returning the parsed events plus whatever partial frame is
+    // still incomplete (to be prepended to the next chunk).
+    function parseSseChunk(buffer) {
+      const events = [];
+      const parts = buffer.split("\n\n");
+      const remainder = parts.pop(); // last part may be incomplete
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data:")) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+        try {
+          events.push(JSON.parse(jsonStr));
+        } catch (e) {
+          console.error("Bad SSE frame:", jsonStr, e);
+        }
+      }
+      return { events, remainder };
+    }
+
+    async function sendMessage() {
+      if (!API_BASE) return;
+      const message = input.value.trim();
+      if (!message) return;
+
+      const active = getActiveChat();
+      const category = (active && active.category) || "general";
+      const filename = (active && active.filename) || "chat";
+      const tier = document.getElementById("tier").value || "high";
+      const mode = document.getElementById("mode").value || "general";
+
+      addMessage(message, "user");
+      setEmptyState(false);
+      input.value = "";
+      sendBtn.disabled = true;
+
+      const panel = createThoughtPanel();
+      let sawAnyEvent = false;
+
+      try {
+        const res = await fetch(`${API_BASE}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Auth-Token": AUTH_TOKEN,
+            "X-Login-Pass": LOGIN_PASS
+          },
+          body: JSON.stringify({ message, category, filename, tier, mode })
+        });
+
+        if (res.status === 401) {
+          panel.remove();
+          forceLogoutInvalidToken();
+          return;
+        }
+
+        // Non-streaming fallback (e.g. plain JSON error responses)
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("text/event-stream")) {
+          const data = await res.json();
+          panel.remove();
+          addMessage(data.response || data.error || "No response", "bot");
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalSteps = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const { events, remainder } = parseSseChunk(buffer);
+          buffer = remainder;
+
+          for (const evt of events) {
+            sawAnyEvent = true;
+
+            if (evt.type === "thinking") {
+              panel.setLabel(
+                evt.step > 1 ? `Thinking about the next step (${evt.step}/${evt.max_steps})` : "Thinking"
+              );
+            } else if (evt.type === "action") {
+              const verb = ACTION_VERBS[evt.action] || "Working on it";
+              panel.setLabel(`${verb}: ${evt.target}`);
+            } else if (evt.type === "step_result") {
+              const verb = ACTION_LABELS[evt.action] || evt.action;
+              const target = evt.command || evt.path || evt.query || "";
+              panel.commitLine(`${verb} — ${target}`);
+            } else if (evt.type === "final") {
+              finalSteps = evt.steps;
+              panel.remove();
+
+              if (evt.kind === "pending_confirmation") {
+                addStepsTrail(evt.steps);
+                addMessage(evt.response, "pending");
+                if (evt.requires_typed_confirmation) {
+                  addDangerConfirmCard(evt.command_id, evt.command);
+                } else {
+                  addConfirmButton(evt.command_id);
+                }
+              } else if (evt.kind === "blocked") {
+                addStepsTrail(evt.steps);
+                addMessage(evt.response, "pending");
+              } else if (evt.kind === "error") {
+                addStepsTrail(evt.steps);
+                addMessage(evt.response, "error");
+                if (evt.retryable) {
+                  addRetryButton(message);
+                }
+              } else {
+                addStepsTrail(evt.steps);
+                await addMessageTyped(evt.response || "No response");
+              }
+            }
+          }
+        }
+
+        if (!sawAnyEvent) {
+          panel.remove();
+          addMessage("No response from the backend.", "bot");
+        }
+      } catch (err) {
+        panel.remove();
+        addMessage("Couldn't reach the backend.\nIs the tunnel up?", "bot");
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // On load: if localStorage has a saved token, jump straight into the
+    // chat screen — no separate "verify on boot" ping needed, because
+    // showApp() immediately calls loadChats(), which is itself an
+    // authenticated GET /chats request. If the saved token is stale
+    // (backend token was rotated via mragent-auth-token), that first
+    // request comes back 401 and loadChats() calls forceLogoutInvalidToken()
+    // right away — so an invalid token is caught on the very first
+    // real network round-trip, not silently trusted.
+    async function tryAutoLogin() {
+      const savedPass = localStorage.getItem("MRagent_pass");
+      const savedToken = localStorage.getItem("MRagent_token");
+      if (!savedPass || !savedToken || !API_BASE) {
+        showLogin();
+        return;
+      }
+      LOGIN_PASS = savedPass;
+      AUTH_TOKEN = savedToken;
+      await showApp();
+    }
+
+    (async () => {
+      // Tunnel URL HECH QACHON keshlanmaydi — har boot'da to'g'ridan-to'g'ri
+      // Firestore'dan o'qiladi. Cloudflared quick tunnel har restart'da
+      // yangi random subdomen beradi, shuning uchun eski keshdagi URL bilan
+      // urinish har doim DNS xatosiga olib kelishi mumkin (ERR_NAME_NOT_RESOLVED).
+      // Parol/token bundan mustasno — ular sessiyalar orasida o'zgarmaydi,
+      // shuning uchun localStorage'da qolaveradi (auto-login tezligi uchun).
+      await loadTunnelUrl();
+      await tryAutoLogin();
+    })();
+  </script>
+</body>
+</html>
