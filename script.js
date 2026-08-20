@@ -1,4 +1,4 @@
-const firebaseConfig = {
+    const firebaseConfig = {
       apiKey: "AIzaSyDYkT1b_SOg5T76yhpyRuqnem9YsG53Qn0",
       authDomain: "mragent-2d280.firebaseapp.com",
       projectId: "mragent-2d280",
@@ -877,10 +877,10 @@ const firebaseConfig = {
       const wrapper = document.createElement("div");
       wrapper.className = "flex justify-start w-full";
       wrapper.innerHTML = `
-        <div class="max-w-full w-full rounded-2xl px-4 py-3" style="background:var(--bg-elevated);">
+        <div class="max-w-full w-full rounded-2xl px-4 py-3" style="background:#262626;">
           <div class="thought-log" id="thought-log"></div>
           <div class="thinking-row" id="thinking-row">
-            <div class="thinking-dot-orb"></div>
+            <video class="thinking-orb-video" src="circle2_transparent.webm" autoplay loop muted playsinline></video>
             <span id="thinking-label">Thinking</span>
             <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
           </div>
@@ -927,7 +927,7 @@ const firebaseConfig = {
             <pre class="whitespace-pre-wrap font-mono text-[12px] text-[#8e8e8e] pl-4 pb-2">${escapeHtml(result)}</pre>
           </details>`;
       }).join("");
-      div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:var(--bg-elevated);">${items}</div>`;
+      div.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-2" style="background:#262626;">${items}</div>`;
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
