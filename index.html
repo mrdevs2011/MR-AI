@@ -9,6 +9,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/css/xterm.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <style>
     * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; }
     body { background: #212121; }
@@ -253,13 +256,21 @@
 
     <!-- =================== SIDEBAR =================== -->
     <aside class="w-64 shrink-0 flex flex-col" style="background:#171717;">
-      <div class="px-3 py-3">
+      <div class="px-3 py-3 space-y-1">
         <button id="new-chat-btn"
                 class="sidebar-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#ececec] text-left">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
             <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
           </svg>
           New chat
+        </button>
+        <button id="bash-btn"
+                class="sidebar-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#ececec] text-left">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+            <polyline points="4 17 10 11 4 5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="19" x2="20" y2="19" stroke-linecap="round"/>
+          </svg>
+          Bash
         </button>
       </div>
 
@@ -287,7 +298,7 @@
     </aside>
 
     <!-- =================== MAIN CHAT =================== -->
-    <div class="flex-1 flex flex-col min-w-0 relative" style="background:#212121;">
+    <div id="chat-panel" class="flex-1 flex flex-col min-w-0 relative" style="background:#212121;">
       <main id="chat" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></main>
 
       <!-- Empty-state: centered greeting + input, ChatGPT-style. Hidden the
@@ -306,6 +317,22 @@
       <footer id="chat-footer" class="px-4 pb-6 pt-2 hidden">
         <div id="composer-slot-footer"></div>
       </footer>
+    </div>
+
+    <!-- =================== REAL BASH TERMINAL =================== -->
+    <!-- Raw PTY over WebSocket straight to the machine, bypassing the AI
+         entirely. Hidden by default; toggled by the "Bash" sidebar button. -->
+    <div id="term-panel" class="hidden flex-1 flex flex-col min-w-0" style="background:#0b0b0b;">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b shrink-0" style="border-color:#2a2a2a;">
+        <div class="flex items-center gap-2 text-[13px] text-[#a8a8a8]">
+          <span class="w-2 h-2 rounded-full shrink-0" id="term-status-dot" style="background:#f2555a;"></span>
+          <span id="term-status-text">connecting...</span>
+        </div>
+        <button id="term-close-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1">
+          close
+        </button>
+      </div>
+      <div id="term-container" class="flex-1 min-h-0 p-2"></div>
     </div>
   </div>
 
@@ -346,6 +373,14 @@
     const logoutBtn = document.getElementById("logout-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
     const sudoBanner = document.getElementById("sudoBanner");
+
+    const chatPanel = document.getElementById("chat-panel");
+    const bashBtn = document.getElementById("bash-btn");
+    const termPanel = document.getElementById("term-panel");
+    const termContainer = document.getElementById("term-container");
+    const termCloseBtn = document.getElementById("term-close-btn");
+    const termStatusDot = document.getElementById("term-status-dot");
+    const termStatusText = document.getElementById("term-status-text");
 
     // ---------------------------------------------------------------------
     // COMPOSER — one physical set of controls (mode/tier/input/send) that
@@ -517,6 +552,118 @@
 
     newChatBtn.addEventListener("click", createNewChat);
 
+    // -----------------------------------------------------------------
+    // REAL BASH TERMINAL — no AI involved anywhere in this path.
+    // Opens a WebSocket straight to a PTY (pseudo-terminal) running real
+    // bash on the machine, through the same cloudflared tunnel as
+    // everything else. Every keystroke goes to bash's stdin, every byte
+    // bash writes comes straight back — this is functionally SSH over
+    // the tunnel, gated by the same password + auth token.
+    // -----------------------------------------------------------------
+    let termInstance = null;
+    let termFitAddon = null;
+    let termSocket = null;
+    let termResizeHandler = null;
+
+    function setTermStatus(text, color) {
+      termStatusText.textContent = text;
+      termStatusDot.style.background = color;
+    }
+
+    function openTerminal() {
+      if (!API_BASE) return;
+      chatPanel.classList.add("hidden");
+      termPanel.classList.remove("hidden");
+      termPanel.classList.add("flex");
+
+      if (termSocket) return; // already connected/connecting, just switched view back to it
+
+      termContainer.innerHTML = "";
+      termInstance = new Terminal({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: "'SF Mono', Menlo, Consolas, monospace",
+        theme: {
+          background: "#0b0b0b",
+          foreground: "#ececec",
+          cursor: "#ececec",
+        },
+      });
+      termFitAddon = new FitAddon.FitAddon();
+      termInstance.loadAddon(termFitAddon);
+      termInstance.open(termContainer);
+      termFitAddon.fit();
+
+      setTermStatus("connecting...", "#e0a020");
+
+      // Browser WebSocket API can't set custom headers on the handshake,
+      // so auth travels as query params here instead of the X-Auth-Token /
+      // X-Login-Pass headers the rest of the app uses.
+      const wsBase = API_BASE.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+      const wsUrl = `${wsBase}/ws/term?token=${encodeURIComponent(AUTH_TOKEN)}&pass=${encodeURIComponent(LOGIN_PASS)}`;
+      const socket = new WebSocket(wsUrl);
+      termSocket = socket;
+
+      socket.addEventListener("open", () => {
+        setTermStatus("connected", "#3fb950");
+        const { cols, rows } = termInstance;
+        socket.send(`\x01RESIZE:${cols},${rows}`);
+        termInstance.focus();
+      });
+      socket.addEventListener("message", (evt) => {
+        termInstance.write(evt.data);
+      });
+      socket.addEventListener("close", () => {
+        setTermStatus("disconnected", "#f2555a");
+        termSocket = null;
+      });
+      socket.addEventListener("error", () => {
+        setTermStatus("connection error", "#f2555a");
+      });
+
+      termInstance.onData((data) => {
+        if (socket.readyState === WebSocket.OPEN) socket.send(data);
+      });
+
+      termResizeHandler = () => {
+        if (!termFitAddon) return;
+        termFitAddon.fit();
+        if (socket.readyState === WebSocket.OPEN) {
+          const { cols, rows } = termInstance;
+          socket.send(`\x01RESIZE:${cols},${rows}`);
+        }
+      };
+      window.addEventListener("resize", termResizeHandler);
+    }
+
+    function closeTerminal() {
+      termPanel.classList.add("hidden");
+      termPanel.classList.remove("flex");
+      chatPanel.classList.remove("hidden");
+    }
+
+    function teardownTerminal() {
+      if (termSocket) {
+        termSocket.close();
+        termSocket = null;
+      }
+      if (termResizeHandler) {
+        window.removeEventListener("resize", termResizeHandler);
+        termResizeHandler = null;
+      }
+      if (termInstance) {
+        termInstance.dispose();
+        termInstance = null;
+      }
+      termFitAddon = null;
+    }
+
+    bashBtn.addEventListener("click", openTerminal);
+    termCloseBtn.addEventListener("click", () => {
+      teardownTerminal();
+      closeTerminal();
+    });
+
     function showApp() {
       bootScreen.classList.add("hidden");
       loginScreen.classList.add("hidden");
@@ -615,6 +762,8 @@
     });
 
     logoutBtn.addEventListener("click", () => {
+      teardownTerminal();
+      closeTerminal();
       showLogin();
     });
 
