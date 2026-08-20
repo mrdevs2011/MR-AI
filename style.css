@@ -241,6 +241,13 @@ textarea:focus-visible:not(.composer-textarea) {
 #chat-header {
   border-bottom: 1px solid transparent;
 }
+/* header-menu-btn hover-preview sidebar (z-index:45, position:absolute)
+   ustida joylashgani uchun uning USTIDA qolishi kerak — aks holda sidebar
+   uni fizik bosib qo'yadi va toggle ishlamay qoladi (topilgan bug). */
+#header-menu-btn {
+  position: relative;
+  z-index: 50;
+}
 #chat-title {
   opacity: 0;
   animation: chatTitleFadeIn .5s ease forwards;
