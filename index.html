@@ -9,13 +9,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/css/xterm.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <style>
     * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif; }
     body { background: #212121; }
-    #term-panel:fullscreen { width: 100vw; height: 100vh; background: #0b0b0b; }
     #chat { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
     #chat-history { scrollbar-width: thin; scrollbar-color: #4d4d4d transparent; }
     .bubble-user { background: #2f2f2f; color: #ececec; }
@@ -329,9 +328,6 @@
           <span class="w-2 h-2 rounded-full shrink-0" id="term-status-dot" style="background:#f2555a;"></span>
           <span id="term-status-text">connecting...</span>
         </div>
-        <button id="term-fullscreen-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1" title="Fullscreen (Esc bilan chiqiladi)">
-          ⛶ fullscreen
-        </button>
         <button id="term-close-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1">
           close
         </button>
@@ -382,7 +378,6 @@
     const termPanel = document.getElementById("term-panel");
     const termContainer = document.getElementById("term-container");
     const termCloseBtn = document.getElementById("term-close-btn");
-    const termFullscreenBtn = document.getElementById("term-fullscreen-btn");
     const termStatusDot = document.getElementById("term-status-dot");
     const termStatusText = document.getElementById("term-status-text");
 
@@ -587,14 +582,30 @@
       termInstance = new Terminal({
         cursorBlink: true,
         fontSize: 13,
-        fontFamily: "'JetBrains Mono', 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace",
-        letterSpacing: 0,
-        lineHeight: 1.2,
+        fontFamily: "'SF Mono', Menlo, Consolas, monospace",
         scrollback: 5000,
         theme: {
           background: "#0b0b0b",
           foreground: "#ececec",
           cursor: "#ececec",
+          cursorAccent: "#0b0b0b",
+          selectionBackground: "#3a3a3a",
+          black: "#0b0b0b",
+          red: "#f2555a",
+          green: "#3fb950",
+          yellow: "#e0a020",
+          blue: "#4c9dff",
+          magenta: "#c678dd",
+          cyan: "#39c5cf",
+          white: "#d4d4d4",
+          brightBlack: "#6a6a6a",
+          brightRed: "#ff7b80",
+          brightGreen: "#56d364",
+          brightYellow: "#f0c040",
+          brightBlue: "#6fb3ff",
+          brightMagenta: "#e0a0f0",
+          brightCyan: "#5ee6f2",
+          brightWhite: "#ffffff",
         },
       });
       termFitAddon = new FitAddon.FitAddon();
@@ -670,29 +681,6 @@
     termCloseBtn.addEventListener("click", () => {
       teardownTerminal();
       closeTerminal();
-    });
-
-    // ---------------------------------------------------------------------
-    // Fullscreen — uses the real browser Fullscreen API (not just CSS),
-    // so the OS/browser chrome (address bar, tabs) also disappears, not
-    // just our own panel. Esc-to-exit is native browser behavior, we
-    // don't need to bind it ourselves. We just react to the change to
-    // resize the pty/xterm grid so bash knows the new terminal size.
-    // ---------------------------------------------------------------------
-    termFullscreenBtn.addEventListener("click", () => {
-      if (!document.fullscreenElement) {
-        termPanel.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen();
-      }
-    });
-    document.addEventListener("fullscreenchange", () => {
-      const isFs = document.fullscreenElement === termPanel;
-      termFullscreenBtn.textContent = isFs ? "⛶ exit fullscreen" : "⛶ fullscreen";
-      // Layout needs a tick to settle before FitAddon measures it.
-      setTimeout(() => {
-        if (termResizeHandler) termResizeHandler();
-      }, 50);
     });
 
     function showApp() {
