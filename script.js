@@ -158,13 +158,13 @@
                 <option value="sudo">Sudo</option>
               </select>
               <select id="tier" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
-                <option value="high">Smart</option>
-                <option value="medium" selected>Fast</option>
-                <option value="low">Turbo</option>
+                <option value="high">Omni</option>
+                <option value="medium" selected>Super</option>
+                <option value="low">Nano</option>
               </select>
               <button type="button" id="combo-btn" class="combo-btn" title="Mode & speed">
                 <span class="pill-dot" id="mode-dot"></span>
-                <span id="combo-label">General Fast</span>
+                <span id="combo-label">General Super</span>
                 <svg class="combo-caret" width="10" height="6" viewBox="0 0 10 6" fill="none">
                   <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -225,9 +225,9 @@
       { value: "sudo", label: "Sudo" },
     ];
     const TIER_OPTS = [
-      { value: "high", label: "Smart" },
-      { value: "medium", label: "Fast" },
-      { value: "low", label: "Turbo" },
+      { value: "high", label: "Omni", model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" },
+      { value: "medium", label: "Super", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+      { value: "low", label: "Nano", model: "nvidia/nemotron-3-nano-30b-a3b:free" },
     ];
 
     function updateComboActiveState() {
@@ -274,7 +274,7 @@
           btn.className = "combo-item";
           btn.dataset.mode = m.value;
           btn.dataset.tier = t.value;
-          btn.innerHTML = `<span class="combo-item-dot" style="background:${MODE_COLORS[m.value]}"></span>${t.label}`;
+          btn.innerHTML = `<span class="combo-item-dot" style="background:${MODE_COLORS[m.value]}"></span><span class="combo-item-text"><span class="combo-item-label">${t.label}</span><span class="combo-item-model">${t.model}</span></span>`;
           btn.addEventListener("click", () => selectCombo(m.value, t.value));
           comboDropdown.appendChild(btn);
         });
