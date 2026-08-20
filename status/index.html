@@ -127,11 +127,29 @@
     const sub = document.getElementById("sub");
     const logo = document.getElementById("logo");
 
-    // Presence pattern: backend faqat status o'zgarganda yozadi
-    // (online/offline), sekundlab yozmaydi. onSnapshot() esa Firestore'ning
-    // real-time push kanali — polling (setInterval + get()) emas, shuning
-    // uchun o'zgarish millisekundlarda ko'rinadi va deyarli hech qanday
-    // qo'shimcha read/write sarflamaydi (bitta doimiy WebSocket ulanish).
+    // Presence pattern + staleness fallback: backend faqat status
+    // o'zgarganda yozadi (online/offline), lekin hard power-off (svet
+    // ketishi, tugmani bosib o'chirish) holatida SIGTERM kelmaydi va
+    // "offline" hech qachon yozilmaydi — Firestore'da "online" abadiy
+    // qolib ketadi. Shu holatni ushlash uchun: agar status="online"
+    // bo'lsa-da lastSeen juda eskirgan bo'lsa (>15s, chunki refresh_loop
+    // 240s'da bir yozadi — demak buni faqat client-side timerda tekshirish
+    // kerak), "offline" deb ko'rsatamiz.
+    const STALE_AFTER_MS = 15 * 1000;
+    let lastSnapshot = null;
+    let staleTimer = null;
+
+    function evaluateAndRender() {
+      if (!lastSnapshot) return;
+      const { status, lastSeen } = lastSnapshot;
+      const ageMs = Date.now() - lastSeen.getTime();
+      if (status === "online" && ageMs < STALE_AFTER_MS) {
+        setOnline(lastSeen);
+      } else {
+        setOffline("Oxirgi marta ko'rilgan: " + lastSeen.toLocaleTimeString());
+      }
+    }
+
     let unsubscribe = null;
 
     function startListening() {
@@ -143,12 +161,15 @@
               return;
             }
             const data = doc.data();
-            const lastSeen = data.lastSeen.toDate();
-            if (data.status === "online") {
-              setOnline(lastSeen);
-            } else {
-              setOffline("Oxirgi marta ko'rilgan: " + lastSeen.toLocaleTimeString());
-            }
+            lastSnapshot = { status: data.status, lastSeen: data.lastSeen.toDate() };
+            evaluateAndRender();
+
+            // Timer'ni qayta o'rnatamiz: agar shu vaqtdan STALE_AFTER_MS
+            // ichida yangi yozuv kelmasa (masalan hard power-off bo'lib,
+            // Firestore'dagi qiymat "online"da muzlab qolsa), qo'lda
+            // staleness tekshiruvini ishga tushiramiz.
+            if (staleTimer) clearTimeout(staleTimer);
+            staleTimer = setTimeout(evaluateAndRender, STALE_AFTER_MS + 500);
           },
           (err) => {
             label.textContent = "Xatolik";
