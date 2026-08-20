@@ -228,9 +228,16 @@
       </main>
 
       <footer class="px-4 pb-6 pt-2">
+        <div id="sudoBanner" class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
+          ⚠️ SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
+        </div>
         <div class="max-w-[720px] mx-auto mb-2 flex items-center gap-3 text-[12px] text-[#8e8e8e]">
           <input id="category" type="text" value="general" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
           <input id="filename" type="text" value="chat" class="bg-transparent border-b border-[#3a3a3a] w-28 focus:outline-none focus:border-[#8e8e8e] transition" />
+          <select id="mode" class="bg-transparent border-b border-[#3a3a3a] focus:outline-none focus:border-[#8e8e8e] transition" title="Xavfsizlik rejimi">
+            <option value="general" selected>🛡️ General</option>
+            <option value="sudo">🔓 Sudo</option>
+          </select>
           <select id="tier" class="bg-transparent border-b border-[#3a3a3a] focus:outline-none focus:border-[#8e8e8e] transition ml-auto" title="Model quality vs speed">
             <option value="high" selected>⚡ Yuqori — qwen2.5:7b</option>
             <option value="medium">⚙️ O'rtacha — qwen2.5:3b</option>
@@ -283,6 +290,14 @@
     const tunnelStatus = document.getElementById("tunnel-status");
     const logoutBtn = document.getElementById("logout-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
+    const modeSelect = document.getElementById("mode");
+    const sudoBanner = document.getElementById("sudoBanner");
+
+    function updateSudoBanner() {
+      sudoBanner.classList.toggle("hidden", modeSelect.value !== "sudo");
+    }
+    modeSelect.addEventListener("change", updateSudoBanner);
+    updateSudoBanner();
     const chatHistoryEl = document.getElementById("chat-history");
     const welcomeEl = document.getElementById("welcome");
 
@@ -605,6 +620,64 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
+    // Qaytarib bo'lmaydigan xavfli komandalar (sudo mode + hard-block
+    // pattern) uchun: oddiy tugma yetarli emas, foydalanuvchi komandani
+    // ANIQ, xatosiz qayta o'zi qo'lda yozishi kerak — xuddi GitHub'ning
+    // "type the repo name to delete" tasdig'i kabi. Tugma matn mos
+    // kelmaguncha disabled turadi.
+    function addDangerConfirmCard(commandId, commandText) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start";
+      div.innerHTML = `
+        <div class="max-w-full w-full rounded-2xl px-4 py-3 space-y-2" style="background:#3a1414; border:1px solid #5c1f1f;">
+          <div class="text-[13px] font-semibold" style="color:#ff6b6b;">
+            ⚠️ XAVFLI, QAYTARIB BO'LMAYDIGAN KOMANDA
+          </div>
+          <div class="text-[13px] font-mono px-2 py-1.5 rounded" style="background:#1a0d0d; color:#ffb4b4; white-space:pre-wrap; word-break:break-all;">${escapeHtml(commandText)}</div>
+          <div class="text-[12px]" style="color:#e8a0a0;">Tasdiqlash uchun komandani XATOSIZ qayta yoz:</div>
+          <input type="text" class="danger-typed w-full bg-transparent border rounded px-2 py-1.5 text-[13px] font-mono focus:outline-none" style="border-color:#5c1f1f; color:#ffb4b4;" placeholder="${escapeHtml(commandText)}" autocomplete="off" spellcheck="false" />
+          <div class="danger-error text-[12px] hidden" style="color:#ff6b6b;">Mos kelmadi yoki noto'g'ri — qaytadan urin.</div>
+          <button class="danger-btn w-full bg-red-800 text-[13px] px-4 py-2 rounded-full transition opacity-40 cursor-not-allowed" disabled>
+            ✓ Tasdiqlab bajarish
+          </button>
+        </div>`;
+
+      const input = div.querySelector(".danger-typed");
+      const btn = div.querySelector(".danger-btn");
+      const errorEl = div.querySelector(".danger-error");
+
+      function refreshBtnState() {
+        const match = input.value === commandText;
+        btn.disabled = !match;
+        btn.classList.toggle("opacity-40", !match);
+        btn.classList.toggle("cursor-not-allowed", !match);
+        btn.classList.toggle("bg-red-800", !match);
+        btn.classList.toggle("bg-red-600", match);
+        btn.classList.toggle("hover:bg-red-500", match);
+      }
+      input.addEventListener("input", () => {
+        errorEl.classList.add("hidden");
+        refreshBtnState();
+      });
+
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = "running...";
+        const ok = await confirmCommand(commandId, input.value);
+        if (ok) {
+          div.remove();
+        } else {
+          errorEl.classList.remove("hidden");
+          btn.disabled = false;
+          btn.textContent = "✓ Tasdiqlab bajarish";
+        }
+      });
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
     function escapeHtml(text) {
       return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
@@ -658,8 +731,10 @@
       });
     }
 
-    async function confirmCommand(commandId) {
+    async function confirmCommand(commandId, typedConfirmation) {
       try {
+        const body = { command_id: commandId };
+        if (typedConfirmation !== undefined) body.typed_confirmation = typedConfirmation;
         const res = await fetch(`${API_BASE}/confirm`, {
           method: "POST",
           headers: {
@@ -667,16 +742,23 @@
             "X-Auth-Token": AUTH_TOKEN,
             "X-Login-Pass": LOGIN_PASS
           },
-          body: JSON.stringify({ command_id: commandId })
+          body: JSON.stringify(body)
         });
         if (res.status === 401) {
           showLogin("Session expired, please sign in again.");
-          return;
+          return false;
         }
         const data = await res.json();
+        if (res.status === 400 && data.error === "typed_confirmation_mismatch") {
+          // Not consumed on the backend — caller (danger card) shows an
+          // inline error and lets the user retry typing.
+          return false;
+        }
         addMessage(data.response || data.error || "No response", "bot");
+        return true;
       } catch (err) {
         addMessage("The confirm request failed.", "bot");
+        return false;
       }
     }
 
@@ -709,6 +791,7 @@
       const category = document.getElementById("category").value.trim() || "general";
       const filename = document.getElementById("filename").value.trim() || "chat";
       const tier = document.getElementById("tier").value || "high";
+      const mode = document.getElementById("mode").value || "general";
 
       addMessage(message, "user");
       input.value = "";
@@ -725,7 +808,7 @@
             "X-Auth-Token": AUTH_TOKEN,
             "X-Login-Pass": LOGIN_PASS
           },
-          body: JSON.stringify({ message, category, filename, tier })
+          body: JSON.stringify({ message, category, filename, tier, mode })
         });
 
         if (res.status === 401) {
@@ -777,7 +860,11 @@
               if (evt.kind === "pending_confirmation") {
                 addStepsTrail(evt.steps);
                 addMessage(evt.response, "pending");
-                addConfirmButton(evt.command_id);
+                if (evt.requires_typed_confirmation) {
+                  addDangerConfirmCard(evt.command_id, evt.command);
+                } else {
+                  addConfirmButton(evt.command_id);
+                }
               } else if (evt.kind === "blocked") {
                 addStepsTrail(evt.steps);
                 addMessage(evt.response, "pending");
