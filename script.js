@@ -55,6 +55,10 @@
     const sidebarBackdrop = document.getElementById("sidebar-backdrop");
 
     function isMobileLayout() { return window.innerWidth < 768; }
+    // Sichqoncha/trackpad bilan hover qila oladigan qurilmami, yoki
+    // faqat touch (barmoq bilan bosish) qurilmami — shunga qarab
+    // sidebar ochilish usuli farqlanadi.
+    function isTouchDevice() { return window.matchMedia("(hover: none), (pointer: coarse)").matches; }
 
     function setSidebarCollapsed(collapsed) {
       sidebarEl.classList.toggle("collapsed", collapsed);
@@ -64,7 +68,45 @@
       setSidebarCollapsed(!sidebarEl.classList.contains("collapsed"));
     }
 
-    headerMenuBtn?.addEventListener("click", toggleSidebar);
+    // ---- Hover bilan ochilish / sekin yopilish (faqat sichqonchali,
+    // desktop qurilmalarda) — Claude.ai'dagi kabi. Touch qurilmalarda
+    // (telefon/planshet) esa oddiy tap-toggle ishlaydi, chunki ularda
+    // "hover" degan holat umuman yo'q. ----
+    let sidebarCloseTimer = null;
+    const SIDEBAR_CLOSE_DELAY = 350; // ms — "sekin yopilish" uchun kutish vaqti
+
+    function cancelSidebarCloseTimer() {
+      if (sidebarCloseTimer) { clearTimeout(sidebarCloseTimer); sidebarCloseTimer = null; }
+    }
+    function scheduleSidebarClose() {
+      cancelSidebarCloseTimer();
+      sidebarCloseTimer = setTimeout(() => {
+        setSidebarCollapsed(true);
+        sidebarCloseTimer = null;
+      }, SIDEBAR_CLOSE_DELAY);
+    }
+
+    if (isTouchDevice()) {
+      // Touch: icon'ga tap qilinganda ochiladi, yana tap qilinganda yopiladi.
+      headerMenuBtn?.addEventListener("click", toggleSidebar);
+    } else {
+      // Desktop: icon ustiga hover qilinganda darrov ochiladi.
+      headerMenuBtn?.addEventListener("mouseenter", () => {
+        cancelSidebarCloseTimer();
+        setSidebarCollapsed(false);
+      });
+      // Sichqoncha icon'dan yoki sidebar'ning o'zidan chiqib ketsa —
+      // darrov emas, kichik kechikish bilan ("sekin") yopiladi. Shu
+      // kechikish ichida sichqoncha sidebar ichiga o'tsa, yopilish
+      // bekor qilinadi — shuning uchun ikkalasiga ham eventlar bor.
+      headerMenuBtn?.addEventListener("mouseleave", scheduleSidebarClose);
+      sidebarEl?.addEventListener("mouseenter", cancelSidebarCloseTimer);
+      sidebarEl?.addEventListener("mouseleave", scheduleSidebarClose);
+      // Icon'ga click ham backup sifatida qoladi (masalan klaviatura/
+      // accessibility uchun, yoki hover ishlamagan holatlarda).
+      headerMenuBtn?.addEventListener("click", toggleSidebar);
+    }
+
     sidebarBackdrop?.addEventListener("click", () => setSidebarCollapsed(true));
 
     // Mobile boshlanishida sidebar yopiq (slide-over), desktopda ochiq.
