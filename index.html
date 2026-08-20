@@ -313,7 +313,6 @@
     const tunnelStatus = document.getElementById("tunnel-status");
     const logoutBtn = document.getElementById("logout-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
-    const sudoBanner = document.getElementById("sudoBanner");
 
     // ---------------------------------------------------------------------
     // COMPOSER — one physical set of controls (mode/tier/input/send) that
@@ -355,6 +354,12 @@
     // initially; showComposerIn() relocates them later without re-creating
     // anything, so listeners/state stay attached.
     while (composer.firstChild) composerSlotEmpty.appendChild(composer.firstChild);
+
+    // Must be looked up AFTER the composer's children (which include
+    // #sudoBanner) are actually inserted into the document above —
+    // otherwise getElementById returns null and the next section throws
+    // "Cannot read properties of null (reading 'classList')".
+    const sudoBanner = document.getElementById("sudoBanner");
 
     const input = document.getElementById("message");
     const sendBtn = document.getElementById("send");
