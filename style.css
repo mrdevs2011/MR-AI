@@ -25,6 +25,10 @@
   --pending-bg:    #3A341F;
   --pending-border:#6B5C2C;
   --success:       #7FB069;
+  --warn:          #C9902E;
+  --warn-hover:    #D9A047;
+  --danger-btn:    #6B2E30;
+  --danger-btn-hover: #8C3A3D;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif;
   --font-serif: "Source Serif Pro", Georgia, "Iowan Old Style", "Times New Roman", serif;
   --font-mono: "SF Mono", Menlo, Consolas, monospace;
@@ -672,6 +676,13 @@ textarea:focus-visible:not(.composer-textarea) {
 /* hover: variantlar ham xuddi shu tokenlar bilan qidiriladi */
 [class~="hover:bg-[#2a2a2a]"]:hover { background-color: var(--bg-hover) !important; }
 [class~="bg-[#2a2a2a]"]             { background-color: var(--bg-sidebar) !important; }
+
+/* script.js orqali qo'shiladigan sovuq kulrang tugma klasslari — issiq
+   Claude palitrasiga ko'chirildi (tool-result "run" tugmalari va h.k.) */
+[class~="bg-[#2f2f2f]"]             { background-color: var(--bg-elevated) !important; }
+[class~="bg-[#3a3a3a]"]             { background-color: var(--bg-hover) !important; }
+[class~="hover:bg-[#3a3a3a]"]:hover { background-color: var(--bg-hover) !important; }
+[class~="hover:bg-[#4a4a4a]"]:hover { background-color: var(--border-strong) !important; }
 
 /* Login submit tugmasi: bg-[#ececec] hover:bg-white text-[#212121] */
 [class~="bg-[#ececec]"]     { background-color: var(--accent) !important; }
