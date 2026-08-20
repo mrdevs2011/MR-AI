@@ -1141,20 +1141,20 @@
     // renders that live, instead of a fake spinner — every line reflects
     // something that is actually happening on the backend right now.
     // -----------------------------------------------------------------
-    function createThoughtPanel() {
-      const wrapper = document.createElement("div");
-      wrapper.className = "flex justify-start w-full";
-      wrapper.innerHTML = `
-        <div class="max-w-full w-full rounded-2xl px-4 py-3" style="background:#262626;">
-          <div class="thought-log" id="thought-log"></div>
-          <div class="thinking-row" id="thinking-row">
-            <video class="thinking-orb-video" src="circle2_transparent.webm" autoplay loop muted playsinline></video>
-            <span id="thinking-label">Thinking</span>
-            <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
-          </div>
-        </div>`;
-      chat.appendChild(wrapper);
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+function createThoughtPanel() {
+  const wrapper = document.createElement("div");
+  wrapper.className = "flex justify-start w-full";
+  wrapper.innerHTML = `
+    <div class="max-w-full w-full rounded-2xl px-4 py-3">
+      <div class="thought-log" id="thought-log"></div>
+      <div class="thinking-row" id="thinking-row">
+        <video class="thinking-orb-video" src="circle2_transparent.webm" autoplay loop muted playsinline></video>
+        <span id="thinking-label">Thinking</span>
+        <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
+      </div>
+    </div>`;
+  chat.appendChild(wrapper);
+  chatScroll.scrollTop = chatScroll.scrollHeight;
 
       const logEl = wrapper.querySelector("#thought-log");
       const rowEl = wrapper.querySelector("#thinking-row");
