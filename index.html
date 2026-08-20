@@ -232,15 +232,9 @@
                  class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
                  placeholder="Login password" required />
         </div>
-
-        <div class="space-y-1.5">
-          <input id="login-token" type="password" autocomplete="off"
-                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
-                 placeholder="Auth token" required />
-        </div>
       </div>
 
-      <p id="login-error" class="text-[13px] text-[#f2555a] hidden">Wrong password or token, or the backend didn't respond.</p>
+      <p id="login-error" class="text-[13px] text-[#f2555a] hidden">Wrong password, or the backend didn't respond.</p>
 
       <button type="submit" id="login-btn"
               class="w-full bg-[#ececec] hover:bg-white text-[#212121] rounded-xl py-3 text-[15px] font-medium transition disabled:opacity-40">
@@ -353,13 +347,13 @@
     let API_BASE = null;
     let LOGIN_PASS = "";
     let AUTH_TOKEN = "";
+    let REMOTE_AUTH_TOKEN = ""; // Firestore'dan olingan token, login formasida qo'lda kiritilmaydi
 
     const bootScreen = document.getElementById("boot-screen");
     const loginScreen = document.getElementById("login-screen");
     const appScreen = document.getElementById("app-screen");
     const loginForm = document.getElementById("login-form");
     const loginPass = document.getElementById("login-pass");
-    const loginToken = document.getElementById("login-token");
     const loginError = document.getElementById("login-error");
     const loginBtn = document.getElementById("login-btn");
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
@@ -711,7 +705,6 @@
         loginError.classList.add("hidden");
       }
       loginPass.value = "";
-      loginToken.value = "";
       loginPass.focus();
     }
 
@@ -720,6 +713,7 @@
         const doc = await db.collection("config").doc("tunnel").get();
         if (doc.exists && doc.data().url) {
           API_BASE = doc.data().url.replace(/\/$/, "");
+          REMOTE_AUTH_TOKEN = doc.data().authToken || "";
           loginTunnelStatus.textContent = "tunnel connected, enter your password";
         } else {
           loginTunnelStatus.textContent = "tunnel not found (Firestore empty)";
@@ -754,8 +748,14 @@
         return;
       }
       const pass = loginPass.value.trim();
-      const token = loginToken.value.trim();
-      if (!pass || !token) return;
+      const token = REMOTE_AUTH_TOKEN;
+      if (!pass || !token) {
+        if (!token) {
+          loginError.textContent = "Auth token not loaded from Firestore yet, wait a moment and try again.";
+          loginError.classList.remove("hidden");
+        }
+        return;
+      }
 
       loginBtn.disabled = true;
       loginBtn.textContent = "Checking...";
