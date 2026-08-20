@@ -440,6 +440,9 @@
     function updateChatTitle() {
       const active = getActiveChat();
       chatTitleEl.textContent = (active && active.title) ? active.title : "MRagent";
+      chatTitleEl.style.animation = "none";
+      void chatTitleEl.offsetWidth;
+      chatTitleEl.style.animation = "";
     }
 
     function createNewChat() {
@@ -830,6 +833,52 @@
     // of folding the command + result into one prose-style bot bubble.
     // Persisted with kind "io" so it survives switching between chats.
     // -----------------------------------------------------------------
+    // Light bash syntax highlighting (no real parser, just enough to look
+    // like a real terminal/code block — commands, flags, quoted strings,
+    // operators like && ; | get their own color, everything else is left
+    // as plain path/argument text).
+    const BASH_COMMANDS = new Set([
+      "cd","ls","zip","unzip","cp","mv","rm","mkdir","touch","cat","echo",
+      "grep","find","sed","awk","curl","wget","git","npm","node","python",
+      "python3","pip","pip3","bash","sh","chmod","chown","tar","kill",
+      "ps","top","df","du","head","tail","sort","uniq","wc","xargs","export"
+    ]);
+    function highlightBash(cmd) {
+      const parts = cmd.split(/(\s*(?:&&|\|\||[;|>]{1,2})\s*)/g);
+      let atCmdStart = true;
+      return parts.map(part => {
+        if (/^\s*(?:&&|\|\||[;|>]{1,2})\s*$/.test(part)) {
+          atCmdStart = true;
+          return `<span class="tok-op">${escapeHtml(part)}</span>`;
+        }
+        const tokens = part.split(/(\s+|"[^"]*"|'[^']*')/g);
+        return tokens.map(tok => {
+          if (!tok) return "";
+          if (/^\s+$/.test(tok)) return tok;
+          if (/^["'].*["']$/.test(tok)) return `<span class="tok-str">${escapeHtml(tok)}</span>`;
+          if (/^-{1,2}[a-zA-Z-]+/.test(tok)) return `<span class="tok-flag">${escapeHtml(tok)}</span>`;
+          if (atCmdStart && BASH_COMMANDS.has(tok)) {
+            atCmdStart = false;
+            return `<span class="tok-cmd">${escapeHtml(tok)}</span>`;
+          }
+          atCmdStart = false;
+          return `<span class="tok-path">${escapeHtml(tok)}</span>`;
+        }).join("");
+      }).join("");
+    }
+
+    // Formats output text, turning a trailing "[Exit code: N]" marker (or
+    // "exit code N" already in that shape) into a small colored line
+    // instead of raw bracketed text.
+    function formatIOOutput(out) {
+      const m = out.match(/^([\s\S]*?)\s*\[Exit code:\s*(-?\d+)\]\s*$/);
+      if (!m) return escapeHtml(out);
+      const [, body, code] = m;
+      const cls = code === "0" ? "io-exit-ok" : "io-exit-err";
+      const bodyHtml = body.trim() ? escapeHtml(body.trim()) + "\n\n" : "";
+      return `${bodyHtml}<span class="${cls}">exit code ${escapeHtml(code)}</span>`;
+    }
+
     function addIOCard(inputText, outputText, persist = true) {
       const div = document.createElement("div");
       div.className = "flex justify-start w-full";
@@ -838,12 +887,12 @@
       div.innerHTML = `
         <div class="max-w-full w-full io-card">
           <div class="io-section">
-            <div class="io-header">Input</div>
-            <pre class="io-content">${escapeHtml(inputText || "")}</pre>
+            <div class="io-header">bash</div>
+            <pre class="io-content">${highlightBash(inputText || "")}</pre>
           </div>
           <div class="io-section">
             <div class="io-header">Output</div>
-            <pre class="io-content${isErr ? " io-output-err" : ""}">${escapeHtml(out)}</pre>
+            <pre class="io-content${isErr ? " io-output-err" : ""}">${formatIOOutput(out)}</pre>
           </div>
         </div>`;
       chat.appendChild(div);

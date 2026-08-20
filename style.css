@@ -190,7 +190,15 @@ textarea:focus-visible:not(.composer-textarea) {
 }
 
 #chat-header {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid transparent;
+}
+#chat-title {
+  opacity: 0;
+  animation: chatTitleFadeIn .5s ease forwards;
+}
+@keyframes chatTitleFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ---- pill select'lar (mode / tier) ---- */
@@ -667,37 +675,44 @@ textarea:focus-visible:not(.composer-textarea) {
   .msg-actions { opacity: 1; }
 }
 
-/* ---- bajarilgan buyruqlar uchun INPUT / OUTPUT kartasi ---- */
+/* ---- bajarilgan buyruqlar uchun INPUT / OUTPUT kartasi (Claude Code uslubida) ---- */
 .io-card {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--bg-code);
 }
+.io-section { padding: 12px 14px 14px; }
 .io-section:not(:last-child) { border-bottom: 1px solid var(--border); }
 .io-header {
-  background: var(--bg-hover);
-  color: var(--ink);
+  color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 6px 14px;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
 }
 .io-content {
   margin: 0;
-  padding: 12px 14px;
+  padding: 0;
   font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.65;
   color: var(--ink-secondary);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 320px;
   overflow-y: auto;
 }
-.io-content.io-output-err { color: var(--danger); }
+.io-content.io-output-err { color: var(--ink-secondary); }
+.io-exit-ok { color: var(--success); font-weight: 500; }
+.io-exit-err { color: var(--danger); font-weight: 500; }
+/* ---- bash syntax highlight tokenlari ---- */
+.tok-cmd    { color: #7EB6E8; }
+.tok-flag   { color: var(--accent); }
+.tok-str    { color: var(--success); }
+.tok-op     { color: var(--muted); }
+.tok-path   { color: var(--ink); }
 
 /* =====================================================================
    OVERRIDE BLOKI — index.html o'zgartirilmagani uchun, undagi Tailwind
