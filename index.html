@@ -170,6 +170,38 @@
     }
     .prose-bot a { color: #b98cff; text-decoration: underline; }
     .prose-bot hr { border: none; border-top: 1px solid #3a3a3a; margin: 0.8em 0; }
+
+    /* ---- INPUT / OUTPUT card for executed commands ---- */
+    .io-card {
+      border: 1px solid #3a3a3a;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #1a1a1a;
+    }
+    .io-section:not(:last-child) { border-bottom: 1px solid #3a3a3a; }
+    .io-header {
+      background: #111111;
+      color: #ececec;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 6px 14px;
+      text-transform: uppercase;
+    }
+    .io-content {
+      margin: 0;
+      padding: 12px 14px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: #d9d9d9;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .io-content.io-output-err { color: #ff9c9c; }
   </style>
 </head>
 <body class="text-[#ececec] h-screen flex flex-col" style="background:#212121;">
@@ -313,6 +345,7 @@
     const tunnelStatus = document.getElementById("tunnel-status");
     const logoutBtn = document.getElementById("logout-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
+    const sudoBanner = document.getElementById("sudoBanner");
 
     // ---------------------------------------------------------------------
     // COMPOSER — one physical set of controls (mode/tier/input/send) that
@@ -354,12 +387,6 @@
     // initially; showComposerIn() relocates them later without re-creating
     // anything, so listeners/state stay attached.
     while (composer.firstChild) composerSlotEmpty.appendChild(composer.firstChild);
-
-    // Must be looked up AFTER the composer's children (which include
-    // #sudoBanner) are actually inserted into the document above —
-    // otherwise getElementById returns null and the next section throws
-    // "Cannot read properties of null (reading 'classList')".
-    const sudoBanner = document.getElementById("sudoBanner");
 
     const input = document.getElementById("message");
     const sendBtn = document.getElementById("send");
@@ -451,7 +478,13 @@
       const isEmpty = !active || active.messages.length === 0;
       setEmptyState(isEmpty);
       if (isEmpty) return;
-      active.messages.forEach(m => addMessage(m.text, m.kind, false));
+      active.messages.forEach(m => {
+        if (m.kind === "io") {
+          addIOCard(m.input, m.output, false);
+        } else {
+          addMessage(m.text, m.kind, false);
+        }
+      });
     }
 
     function switchChat(id) {
@@ -622,6 +655,42 @@
             active.title = text.slice(0, 40);
             renderChatHistory();
           }
+          saveChats();
+        }
+      }
+      return div;
+    }
+
+    // -----------------------------------------------------------------
+    // INPUT / OUTPUT CARD
+    // Shows exactly what the AI ran (input) and exactly what the
+    // terminal returned (output) as two clearly separated boxes, instead
+    // of folding the command + result into one prose-style bot bubble.
+    // Persisted with kind "io" so it survives switching between chats.
+    // -----------------------------------------------------------------
+    function addIOCard(inputText, outputText, persist = true) {
+      const div = document.createElement("div");
+      div.className = "flex justify-start w-full";
+      const out = (outputText && outputText.trim()) ? outputText : "(no output)";
+      const isErr = /\[Exit code: [1-9]/.test(out) || /^Execution error:/.test(out) || /^Command timed out/.test(out);
+      div.innerHTML = `
+        <div class="max-w-full w-full io-card">
+          <div class="io-section">
+            <div class="io-header">Input</div>
+            <pre class="io-content">${escapeHtml(inputText || "")}</pre>
+          </div>
+          <div class="io-section">
+            <div class="io-header">Output</div>
+            <pre class="io-content${isErr ? " io-output-err" : ""}">${escapeHtml(out)}</pre>
+          </div>
+        </div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+
+      if (persist) {
+        const active = getActiveChat();
+        if (active) {
+          active.messages.push({ kind: "io", input: inputText, output: outputText });
           saveChats();
         }
       }
@@ -862,7 +931,19 @@
           // inline error and lets the user retry typing.
           return false;
         }
-        addMessage(data.response || data.error || "No response", "bot");
+        if (data.error && !data.type) {
+          addMessage(data.error, "bot");
+          return true;
+        }
+        // Show exactly what ran (input) and exactly what came back
+        // (output) as two separate boxes, instead of one prose bubble.
+        if (data.type === "command") {
+          addIOCard(data.command, data.result);
+        } else if (data.type === "write_file") {
+          addIOCard(`write_file: ${data.path}`, data.result);
+        } else {
+          addMessage(data.response || data.error || "No response", "bot");
+        }
         return true;
       } catch (err) {
         addMessage("The confirm request failed.", "bot");
