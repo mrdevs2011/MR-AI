@@ -1,4 +1,4 @@
-    const firebaseConfig = {
+const firebaseConfig = {
       apiKey: "AIzaSyDYkT1b_SOg5T76yhpyRuqnem9YsG53Qn0",
       authDomain: "mragent-2d280.firebaseapp.com",
       projectId: "mragent-2d280",
@@ -1385,6 +1385,92 @@ function createThoughtPanel() {
       });
     }
 
+    // sendMessage() va confirmCommand() ikkalasi ham backend'dan SSE stream
+    // qaytaradi (ROADMAP: /confirm endi run_agent_loop'ga qaytib, zanjirni
+    // avtomatik davom ettiradi — oldin oddiy JSON qaytarardi). Bu funksiya
+    // ikkalasi uchun ham umumiy: bitta fetch Response'ni oladi, SSE
+    // frame'larni o'qib, thought panel + xabar kartalarini yangilaydi.
+    async function consumeAgentStream(res, panel, originalMessage) {
+      let sawAnyEvent = false;
+
+      // Ba'zi holatlarda backend hali ham oddiy JSON qaytarishi mumkin
+      // (masalan __mragent_auth_check__ yoki xato javoblar) — shuni SSE
+      // deb noto'g'ri o'qishga urinmaslik uchun avval content-type'ni
+      // tekshiramiz.
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("text/event-stream")) {
+        const data = await res.json();
+        panel?.remove();
+        if (data.error && !data.type) {
+          addMessage(data.error, "bot");
+        } else {
+          addMessage(data.response || "No response", "bot");
+        }
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const { events, remainder } = parseSseChunk(buffer);
+        buffer = remainder;
+
+        for (const evt of events) {
+          sawAnyEvent = true;
+
+          if (evt.type === "thinking") {
+            panel?.setLabel(
+              evt.step > 1 ? `Thinking about the next step (${evt.step}/${evt.max_steps})` : "Thinking"
+            );
+          } else if (evt.type === "action") {
+            const verb = ACTION_VERBS[evt.action] || "Working on it";
+            panel?.setLabel(`${verb}: ${evt.target}`);
+          } else if (evt.type === "step_result") {
+            const verb = ACTION_LABELS[evt.action] || evt.action;
+            const target = evt.command || evt.path || evt.query || "";
+            panel?.commitLine(`${verb} — ${target}`);
+          } else if (evt.type === "final") {
+            panel?.remove();
+            panel = null; // keyingi "thinking" eventi kelsa (confirm zanjiri
+                           // davom etib, yana bir bosqich chiqsa), yangi panel
+                           // kerak bo'ladi — buni chaqiruvchi tomon boshqaradi.
+
+            if (evt.kind === "pending_confirmation") {
+              addStepsTrail(evt.steps);
+              addMessage(evt.response, "pending");
+              if (evt.requires_typed_confirmation) {
+                addDangerConfirmCard(evt.command_id, evt.command);
+              } else {
+                addConfirmButton(evt.command_id);
+              }
+            } else if (evt.kind === "blocked") {
+              addStepsTrail(evt.steps);
+              addMessage(evt.response, "pending");
+            } else if (evt.kind === "error") {
+              addStepsTrail(evt.steps);
+              addMessage(evt.response, "error");
+              if (evt.retryable && originalMessage) {
+                addRetryButton(originalMessage);
+              }
+            } else {
+              addStepsTrail(evt.steps);
+              await addMessageTyped(evt.response || "No response");
+            }
+          }
+        }
+      }
+
+      if (!sawAnyEvent) {
+        panel?.remove();
+        addMessage("No response from the backend.", "bot");
+      }
+    }
+
     async function confirmCommand(commandId, typedConfirmation) {
       try {
         const body = { command_id: commandId };
@@ -1402,25 +1488,32 @@ function createThoughtPanel() {
           forceLogoutInvalidToken();
           return false;
         }
-        const data = await res.json();
-        if (res.status === 400 && data.error === "typed_confirmation_mismatch") {
-          // Not consumed on the backend — caller (danger card) shows an
-          // inline error and lets the user retry typing.
-          return false;
-        }
-        if (data.error && !data.type) {
-          addMessage(data.error, "bot");
+        // typed_confirmation_mismatch hali ham oddiy JSON (400) — bu SSE
+        // stream boshlanishidan OLDIN, backend darhol shu xatoni qaytaradi.
+        // Shuning uchun bu tekshiruv consumeAgentStream()dan oldin turadi.
+        if (res.status === 400) {
+          const data = await res.json().catch(() => ({}));
+          if (data.error === "typed_confirmation_mismatch") {
+            // Not consumed on the backend — caller (danger card) shows an
+            // inline error and lets the user retry typing.
+            return false;
+          }
+          addMessage(data.error || "Confirm failed.", "bot");
           return true;
         }
-        // Show exactly what ran (input) and exactly what came back
-        // (output) as two separate boxes, instead of one prose bubble.
-        if (data.type === "command") {
-          addIOCard(data.command, data.result);
-        } else if (data.type === "write_file") {
-          addIOCard(`write_file: ${data.path}`, data.result);
-        } else {
-          addMessage(data.response || data.error || "No response", "bot");
+        if (res.status === 403 || res.status === 404) {
+          const data = await res.json().catch(() => ({}));
+          addMessage(data.error || "Confirm failed.", "bot");
+          return true;
         }
+
+        // Muvaffaqiyatli confirm endi SSE stream — /chat bilan bir xil
+        // "thinking / action / step_result / final" event ketma-ketligini
+        // qaytaradi, chunki backend shu yerdan run_agent_loop'ni davom
+        // ettiradi. Shuning uchun bir marta ishlab, to'xtab qolish o'rniga
+        // agent qolgan rejasini (keyingi zona-2/3 amalgacha) o'zi bajaradi.
+        const panel = createThoughtPanel();
+        await consumeAgentStream(res, panel);
         return true;
       } catch (err) {
         addMessage("The confirm request failed.", "bot");
@@ -1467,7 +1560,6 @@ function createThoughtPanel() {
       sendBtn.disabled = true;
 
       const panel = createThoughtPanel();
-      let sawAnyEvent = false;
 
       try {
         const res = await fetch(`${API_BASE}/chat`, {
@@ -1486,74 +1578,7 @@ function createThoughtPanel() {
           return;
         }
 
-        // Non-streaming fallback (e.g. plain JSON error responses)
-        const contentType = res.headers.get("content-type") || "";
-        if (!contentType.includes("text/event-stream")) {
-          const data = await res.json();
-          panel.remove();
-          addMessage(data.response || data.error || "No response", "bot");
-          return;
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let finalSteps = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const { events, remainder } = parseSseChunk(buffer);
-          buffer = remainder;
-
-          for (const evt of events) {
-            sawAnyEvent = true;
-
-            if (evt.type === "thinking") {
-              panel.setLabel(
-                evt.step > 1 ? `Thinking about the next step (${evt.step}/${evt.max_steps})` : "Thinking"
-              );
-            } else if (evt.type === "action") {
-              const verb = ACTION_VERBS[evt.action] || "Working on it";
-              panel.setLabel(`${verb}: ${evt.target}`);
-            } else if (evt.type === "step_result") {
-              const verb = ACTION_LABELS[evt.action] || evt.action;
-              const target = evt.command || evt.path || evt.query || "";
-              panel.commitLine(`${verb} — ${target}`);
-            } else if (evt.type === "final") {
-              finalSteps = evt.steps;
-              panel.remove();
-
-              if (evt.kind === "pending_confirmation") {
-                addStepsTrail(evt.steps);
-                addMessage(evt.response, "pending");
-                if (evt.requires_typed_confirmation) {
-                  addDangerConfirmCard(evt.command_id, evt.command);
-                } else {
-                  addConfirmButton(evt.command_id);
-                }
-              } else if (evt.kind === "blocked") {
-                addStepsTrail(evt.steps);
-                addMessage(evt.response, "pending");
-              } else if (evt.kind === "error") {
-                addStepsTrail(evt.steps);
-                addMessage(evt.response, "error");
-                if (evt.retryable) {
-                  addRetryButton(message);
-                }
-              } else {
-                addStepsTrail(evt.steps);
-                await addMessageTyped(evt.response || "No response");
-              }
-            }
-          }
-        }
-
-        if (!sawAnyEvent) {
-          panel.remove();
-          addMessage("No response from the backend.", "bot");
-        }
+        await consumeAgentStream(res, panel, message);
       } catch (err) {
         panel.remove();
         addMessage("Couldn't reach the backend.\nIs the tunnel up?", "bot");
