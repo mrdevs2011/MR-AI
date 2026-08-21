@@ -269,6 +269,38 @@ textarea:focus-visible:not(.composer-textarea) {
 }
 #sidebar-brand.hidden { display: none; }
 #sidebar-brand:not(.hidden) { display: flex; }
+
+/* ---- brand orb: hover qilganda statik logo o'rniga jonli webm silliq
+   crossfade bilan chiqadi ---- */
+.brand-orb {
+  position: relative;
+  cursor: default;
+}
+.brand-orb-static,
+.brand-orb-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.brand-orb-video {
+  opacity: 0;
+  /* Video fon'da doim autoplay+loop bilan ishlab turadi (pastda hech
+     qachon to'xtatilmaydi) — shuning uchun hover bosilgan zahoti u allaqachon
+     "tayyor" holatda, faqat opacity bilan yumshoq ko'rinadi. Agar buning
+     o'rniga JS orqali har hover'da .play() chaqirilsa, birinchi kadr(lar)
+     kechikib, "tiq" etib boshlanishi mumkin edi — shu sabab bu yondashuv
+     tanlandi. */
+  transition: opacity .35s ease;
+}
+#sidebar-brand:hover .brand-orb-video {
+  opacity: 1;
+}
+#sidebar-brand:hover .brand-orb-static {
+  opacity: 0;
+  transition: opacity .35s ease;
+}
 #chat-title {
   opacity: 0;
   animation: chatTitleFadeIn .5s ease forwards;
@@ -613,6 +645,15 @@ textarea:focus-visible:not(.composer-textarea) {
   padding: 4px 0;
   color: var(--muted);
   font-size: 13.5px;
+  /* Butun qator paydo bo'lganda shoshilinch "sakrab chiqmasin" — sekin,
+     silliq va biroz "cho'kib" joylashsin (sifatli, premium tuyg'u uchun
+     ease-out emas, custom cubic-bezier bilan oxiri yumshoq to'xtaydi). */
+  animation: thinkingRowSettle 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes thinkingRowSettle {
+  0%   { opacity: 0; transform: translateY(6px); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .thinking-dot-orb {
   width: 6px;
@@ -633,6 +674,38 @@ textarea:focus-visible:not(.composer-textarea) {
   object-fit: cover;
   flex-shrink: 0;
   display: block;
+  /* MUHIM: circle2_transparent.webm'ning haqiqiy davomiyligi — ffprobe
+     bilan tekshirilgan (10.067s). Pastdagi ikkala animatsiya HAM aynan
+     shu son bilan yozilgan — chunki veil (loop-yashiruvchi xiralashish)
+     faqat video haqiqatan qayta boshlanadigan lahzada ishlasa foyda
+     beradi; boshqa son bo'lsa ikkalasi bir-biridan "chiqib" ketib,
+     tasodifiy paytlarda xiralashib, hech narsani yashirmay qoladi. */
+  animation: orbGentleRotate 10.067s cubic-bezier(0.65, 0, 0.35, 1) infinite,
+             orbLoopVeil 10.067s linear infinite;
+  transform-origin: 50% 50%;
+}
+@keyframes orbGentleRotate {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(0deg); }
+  40%  { transform: rotate(180deg); }
+  55%  { transform: rotate(180deg); }
+  90%  { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+/* Video oxiridan boshiga qaytadigan aniq lahza (100%->0%) — o'sha nuqtada
+   frame orasida qattiq "sakrash" bor, ko'zga tashlanadi. Buni butunlay
+   yo'qotib bo'lmaydi (bu videoning o'z contenti), lekin aynan shu lahzada
+   opacity'ni bir zumga pasaytirib-ko'tarish orqali sakrashni "yashirish"
+   mumkin — inson ko'zi past-opacity paytdagi almashinuvni deyarli
+   sezmaydi. Video oxirlashiga ~250ms qolganda xiralasha boshlaydi, loop
+   nuqtasidan ~150ms o'tgach yana to'liq yorishadi — shu oraliqda haqiqiy
+   "tiqillash" ko'z uchun ko'rinmay qoladi. */
+@keyframes orbLoopVeil {
+  0%     { opacity: 1; }
+  97.5%  { opacity: 1; }
+  99%    { opacity: 0.3; }
+  99.99% { opacity: 0.3; }
+  100%   { opacity: 0.3; }
 }
 .thinking-dots {
   display: none;
@@ -643,7 +716,9 @@ textarea:focus-visible:not(.composer-textarea) {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: thinkingShimmer 1.8s linear infinite;
+  /* Sekinroq, silliqroq shimmer — oldingi 1.8s "yugurib o'tadigan"
+     tezlikdan ko'ra sokinroq, sifatli tuyg'u beradi. */
+  animation: thinkingShimmer 2.6s ease-in-out infinite;
 }
 @keyframes thinkingShimmer {
   0% { background-position: 200% 0; }
@@ -661,7 +736,9 @@ textarea:focus-visible:not(.composer-textarea) {
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  animation: fadeInThought .25s ease;
+  /* Har bir fikr qatori shoshmasdan, silliq "cho'kib" joylashadi —
+     thinking-row bilan bir xil sokin his qilinishi uchun mos uslub. */
+  animation: fadeInThought .55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .thought-line.current { color: var(--ink-secondary); }
 .thought-line .check {
@@ -670,7 +747,7 @@ textarea:focus-visible:not(.composer-textarea) {
   opacity: 0.7;
 }
 @keyframes fadeInThought {
-  from { opacity: 0; transform: translateY(-3px); }
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

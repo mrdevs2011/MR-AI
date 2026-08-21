@@ -1088,7 +1088,7 @@ const firebaseConfig = {
       return `${bodyHtml}<span class="${cls}">exit code ${escapeHtml(code)}</span>`;
     }
 
-    function addIOCard(inputText, outputText, persist = true) {
+    function addIOCard(inputText, outputText, persist = true, beforeEl = null) {
       const div = document.createElement("div");
       div.className = "flex justify-start w-full";
       const out = (outputText && outputText.trim()) ? outputText : "(no output)";
@@ -1104,7 +1104,17 @@ const firebaseConfig = {
             <pre class="io-content${isErr ? " io-output-err" : ""}">${formatIOOutput(out)}</pre>
           </div>
         </div>`;
-      chat.appendChild(div);
+      // beforeEl beriladi -> shu element (masalan hali faol "thinking"
+      // qatori)dan OLDIN kiritamiz, aks holda yangi box doim eng pastga —
+      // hali ishlab turgan thinking indikatoridan HAM pastga tushib
+      // qolardi, tartib teskari ko'rinardi (terminaldagidek: bajarilgan
+      // komanda tepada, "hozir ishlayapti" belgisi doim eng pastda turishi
+      // kerak).
+      if (beforeEl && beforeEl.parentNode === chat) {
+        chat.insertBefore(div, beforeEl);
+      } else {
+        chat.appendChild(div);
+      }
       chatScroll.scrollTop = chatScroll.scrollHeight;
 
       if (persist) {
@@ -1116,22 +1126,6 @@ const firebaseConfig = {
       }
       return div;
     }
-
-    const ACTION_LABELS = {
-      command: "command",
-      read_file: "read",
-      write_file: "write",
-      list_dir: "folder",
-      web_search: "search"
-    };
-
-    const ACTION_VERBS = {
-      command: "Running command",
-      read_file: "Reading file",
-      write_file: "Writing file",
-      list_dir: "Listing folder",
-      web_search: "Searching the web"
-    };
 
     // -----------------------------------------------------------------
     // LIVE THOUGHT-PROCESS PANEL
@@ -1149,7 +1143,7 @@ function createThoughtPanel() {
       <div class="thought-log" id="thought-log"></div>
       <div class="thinking-row" id="thinking-row">
         <video class="thinking-orb-video" src="circle2_transparent.webm" autoplay loop muted playsinline></video>
-        <span id="thinking-label">Thinking</span>
+        <span id="thinking-label">Yuborilmoqda</span>
         <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
       </div>
     </div>`;
@@ -1179,18 +1173,6 @@ function createThoughtPanel() {
           wrapper.remove();
         }
       };
-    }
-
-    // Har bir step endi to'liq Input/Output kartasi sifatida chiziladi
-    // (addIOCard bilan bir xil ko'rinish) — eski flat "label — target"
-    // ro'yxati o'rniga. command bo'lmagan step'lar (read_file/list_dir/
-    // web_search) uchun target Input o'rnida ko'rsatiladi.
-    function addStepsTrail(steps) {
-      if (!steps || !steps.length) return;
-      for (const s of steps) {
-        const inputText = s.command || s.path || s.query || "";
-        addIOCard(inputText, s.result || "", true);
-      }
     }
 
     // OpenRouter (bepul model) band bo'lib chaqiruv butunlay
@@ -1417,16 +1399,20 @@ function createThoughtPanel() {
           sawAnyEvent = true;
 
           if (evt.type === "thinking") {
-            panel?.setLabel(
-              evt.step > 1 ? `Thinking about the next step (${evt.step}/${evt.max_steps})` : "Thinking"
-            );
+            // Backend endi aynan qaysi matnni ko'rsatish kerakligini
+            // `label` maydonida yuboradi — frontend o'zidan "Thinking"
+            // kabi status nomini o'ylab topmaydi, faqat kelganini chiqaradi.
+            panel?.setLabel(evt.label || "...");
           } else if (evt.type === "action") {
-            const verb = ACTION_VERBS[evt.action] || "Working on it";
-            panel?.setLabel(`${verb}: ${evt.target}`);
+            panel?.setLabel(evt.label || evt.target || "...");
           } else if (evt.type === "step_result") {
-            const verb = ACTION_LABELS[evt.action] || evt.action;
-            const target = evt.command || evt.path || evt.query || "";
-            panel?.commitLine(`${verb} — ${target}`);
+            panel?.commitLine(evt.label || `${evt.action} — ${evt.command || evt.path || evt.query || ""}`);
+            // Box'ni HOZIR, shu step tugagan zahoti chizamiz — "final"
+            // kelguncha kutib, hammasini birdaniga tashlamaymiz. Shuning
+            // uchun har bir komanda/fayl amali real vaqtda, ketma-ket
+            // ekranga chiqib boradi, xuddi terminalda ishlayotgandek.
+            const inputText = evt.command || evt.path || evt.query || "";
+            addIOCard(inputText, evt.result || "", true, panel?.el || null);
           } else if (evt.type === "final") {
             panel?.remove();
             panel = null; // keyingi "thinking" eventi kelsa (confirm zanjiri
@@ -1434,7 +1420,9 @@ function createThoughtPanel() {
                            // kerak bo'ladi — buni chaqiruvchi tomon boshqaradi.
 
             if (evt.kind === "pending_confirmation") {
-              addStepsTrail(evt.steps);
+              // Box'lar allaqachon step_result orqali jonli chizilgan —
+              // shu yerda evt.steps'ni qayta aylantirish ularni EKANGA
+              // TAKRORLAB chiqarardi (ikki marta ko'rinardi).
               addMessage(evt.response, "pending");
               if (evt.requires_typed_confirmation) {
                 addDangerConfirmCard(evt.command_id, evt.command);
@@ -1442,16 +1430,13 @@ function createThoughtPanel() {
                 addConfirmButton(evt.command_id);
               }
             } else if (evt.kind === "blocked") {
-              addStepsTrail(evt.steps);
               addMessage(evt.response, "pending");
             } else if (evt.kind === "error") {
-              addStepsTrail(evt.steps);
               addMessage(evt.response, "error");
               if (evt.retryable && originalMessage) {
                 addRetryButton(originalMessage);
               }
             } else {
-              addStepsTrail(evt.steps);
               await addMessageTyped(evt.response || "No response");
             }
           }
