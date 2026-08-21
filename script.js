@@ -33,8 +33,127 @@ const firebaseConfig = {
     const appScreen = document.getElementById("app-screen");
     const loginForm = document.getElementById("login-form");
     const loginPass = document.getElementById("login-pass");
-    const loginOtp = document.getElementById("login-otp");
+    const loginOtp = document.getElementById("login-otp"); // hidden, combined value
+    const loginOtpBoxes = document.getElementById("login-otp-boxes");
+    const loginOtpWrap = document.getElementById("login-otp-wrap");
+    const loginOtpTimer = document.getElementById("login-otp-timer");
     const loginError = document.getElementById("login-error");
+    // Ikki bosqichli login: avval faqat parol ko'rinadi. Continue
+    // bosilganda parol tekshirilib (send-otp orqali) emailga OTP
+    // yuboriladi va shu ekrandayoq OTP maydoni ochiladi — parol input
+    // qulflanib qoladi, uni qayta kiritish shart emas. "otpStage=true"
+    // bo'lganda submit endi /login'ni pass+otp bilan chaqiradi.
+    let otpStage = false;
+    let otpTimerInterval = null;
+
+    // --- 8 ta alohida raqam katakchasi ---
+    // Har bir katak bitta raqam qabul qiladi, kiritilgan zahoti keyingi
+    // katakka fokus o'tadi; Backspace bo'sh katakda oldingisiga qaytaradi.
+    // Barcha qiymatlar birlashtirilib yashirin #login-otp input'iga
+    // yoziladi — qolgan kod (verifyLogin, showLogin) shu yerdan o'qiydi.
+    const OTP_LENGTH = 8;
+    let otpDigitInputs = [];
+
+    function buildOtpBoxes() {
+      loginOtpBoxes.innerHTML = "";
+      otpDigitInputs = [];
+      for (let i = 0; i < OTP_LENGTH; i++) {
+        const box = document.createElement("input");
+        box.type = "text";
+        box.inputMode = "numeric";
+        box.autocomplete = "one-time-code";
+        box.maxLength = 1;
+        box.className = "login-input rounded-xl text-center text-[17px] text-[#ececec] focus:outline-none";
+        box.style.width = "0";
+        box.style.flex = "1 1 0";
+        box.style.height = "48px";
+        box.style.minWidth = "0";
+        box.dataset.index = String(i);
+
+        box.addEventListener("input", () => {
+          box.value = box.value.replace(/[^0-9]/g, "").slice(-1);
+          syncOtpHiddenValue();
+          if (box.value && i < OTP_LENGTH - 1) {
+            otpDigitInputs[i + 1].focus();
+          }
+          if (loginOtp.value.length === OTP_LENGTH) {
+            submitOtp();
+          }
+        });
+
+        box.addEventListener("keydown", (e) => {
+          if (e.key === "Backspace" && !box.value && i > 0) {
+            otpDigitInputs[i - 1].focus();
+          }
+        });
+
+        box.addEventListener("paste", (e) => {
+          const text = (e.clipboardData || window.clipboardData).getData("text");
+          const digits = text.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH);
+          if (!digits) return;
+          e.preventDefault();
+          digits.split("").forEach((d, idx) => {
+            if (otpDigitInputs[idx]) otpDigitInputs[idx].value = d;
+          });
+          syncOtpHiddenValue();
+          const next = otpDigitInputs[Math.min(digits.length, OTP_LENGTH - 1)];
+          if (next) next.focus();
+          if (loginOtp.value.length === OTP_LENGTH) {
+            submitOtp();
+          }
+        });
+
+        loginOtpBoxes.appendChild(box);
+        otpDigitInputs.push(box);
+      }
+    }
+
+    function syncOtpHiddenValue() {
+      loginOtp.value = otpDigitInputs.map((b) => b.value).join("");
+    }
+
+    function clearOtpBoxes() {
+      otpDigitInputs.forEach((b) => { b.value = ""; });
+      loginOtp.value = "";
+    }
+
+    function focusFirstOtpBox() {
+      if (otpDigitInputs[0]) otpDigitInputs[0].focus();
+    }
+
+    buildOtpBoxes();
+
+    // OTP jonli sanoq: backend qaytargan ttl_seconds'dan boshlab har
+    // soniyada 1 kamayib turadi (59, 58, 57...). Muddati tugasa, kod
+    // eskirganini ko'rsatib, foydalanuvchini yangi kod so'rashga
+    // yo'naltiradi (otpStage qaytadan false qilinadi).
+    function startOtpTimer(ttlSeconds) {
+      stopOtpTimer();
+      let remaining = Math.max(0, Math.floor(ttlSeconds));
+      loginOtpTimer.classList.remove("hidden");
+      const render = () => {
+        if (remaining > 0) {
+          loginOtpTimer.textContent = `Code expires in ${remaining}s`;
+        } else {
+          loginOtpTimer.textContent = "Code expired — press Continue to get a new one.";
+          stopOtpTimer();
+          otpStage = false;
+          clearOtpBoxes();
+        }
+      };
+      render();
+      otpTimerInterval = setInterval(() => {
+        remaining -= 1;
+        render();
+      }, 1000);
+    }
+
+    function stopOtpTimer() {
+      if (otpTimerInterval) {
+        clearInterval(otpTimerInterval);
+        otpTimerInterval = null;
+      }
+    }
     const loginBtn = document.getElementById("login-btn");
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
 
@@ -920,6 +1039,12 @@ const firebaseConfig = {
       stopInactivityWatcher();
       loginBtn.disabled = false;
       loginBtn.textContent = "Continue";
+      otpStage = false;
+      loginOtpWrap.classList.add("hidden");
+      loginPass.disabled = false;
+      stopOtpTimer();
+      loginOtpTimer.classList.add("hidden");
+      loginOtpTimer.textContent = "";
       if (errorMsg) {
         loginError.textContent = errorMsg;
         loginError.classList.remove("hidden");
@@ -927,7 +1052,7 @@ const firebaseConfig = {
         loginError.classList.add("hidden");
       }
       loginPass.value = "";
-      loginOtp.value = "";
+      clearOtpBoxes();
       loginPass.focus();
     }
 
@@ -1003,11 +1128,22 @@ const firebaseConfig = {
       loginTunnelStatus.insertAdjacentElement("afterend", btn);
     }
 
-    // /login endpointi endi IKKITA narsa bilan chaqiriladi: PASS va
-    // emailga yuborilgan 60 soniyalik bir martalik OTP kod. Backend
-    // ikkalasini ham tekshiradi (pass -> otp, shu tartibda); biri
-    // noto'g'ri bo'lsa session ochilmaydi. OTP kodini status sahifasidagi
-    // "Send OTP to email" tugmasi orqali olish kerak.
+    // Ikki bosqichli login. 1-bosqich: faqat PASS yuboriladi -> backend
+    // /send-otp orqali parolni tekshiradi va to'g'ri bo'lsa emailga
+    // 60 soniyalik bir martalik OTP kod jo'natadi. 2-bosqich: shu ekranda
+    // ochilgan OTP maydoniga kod kiritilib, /login PASS+OTP bilan
+    // chaqiriladi va session ochiladi.
+    async function requestOtp(pass) {
+      const res = await fetch(`${API_BASE}/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pass })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 200 && data.ok) return { ok: true, error: null, ttlSeconds: data.ttl_seconds || 60 };
+      return { ok: false, error: data.error || null, ttlSeconds: null };
+    }
+
     async function verifyLogin(pass, otp) {
       const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
@@ -1020,28 +1156,25 @@ const firebaseConfig = {
       return { sessionId: data.session_id, error: null };
     }
 
-    loginForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (!API_BASE) {
-        loginError.textContent = "Tunnel not found yet, wait a moment and try again.";
-        loginError.classList.remove("hidden");
-        return;
-      }
+    // --- 2-bosqich: OTP bilan haqiqiy login (tugmasiz, avtomatik) ---
+    // 8-chi raqam kiritilgan zahoti (yoki paste orqali to'liq kod tushsa)
+    // chaqiriladi — foydalanuvchi hech qanday tugma bosmaydi.
+    let otpSubmitting = false;
+
+    async function submitOtp() {
+      if (otpSubmitting) return;
       const pass = loginPass.value.trim();
       const otp = loginOtp.value.trim();
-      if (!pass || !otp) {
-        loginError.textContent = "Password and OTP code are both required.";
-        loginError.classList.remove("hidden");
-        return;
-      }
+      if (otp.length !== OTP_LENGTH) return;
 
-      loginBtn.disabled = true;
-      loginBtn.textContent = "Checking...";
+      otpSubmitting = true;
+      setOtpBoxesDisabled(true);
       loginError.classList.add("hidden");
 
       try {
         const { sessionId, error } = await verifyLogin(pass, otp);
         if (sessionId) {
+          stopOtpTimer();
           LOGIN_PASS = pass;
           SESSION_ID = sessionId;
           localStorage.setItem("MRagent_pass", LOGIN_PASS);
@@ -1050,15 +1183,70 @@ const firebaseConfig = {
           startInactivityWatcher();
           await showApp();
         } else if (error === "invalid_or_expired_otp") {
-          showLogin("OTP code is wrong or expired — send a new one from the status page.");
+          showLogin("OTP code is wrong or expired — enter your password again.");
         } else {
           showLogin("Wrong password.");
         }
       } catch (err) {
         showLogin("Couldn't reach the backend. Is the tunnel up?");
       } finally {
+        otpSubmitting = false;
+        setOtpBoxesDisabled(false);
+      }
+    }
+
+    function setOtpBoxesDisabled(disabled) {
+      otpDigitInputs.forEach((b) => { b.disabled = disabled; });
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!API_BASE) {
+        loginError.textContent = "Tunnel not found yet, wait a moment and try again.";
+        loginError.classList.remove("hidden");
+        return;
+      }
+      const pass = loginPass.value.trim();
+
+      if (otpStage) {
+        // OTP bosqichida forma submit bo'lishi kerak emas (tugma yo'q,
+        // Enter bosilsa ham hech narsa qilmaydi) — tekshiruv faqat
+        // 8 xona to'lganda avtomatik ishga tushadi (submitOtp).
+        return;
+      }
+
+      // --- 1-bosqich: parolni yuborib OTP so'rash ---
+      if (!pass) {
+        loginError.textContent = "Enter your password.";
+        loginError.classList.remove("hidden");
+        return;
+      }
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Checking...";
+      loginError.classList.add("hidden");
+      try {
+        const { ok, error, ttlSeconds } = await requestOtp(pass);
+        if (ok) {
+          otpStage = true;
+          loginPass.disabled = true;
+          loginOtpWrap.classList.remove("hidden");
+          loginBtn.classList.add("hidden");
+          focusFirstOtpBox();
+          startOtpTimer(ttlSeconds);
+        } else if (error === "unauthorized") {
+          showLogin("Wrong password.");
+        } else if (error === "email_not_configured_or_failed") {
+          loginError.textContent = "Couldn't send the email — try again in a moment.";
+          loginError.classList.remove("hidden");
+        } else {
+          loginError.textContent = "Couldn't send OTP. Try again.";
+          loginError.classList.remove("hidden");
+        }
+      } catch (err) {
+        showLogin("Couldn't reach the backend. Is the tunnel up?");
+      } finally {
         loginBtn.disabled = false;
-        loginBtn.textContent = "Continue";
+        if (!otpStage) loginBtn.textContent = "Continue";
       }
     });
 

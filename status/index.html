@@ -73,49 +73,6 @@
     font-size: 14px;
     color: var(--muted);
   }
-  .login-box {
-    margin-top: 28px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .login-box input {
-    background: var(--bg);
-    border: 1px solid var(--border-strong);
-    color: var(--ink);
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    outline: none;
-    transition: border-color .15s ease, box-shadow .15s ease;
-  }
-  .login-box input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(217,119,87,0.15);
-  }
-  .login-box button {
-    background: var(--accent);
-    color: #FFFFFF;
-    border: none;
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color .15s ease;
-  }
-  .login-box button:hover:not(:disabled) { background: var(--accent-hover); }
-  .login-box button:disabled { opacity: 0.5; cursor: default; }
-  .login-result {
-    font-size: 12px;
-    word-break: break-all;
-    color: var(--muted);
-    min-height: 16px;
-  }
-  .login-result.ok { color: var(--success); }
-  .login-result.err { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -123,12 +80,6 @@
     <div class="logo loading" id="logo"><img src="../splash.svg" alt="mragent"></div>
     <div class="status-text"><span class="dot loading" id="dot"></span><span id="label">Checking...</span></div>
     <div class="sub" id="sub">&nbsp;</div>
-
-    <div class="login-box">
-      <input type="password" id="passInput" placeholder="Login password" autocomplete="off">
-      <button id="sendOtpBtn">Send OTP to email</button>
-      <div class="login-result" id="loginResult"></div>
-    </div>
   </div>
 
   <script>
@@ -216,71 +167,6 @@
     }
 
     startListening();
-
-    // --- PASS kiritib OTP yuborish ---
-    // Auth token butunlay olib tashlandi — bu sahifaning yagona vazifasi
-    // endi PASS to'g'ri bo'lsa emailga bir martalik OTP kod yuborish
-    // (login-otp maydoniga kiritish uchun, asosiy ilova login ekranida).
-    // Backend URL'ni qo'lda yozmaymiz — Firestore'dagi config/tunnel
-    // hujjatida allaqachon bor (cloudflared tunnel har start'da o'zini
-    // shu yerga yozadi), status page ham shu manbadan o'qiydi.
-    const passInput = document.getElementById("passInput");
-    const sendOtpBtn = document.getElementById("sendOtpBtn");
-    const loginResult = document.getElementById("loginResult");
-
-    async function getBackendUrl() {
-      const doc = await db.collection("config").doc("tunnel").get();
-      if (!doc.exists || !doc.data().url) {
-        throw new Error("Backend address not found (tunnel might be offline)");
-      }
-      return doc.data().url.replace(/\/$/, "");
-    }
-
-    async function doSendOtp() {
-      const pass = passInput.value.trim();
-      if (!pass) {
-        loginResult.textContent = "Enter the password first.";
-        loginResult.className = "login-result err";
-        return;
-      }
-      sendOtpBtn.disabled = true;
-      loginResult.textContent = "Checking password...";
-      loginResult.className = "login-result";
-      try {
-        const backendUrl = await getBackendUrl();
-        const res = await fetch(backendUrl + "/send-otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pass })
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 401) {
-          loginResult.textContent = "Wrong password.";
-          loginResult.className = "login-result err";
-          return;
-        }
-        if (res.status === 500) {
-          loginResult.textContent = "Email isn't configured on the backend (OTP_SMTP_* / OTP_EMAIL_TO).";
-          loginResult.className = "login-result err";
-          return;
-        }
-        if (!res.ok || !data.ok) {
-          loginResult.textContent = "Couldn't send OTP.";
-          loginResult.className = "login-result err";
-          return;
-        }
-        loginResult.textContent = "OTP sent — check your email, it expires in " + (data.ttl_seconds || 60) + "s.";
-        loginResult.className = "login-result ok";
-      } catch (e) {
-        loginResult.textContent = "Error: " + e.message;
-        loginResult.className = "login-result err";
-      } finally {
-        sendOtpBtn.disabled = false;
-      }
-    }
-
-    sendOtpBtn.addEventListener("click", doSendOtp);
-    passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSendOtp(); });
   </script>
 </body>
 </html>

@@ -39,10 +39,10 @@
                  class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
                  placeholder="Login password" required />
         </div>
-        <div class="space-y-1.5">
-          <input id="login-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
-                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
-                 placeholder="OTP code (from email, get it on the status page)" required />
+        <div class="space-y-2 hidden" id="login-otp-wrap">
+          <div id="login-otp-boxes" class="flex justify-between gap-1.5"></div>
+          <input type="hidden" id="login-otp" />
+          <p id="login-otp-timer" class="text-[13px] text-[#8e8e8e] text-center hidden"></p>
         </div>
       </div>
 
