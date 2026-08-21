@@ -1104,7 +1104,7 @@ const firebaseConfig = {
 
         if (doc.exists && doc.data().url) {
           API_BASE = doc.data().url.replace(/\/$/, "");
-          loginTunnelStatus.textContent = "tunnel connected, enter your password and token";
+          loginTunnelStatus.textContent = "tunnel connected, enter your password";
         } else {
           loginTunnelStatus.textContent = "tunnel not found (Firestore empty)";
           showTunnelRetry();
