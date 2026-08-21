@@ -38,6 +38,7 @@ const firebaseConfig = {
     const loginForm = document.getElementById("login-form");
     const loginPass = document.getElementById("login-pass");
     const loginToken = document.getElementById("login-token");
+    const loginOtp = document.getElementById("login-otp");
     const loginError = document.getElementById("login-error");
     const loginBtn = document.getElementById("login-btn");
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
@@ -934,6 +935,7 @@ const firebaseConfig = {
       }
       loginPass.value = "";
       loginToken.value = "";
+      loginOtp.value = "";
       loginPass.focus();
     }
 
@@ -1009,23 +1011,21 @@ const firebaseConfig = {
       loginTunnelStatus.insertAdjacentElement("afterend", btn);
     }
 
-    // /login endpointi faqat PASS so'raydi va TOKEN + yangi session_id
-    // qaytaradi. Foydalanuvchi kiritgan TOKEN shu qaytgan qiymatga mos
-    // kelishini ham tekshiramiz — token maydoni shu tariqa hamon ma'noli
-    // (noto'g'ri TOKEN kiritilsa, PASS to'g'ri bo'lsa ham rad etiladi).
-    // Eski usul /chat'ga soxta "__mragent_auth_check__" xabar yuborib
-    // tekshirardi — endi bunga hojat qolmadi, chunki session_id faqat
-    // /login orqali beriladi.
-    async function verifyToken(pass, token) {
+    // /login endpointi endi UCHTA narsa bilan chaqiriladi: PASS, TOKEN va
+    // emailga yuborilgan 60 soniyalik bir martalik OTP kod. Backend
+    // uchalasini ham tekshiradi (pass -> token -> otp, shu tartibda);
+    // biri noto'g'ri bo'lsa session ochilmaydi. OTP kodini status
+    // sahifasidagi "Send OTP to email" tugmasi orqali olish kerak.
+    async function verifyToken(pass, token, otp) {
       const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pass })
+        body: JSON.stringify({ pass, token, otp })
       });
-      if (res.status !== 200) return null;
       const data = await res.json().catch(() => ({}));
-      if (!data.token || data.token !== token || !data.session_id) return null;
-      return data.session_id;
+      if (res.status !== 200) return { sessionId: null, error: data.error || null };
+      if (!data.token || data.token !== token || !data.session_id) return { sessionId: null, error: "mismatch" };
+      return { sessionId: data.session_id, error: null };
     }
 
     loginForm.addEventListener("submit", async (e) => {
@@ -1037,8 +1037,9 @@ const firebaseConfig = {
       }
       const pass = loginPass.value.trim();
       const token = loginToken.value.trim();
-      if (!pass || !token) {
-        loginError.textContent = "Password and auth token are both required.";
+      const otp = loginOtp.value.trim();
+      if (!pass || !token || !otp) {
+        loginError.textContent = "Password, auth token and OTP code are all required.";
         loginError.classList.remove("hidden");
         return;
       }
@@ -1048,7 +1049,7 @@ const firebaseConfig = {
       loginError.classList.add("hidden");
 
       try {
-        const sessionId = await verifyToken(pass, token);
+        const { sessionId, error } = await verifyToken(pass, token, otp);
         if (sessionId) {
           LOGIN_PASS = pass;
           AUTH_TOKEN = token;
@@ -1059,6 +1060,8 @@ const firebaseConfig = {
           markActive();
           startInactivityWatcher();
           await showApp();
+        } else if (error === "invalid_or_expired_otp") {
+          showLogin("OTP code is wrong or expired — send a new one from the status page.");
         } else {
           showLogin("Wrong password or token.");
         }
