@@ -64,9 +64,12 @@
     <aside id="sidebar" class="shrink-0 flex flex-col sidebar-collapsible">
       <!-- Header brand: pinned/preview da yuqori chapda, icon bilan bir qator (Claude uslubi) -->
       <div id="sidebar-brand" class="hidden">
+        <div class="w-6 h-6 rounded-full overflow-hidden shrink-0" style="background:#ececec;">
+          <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+        </div>
         <span>MRagent</span>
       </div>
-      <div class="px-3 py-3 space-y-1 sidebar-fade">
+      <div id="sidebar-top-content" class="px-3 py-3 space-y-1 sidebar-fade">
         <button id="new-chat-btn"
                 class="sidebar-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-1.5 text-sm text-[#ececec] text-left">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">

@@ -207,7 +207,7 @@ textarea:focus-visible:not(.composer-textarea) {
    header'dagi hamburger icon bilan bir qatorda chiqmasin deb, header
    balandligi (h-14 = 56px) qadar yuqoridan bo'sh joy qo'shiladi — shu
    bo'sh joydan keyin "New chat" tugmasi boshlanadi. */
-.sidebar-collapsible > *:first-child {
+#sidebar-top-content {
   margin-top: 56px;
 }
 /* Ichki kontent (matnlar, tugmalar) faqat sidebar chinakam kengaygan
@@ -257,6 +257,14 @@ textarea:focus-visible:not(.composer-textarea) {
   transition: none;
 }
 #sidebar-brand {
+  height: 56px; /* chat-header (h-14) bilan bir xil balandlik — icon bilan bitta qatorda tekis tursin */
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #ececec;
   transition: opacity .22s ease;
 }
 #sidebar-brand.hidden { display: none; }
