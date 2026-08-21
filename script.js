@@ -1135,7 +1135,30 @@ const firebaseConfig = {
     // renders that live, instead of a fake spinner — every line reflects
     // something that is actually happening on the backend right now.
     // -----------------------------------------------------------------
-function createThoughtPanel() {
+// Mirrors backend detect_lang()/action_label() just enough for the
+// placeholder shown before the FIRST real SSE "thinking" event arrives
+// (which overwrites it immediately via setLabel — this only covers the
+// brief gap while the request is in flight). `sourceText`, when given, is
+// the message the user just sent; for the /confirm flow there's no fresh
+// message, so it falls back to a language-neutral "..." instead of
+// guessing wrong.
+const _SENDING_LABEL = { uz: "So'rov yuborilmoqda", ru: "Отправка запроса", en: "Sending request" };
+function _detectLangJs(text) {
+  if (!text) return null;
+  const t = text.trim().toLowerCase();
+  if (/[\u0400-\u04FF]/.test(t)) {
+    return /[ўқғҳ]/.test(t) ? "uz" : "ru";
+  }
+  const words = new Set(t.match(/[a-z']+/g) || []);
+  const uzWords = ["va", "bilan", "uchun", "keyin", "nima", "qanday", "salom", "rahmat", "bratan", "kerak", "iltimos"];
+  const enWords = ["the", "is", "are", "you", "please", "help", "and", "for", "with", "what", "how", "can"];
+  if (uzWords.some((w) => words.has(w))) return "uz";
+  if (enWords.some((w) => words.has(w))) return "en";
+  return null;
+}
+function createThoughtPanel(sourceText) {
+  const lang = _detectLangJs(sourceText);
+  const initialLabel = lang ? _SENDING_LABEL[lang] : "...";
   const wrapper = document.createElement("div");
   wrapper.className = "flex justify-start w-full";
   wrapper.innerHTML = `
@@ -1143,7 +1166,7 @@ function createThoughtPanel() {
       <div class="thought-log" id="thought-log"></div>
       <div class="thinking-row" id="thinking-row">
         <video class="thinking-orb-video" src="circle2_transparent.webm" autoplay loop muted playsinline></video>
-        <span id="thinking-label">Yuborilmoqda</span>
+        <span id="thinking-label">${initialLabel}</span>
         <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
       </div>
     </div>`;
@@ -1540,7 +1563,7 @@ function createThoughtPanel() {
       autoResizeInput();
       sendBtn.disabled = true;
 
-      const panel = createThoughtPanel();
+      const panel = createThoughtPanel(message);
 
       try {
         const res = await fetch(`${API_BASE}/chat`, {
