@@ -136,14 +136,13 @@ const firebaseConfig = {
         if (remaining > 0) {
           loginOtpTimer.textContent = `Code expires in ${remaining}s`;
         } else {
-          loginOtpTimer.textContent = "Code expired — press Continue to get a new one.";
+          // 60s tugadi — endi "expired" holatida osilib turmaymiz,
+          // to'g'ridan-to'g'ri reload qilamiz. Xabarni sessionStorage'ga
+          // yozib qo'yamiz, reload'dan keyin showLogin() shuni o'qib
+          // login xato joyida ko'rsatadi.
           stopOtpTimer();
-          otpStage = false;
-          clearOtpBoxes();
-          loginPass.disabled = false;
-          loginPassWrap.classList.remove("hidden");
-          loginBtn.classList.remove("hidden");
-          loginBtn.textContent = "Continue";
+          try { sessionStorage.setItem("MRagent_post_reload_msg", "Code expired — please sign in again."); } catch (_) {}
+          window.location.reload();
         }
       };
       render();
@@ -159,6 +158,7 @@ const firebaseConfig = {
         otpTimerInterval = null;
       }
     }
+
     const loginBtn = document.getElementById("login-btn");
     const loginTunnelStatus = document.getElementById("login-tunnel-status");
 
@@ -1007,17 +1007,212 @@ const firebaseConfig = {
       }
     }
 
-    // TO'LIQ logout: serverdagi session_id'ni bekor qiladi (best-effort —
-    // tarmoq yo'q bo'lsa ham baribir mahalliy tozalashni davom ettiradi),
-    // so'ng har qanday qoldiq holat/keshni (pass, token, session_id,
-    // oxirgi-faollik vaqti) mahalliy tozalaydi va login ekraniga qaytaradi.
-    // Bu — sen so'ragan "barcha kesh lar tozalanishi kerak" talabining
-    // aynan o'zi: na eski parol, na eski token, na eski session — hech
-    // narsa brauzerda qolmaydi.
-    function doLogout(message) {
+    // ---------------------------------------------------------------------
+    // TO'LIQ LOGOUT + KESH TOZALASH ANIMATSIYASI
+    // ---------------------------------------------------------------------
+    // Nega bunday tuzilgan — tartib MUHIM:
+    //   1) AVVAL o'lchaymiz (localStorage/sessionStorage/IndexedDB/CacheStorage
+    //      hajmini baytlarda). Agar avval o'chirib keyin o'lchasak, hammasi
+    //      allaqachon bo'sh bo'lib, "0.000 B" dan hech qachon o'smaydi.
+    //   2) Shu o'lchangan umumiy summa ustida 0'dan haqiqiy qiymatgacha
+    //      requestAnimationFrame bilan silliq counter-up animatsiyasi
+    //      ishlaydi (minimum ~2.2s cho'zilgan holda — juda kichik kesh
+    //      hajmida ham foydalanuvchi jarayonni "ko'rishi" uchun).
+    //   3) Animatsiya tugagach — FAKTIK tozalash: localStorage.clear(),
+    //      sessionStorage.clear(), barcha IndexedDB baza(lar) o'chiriladi
+    //      (Firestore offline-persistence shu yerda saqlanadi), va agar
+    //      CacheStorage mavjud bo'lsa (Service Worker bo'lmasa ham API
+    //      brauzerda mavjud bo'lishi mumkin) — u ham tozalanadi.
+    //   4) Server session ham bekor qilinadi (best-effort fetch).
+    //   5) Eng oxirida location.reload(true-ekvivalenti) — chunki reload
+    //      bo'lmasa, Firestore SDK'ning xotiradagi runtime holati, ochiq
+    //      IndexedDB connection'lari va boshqa JS o'zgaruvchilar eskicha
+    //      qolib ketadi. Reload — "hech narsa qolmadi"ning yagona kafolati.
+    // ---------------------------------------------------------------------
+
+    function bytesForString(str) {
+      // UTF-16 emas, brauzer haqiqatda diskda/xotirada saqlaydigan
+      // bayt hajmiga yaqinroq baho uchun UTF-8 bayt uzunligini olamiz.
+      return str ? new Blob([str]).size : 0;
+    }
+
+    async function measureLocalStorageBytes() {
+      let total = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        total += bytesForString(key) + bytesForString(localStorage.getItem(key));
+      }
+      return total;
+    }
+
+    async function measureSessionStorageBytes() {
+      let total = 0;
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        total += bytesForString(key) + bytesForString(sessionStorage.getItem(key));
+      }
+      return total;
+    }
+
+    // IndexedDB'dagi HAR BIR bazaning HAR BIR object-store'idagi HAR BIR
+    // yozuvni o'qib, taxminiy bayt hajmini yig'adi. Firestore o'zining
+    // offline-persistence keshini aynan shu yerda saqlaydi — shuning uchun
+    // "barcha kesh" degan da'voning eng katta qismi odatda mana shu.
+    async function measureAndCollectIndexedDbDatabases() {
+      let totalBytes = 0;
+      let dbNames = [];
+      try {
+        if (indexedDB.databases) {
+          const dbs = await indexedDB.databases();
+          dbNames = dbs.map((d) => d.name).filter(Boolean);
+        }
+      } catch (_) { /* ba'zi brauzerlarda databases() yo'q — jim o'tamiz */ }
+
+      for (const name of dbNames) {
+        try {
+          const size = await new Promise((resolve) => {
+            const req = indexedDB.open(name);
+            req.onerror = () => resolve(0);
+            req.onsuccess = () => {
+              const db = req.result;
+              try {
+                const storeNames = Array.from(db.objectStoreNames);
+                if (storeNames.length === 0) { db.close(); resolve(0); return; }
+                const tx = db.transaction(storeNames, "readonly");
+                let storeBytes = 0;
+                let pending = storeNames.length;
+                storeNames.forEach((storeName) => {
+                  const store = tx.objectStore(storeName);
+                  const cursorReq = store.openCursor();
+                  cursorReq.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                      try { storeBytes += bytesForString(JSON.stringify(cursor.value)); } catch (_) {}
+                      cursor.continue();
+                    }
+                  };
+                });
+                tx.oncomplete = () => { db.close(); pending -= 1; resolve(storeBytes); };
+                tx.onerror = () => { db.close(); resolve(storeBytes); };
+              } catch (_) {
+                db.close();
+                resolve(0);
+              }
+            };
+          });
+          totalBytes += size;
+        } catch (_) { /* skip */ }
+      }
+      return { totalBytes, dbNames };
+    }
+
+    async function measureCacheStorageBytes() {
+      let total = 0;
+      try {
+        if (window.caches && caches.keys) {
+          const names = await caches.keys();
+          for (const name of names) {
+            const cache = await caches.open(name);
+            const reqs = await cache.keys();
+            for (const req of reqs) {
+              try {
+                const res = await cache.match(req);
+                if (res) {
+                  const blob = await res.clone().blob();
+                  total += blob.size;
+                }
+              } catch (_) { /* skip individual entry */ }
+            }
+          }
+        }
+      } catch (_) { /* Cache API yo'q yoki bloklangan — jim o'tamiz */ }
+      return total;
+    }
+
+    function formatBytes(n) {
+      if (n < 1024) return `${n.toFixed(3)} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(3)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(3)} MB`;
+    }
+
+    function animateCounterAndBar(targetBytes, durationMs) {
+      return new Promise((resolve) => {
+        const bar = document.getElementById("logout-progress-bar");
+        const label = document.getElementById("logout-bytes-text");
+        const start = performance.now();
+        function tick(now) {
+          const elapsed = now - start;
+          const t = Math.min(1, elapsed / durationMs);
+          // ease-out — boshida tez, oxiriga kelib sekinlashadi, real
+          // "hisoblanyapti" tuyg'usi uchun chiziqli emas.
+          const eased = 1 - Math.pow(1 - t, 3);
+          const shown = targetBytes * eased;
+          if (label) label.textContent = `${formatBytes(shown)} cleared`;
+          if (bar) bar.style.width = `${(eased * 100).toFixed(1)}%`;
+          if (t < 1) {
+            requestAnimationFrame(tick);
+          } else {
+            if (label) label.textContent = `${formatBytes(targetBytes)} cleared`;
+            resolve();
+          }
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+
+    async function actuallyClearEverything(dbNames) {
+      // 1) localStorage / sessionStorage — to'liq, tanlab emas.
+      try { localStorage.clear(); } catch (_) {}
+      try { sessionStorage.clear(); } catch (_) {}
+
+      // 2) IndexedDB — yuqorida topilgan HAR BIR bazani o'chiramiz
+      //    (Firestore offline-persistence shu yerda).
+      await Promise.all(
+        (dbNames || []).map(
+          (name) =>
+            new Promise((resolve) => {
+              try {
+                const req = indexedDB.deleteDatabase(name);
+                req.onsuccess = () => resolve();
+                req.onerror = () => resolve();
+                req.onblocked = () => resolve();
+              } catch (_) {
+                resolve();
+              }
+            })
+        )
+      );
+
+      // 3) CacheStorage — Service Worker bo'lmasa ham API mavjud bo'lishi
+      //    mumkin, borini tozalaymiz.
+      try {
+        if (window.caches && caches.keys) {
+          const names = await caches.keys();
+          await Promise.all(names.map((n) => caches.delete(n)));
+        }
+      } catch (_) {}
+    }
+
+    async function doLogout(message) {
+      const overlay = document.getElementById("logout-overlay");
+      const statusText = document.getElementById("logout-status-text");
+      const bytesText = document.getElementById("logout-bytes-text");
+      const bar = document.getElementById("logout-progress-bar");
+
+      // Overlay darhol ko'rinadi — foydalanuvchi bosgan zahoti biror
+      // narsa sodir bo'layotganini ko'rishi kerak, o'lchash tugashini
+      // kutib turmaydi.
+      if (overlay) overlay.classList.remove("hidden");
+      if (bar) bar.style.width = "0%";
+      if (bytesText) bytesText.textContent = "0.000 B cleared";
+      if (statusText) statusText.textContent = "Measuring local data…";
+
       stopInactivityWatcher();
       teardownTerminal?.();
       closeTerminal?.();
+
+      // Server session'ni parallel ravishda bekor qilamiz — bu UI
+      // animatsiyasini kutib turishi shart emas, best-effort.
       const sidToInvalidate = SESSION_ID;
       if (API_BASE && sidToInvalidate) {
         fetch(`${API_BASE}/logout`, {
@@ -1026,10 +1221,49 @@ const firebaseConfig = {
           body: JSON.stringify({ session_id: sidToInvalidate }),
         }).catch(() => {});
       }
-      localStorage.removeItem("MRagent_session");
-      localStorage.removeItem("MRagent_last_active");
+
+      // --- O'lchash (haqiqiy raqamlar, taxmin emas) ---
+      const lsBytes = await measureLocalStorageBytes();
+      const ssBytes = await measureSessionStorageBytes();
+      if (statusText) statusText.textContent = "Scanning IndexedDB (Firestore cache)…";
+      const { totalBytes: idbBytes, dbNames } = await measureAndCollectIndexedDbDatabases();
+      if (statusText) statusText.textContent = "Checking cache storage…";
+      const cacheBytes = await measureCacheStorageBytes();
+
+      const totalBytes = lsBytes + ssBytes + idbBytes + cacheBytes;
+
+      if (statusText) statusText.textContent = "Clearing everything…";
+
+      // --- Animatsiya: 0.000 B dan haqiqiy summagacha, ~2.2s davomida. ---
+      // Bu vaqt oralig'ida haqiqiy o'chirish HALI sodir bo'lmagan —
+      // animatsiya tugagandan keyin o'chiramiz, aks holda progress-bar
+      // "gapirayotgan" raqam bilan haqiqat mos kelmay qoladi.
+      await animateCounterAndBar(totalBytes, 2200);
+
+      // --- Endi haqiqatda o'chiramiz. ---
+      await actuallyClearEverything(dbNames);
       SESSION_ID = "";
-      showLogin(message);
+
+      if (statusText) statusText.textContent = "Done. Reloading…";
+
+      // Agar logout biror sababli xabar bilan chaqirilgan bo'lsa (masalan
+      // "session expired"), shu xabarni reload'dan OMON QOLADIGAN joyga —
+      // sessionStorage'ga — vaqtincha yozib qo'yamiz. localStorage bo'lsa
+      // bo'lmaydi, chunki uni yuqorida actuallyClearEverything() allaqachon
+      // tozalab yubordi. Reload'dan keyin, sahifa qayta yuklanganda,
+      // boshlang'ich init kodi shu kalitni o'qib login ekranidagi xato
+      // joyiga chiqaradi va o'zi tozalaydi (pastga qarang: "on load" bloki).
+      if (message) {
+        try { sessionStorage.setItem("MRagent_post_reload_msg", message); } catch (_) {}
+      }
+
+      // Kichik bir "nafas" — foydalanuvchi "Done" xabarini ko'rishi uchun,
+      // so'ng to'liq sahifa yangilanadi. Reload — Firestore SDK'ning
+      // xotiradagi runtime holati va boshqa JS state'lar eskicha
+      // qolib ketmasligining yagona kafolati.
+      setTimeout(() => {
+        window.location.reload();
+      }, 350);
     }
 
     function showLogin(errorMsg) {
@@ -1051,8 +1285,21 @@ const firebaseConfig = {
       stopOtpTimer();
       loginOtpTimer.classList.add("hidden");
       loginOtpTimer.textContent = "";
-      if (errorMsg) {
-        loginError.textContent = errorMsg;
+
+      // doLogout() reload qilishdan oldin sessionStorage'ga yozib qoldirgan
+      // sabab-xabar bormi — bo'lsa, shuni ko'rsatamiz (masalan "session
+      // expired"). errorMsg to'g'ridan-to'g'ri argument sifatida kelgan
+      // holatlar ustunroq, chunki ular reload'siz, shu turdagi chaqiruv
+      // ichida darhol keladi.
+      let deferredMsg = null;
+      try {
+        deferredMsg = sessionStorage.getItem("MRagent_post_reload_msg");
+        if (deferredMsg) sessionStorage.removeItem("MRagent_post_reload_msg");
+      } catch (_) {}
+      const finalMsg = errorMsg || deferredMsg;
+
+      if (finalMsg) {
+        loginError.textContent = finalMsg;
         loginError.classList.remove("hidden");
       } else {
         loginError.classList.add("hidden");
@@ -1189,7 +1436,13 @@ const firebaseConfig = {
           startInactivityWatcher();
           await showApp();
         } else if (error === "invalid_or_expired_otp") {
-          showLogin("OTP code is wrong or expired — enter your password again.");
+          // Noto'g'ri OTP kiritilsa — showLogin() bilan qayta chizib
+          // o'tirmaymiz, to'g'ridan-to'g'ri sahifani reload qilamiz.
+          // sessionStorage'ga xabar yozib qo'yamiz, reload'dan keyin
+          // showLogin() shu xabarni o'qib login xato joyida ko'rsatadi.
+          try { sessionStorage.setItem("MRagent_post_reload_msg", "OTP code is wrong or expired — please sign in again."); } catch (_) {}
+          window.location.reload();
+          return;
         } else {
           showLogin("Wrong password.");
         }

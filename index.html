@@ -175,6 +175,28 @@
     </div>
   </div>
 
+  <!-- =================== LOGOUT / CACHE-CLEAR OVERLAY =================== -->
+  <!-- login-screen bilan bir xil vizual til: shrift, ranglar, kartochka.
+       Faqat logout paytida ko'rinadi, "hidden" bilan boshlanadi. Ichidagi
+       raqam va progress-bar JS orqali (doLogout ichida) jonlantiriladi. -->
+  <div id="logout-overlay" class="hidden h-screen w-screen flex items-center justify-center fixed inset-0 z-[999]" style="background:var(--bg);">
+    <div class="login-card w-full max-w-[400px] p-8 space-y-6 text-center">
+      <div class="w-9 h-9 mx-auto">
+        <img src="MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+      </div>
+      <div class="space-y-1">
+        <h1 class="font-semibold text-xl tracking-tight text-[#ececec]">Signing out</h1>
+        <p id="logout-status-text" class="text-[13px] text-[#8e8e8e]">Clearing local session…</p>
+      </div>
+      <div class="space-y-2">
+        <div class="w-full h-1.5 rounded-full overflow-hidden" style="background:#2a2a2a;">
+          <div id="logout-progress-bar" class="h-full rounded-full" style="width:0%; background:#e0703a; transition: width 120ms linear;"></div>
+        </div>
+        <p id="logout-bytes-text" class="text-[12px] text-[#8e8e8e] tabular-nums">0.000 B cleared</p>
+      </div>
+    </div>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>
