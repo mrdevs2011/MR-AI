@@ -18,6 +18,14 @@ const firebaseConfig = {
     let API_BASE = null;
     let LOGIN_PASS = "";
     let AUTH_TOKEN = "";
+    let SESSION_ID = "";
+    // 1 kunlik harakatsizlik — backenddagi SESSION_TTL_SECONDS bilan bir xil
+    // qiymat. Bu yerda ham nusxasi turadi, chunki tab OCHIQ qolib, hech
+    // qanday so'rov yuborilmasa ham (masalan brauzer tab background'da
+    // tinch turibdi), baribir 24 soatdan keyin o'zi chiqib ketishi kerak —
+    // buni faqat client tomonda taymer bilan ta'minlash mumkin.
+    const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+    let inactivityWatcherId = null;
     // Eski usul: token Firestore'dan avtomatik olinardi. Endi backend
     // (main.py) endi TOKEN'ni Firestore'ga yozmaydi — xavfsizlik uchun,
     // PASS bilmagan odam ham Firestore'dan o'qiy olmasin deb. Shuning
@@ -514,13 +522,14 @@ const firebaseConfig = {
     async function loadChats() {
       try {
         const res = await fetch(`${API_BASE}/chats`, {
-          headers: { "X-Auth-Token": AUTH_TOKEN, "X-Login-Pass": LOGIN_PASS },
+          headers: authHeaders(),
         });
         if (res.status === 401) {
-          forceLogoutInvalidToken();
+          await handleAuthFailure(res);
           return;
         }
         if (!res.ok) throw new Error("bad status " + res.status);
+        markActive();
         const data = await res.json();
         chats = data.map(c => ({
           id: `${c.category}::${c.filename}`,
@@ -549,8 +558,9 @@ const firebaseConfig = {
       try {
         await fetch(`${API_BASE}/chats/${encodeURIComponent(category)}/${encodeURIComponent(filename)}`, {
           method: "DELETE",
-          headers: { "X-Auth-Token": AUTH_TOKEN, "X-Login-Pass": LOGIN_PASS },
+          headers: authHeaders(),
         });
+        markActive();
       } catch (e) {
         console.error("Chatni o'chirib bo'lmadi:", e);
       }
@@ -748,12 +758,13 @@ const firebaseConfig = {
       // so auth travels as query params here instead of the X-Auth-Token /
       // X-Login-Pass headers the rest of the app uses.
       const wsBase = API_BASE.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
-      const wsUrl = `${wsBase}/ws/term?token=${encodeURIComponent(AUTH_TOKEN)}&pass=${encodeURIComponent(LOGIN_PASS)}`;
+      const wsUrl = `${wsBase}/ws/term?token=${encodeURIComponent(AUTH_TOKEN)}&pass=${encodeURIComponent(LOGIN_PASS)}&session=${encodeURIComponent(SESSION_ID)}`;
       const socket = new WebSocket(wsUrl);
       termSocket = socket;
 
       socket.addEventListener("open", () => {
         setTermStatus("connected", "#3fb950");
+        markActive();
         const { cols, rows } = termInstance;
         socket.send(`\x01RESIZE:${cols},${rows}`);
         termInstance.focus();
@@ -834,14 +845,85 @@ const firebaseConfig = {
       input.focus();
     }
 
+    // Har bir himoyalangan so'rovga qo'shiladigan header'lar — session_id
+    // shu yerda markazlashtirilgan, shuning uchun uni qo'shishni unutib
+    // qo'yadigan yangi fetch chaqiruvi paydo bo'lmaydi.
+    function authHeaders(extra) {
+      return Object.assign(
+        { "X-Auth-Token": AUTH_TOKEN, "X-Login-Pass": LOGIN_PASS, "X-Session-Id": SESSION_ID },
+        extra || {}
+      );
+    }
+
+    // Har qanday muvaffaqiyatli himoyalangan so'rovdan keyin chaqiriladi —
+    // "oxirgi faollik" vaqtini localStorage'ga yozadi. Backend'dagi
+    // touch_session() bilan bir xil g'oya: 24 soatlik hisob har harakatda
+    // qaytadan boshlanadi (sliding), faqat CHINDAN 1 kun hech narsa
+    // qilinmasa avto-logout ishga tushadi.
+    function markActive() {
+      localStorage.setItem("MRagent_last_active", String(Date.now()));
+    }
+
+    function isSessionStale() {
+      const lastActive = parseInt(localStorage.getItem("MRagent_last_active") || "0", 10);
+      return !lastActive || (Date.now() - lastActive > SESSION_TTL_MS);
+    }
+
+    // Tab OCHIQ turgan holatda ham (hech qanday so'rov yubormasdan) 24
+    // soatdan keyin avto-logout bo'lishi uchun — davriy tekshiruv.
+    function startInactivityWatcher() {
+      if (inactivityWatcherId) clearInterval(inactivityWatcherId);
+      inactivityWatcherId = setInterval(() => {
+        if (isSessionStale()) {
+          doLogout("You were inactive for over a day — please sign in again.");
+        }
+      }, 5 * 60 * 1000); // har 5 daqiqada tekshiradi — real-vaqtga yaqin, arzon
+    }
+
+    function stopInactivityWatcher() {
+      if (inactivityWatcherId) {
+        clearInterval(inactivityWatcherId);
+        inactivityWatcherId = null;
+      }
+    }
+
+    // TO'LIQ logout: serverdagi session_id'ni bekor qiladi (best-effort —
+    // tarmoq yo'q bo'lsa ham baribir mahalliy tozalashni davom ettiradi),
+    // so'ng har qanday qoldiq holat/keshni (pass, token, session_id,
+    // oxirgi-faollik vaqti) mahalliy tozalaydi va login ekraniga qaytaradi.
+    // Bu — sen so'ragan "barcha kesh lar tozalanishi kerak" talabining
+    // aynan o'zi: na eski parol, na eski token, na eski session — hech
+    // narsa brauzerda qolmaydi.
+    function doLogout(message) {
+      stopInactivityWatcher();
+      teardownTerminal?.();
+      closeTerminal?.();
+      const sidToInvalidate = SESSION_ID;
+      if (API_BASE && sidToInvalidate) {
+        fetch(`${API_BASE}/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sidToInvalidate }),
+        }).catch(() => {});
+      }
+      localStorage.removeItem("MRagent_session");
+      localStorage.removeItem("MRagent_last_active");
+      SESSION_ID = "";
+      showLogin(message);
+    }
+
     function showLogin(errorMsg) {
       bootScreen.classList.add("hidden");
       appScreen.classList.add("hidden");
       loginScreen.classList.remove("hidden");
       LOGIN_PASS = "";
       AUTH_TOKEN = "";
+      SESSION_ID = "";
       localStorage.removeItem("MRagent_pass");
       localStorage.removeItem("MRagent_token");
+      localStorage.removeItem("MRagent_session");
+      localStorage.removeItem("MRagent_last_active");
+      stopInactivityWatcher();
       loginBtn.disabled = false;
       loginBtn.textContent = "Continue";
       if (errorMsg) {
@@ -855,12 +937,24 @@ const firebaseConfig = {
       loginPass.focus();
     }
 
-    // Backend token'ni qayta yaratgan/o'zgartirgan bo'lsa (mragent-auth-token),
-    // saqlangan eski token endi noto'g'ri hisoblanadi. Har qanday /chat,
-    // /confirm yoki /chats so'rovi 401 qaytarsa, shu funksiya darhol
-    // chaqiriladi — login ekraniga qaytaradi va eski token/parolni tozalaydi.
-    function forceLogoutInvalidToken() {
-      showLogin("Token changed — please sign in again.");
+    // Har qanday himoyalangan so'rov 401 qaytarganda chaqiriladi — sabab
+    // backend'dan keladi ('unauthorized' — PASS/TOKEN o'zi noto'g'ri,
+    // odatda ular mragent-set-pass/mragent-auth-token bilan o'zgartirilgan
+    // bo'lsa; 'session_expired' — PASS/TOKEN to'g'ri, lekin 24 soatlik
+    // sessiya muddati tugagan). Ikkala holatda ham to'liq logout: eski
+    // pass/token/session hech qanday holatda brauzerda qolib ketmaydi.
+    async function handleAuthFailure(res) {
+      let reason = "unauthorized";
+      try {
+        const data = await res.json();
+        if (data && data.error) reason = data.error;
+      } catch (e) {
+        // body yo'q yoki JSON emas — standart xabar bilan davom etamiz
+      }
+      const message = reason === "session_expired"
+        ? "Your session expired after a day of inactivity — please sign in again."
+        : "Token changed — please sign in again.";
+      doLogout(message);
     }
 
     async function loadTunnelUrl() {
@@ -915,20 +1009,23 @@ const firebaseConfig = {
       loginTunnelStatus.insertAdjacentElement("afterend", btn);
     }
 
-    // No dedicated endpoint exists just to check credentials, so we ping
-    // /chat with a harmless sentinel message and read the status code.
-    // This never triggers a real action, it only confirms auth.
+    // /login endpointi faqat PASS so'raydi va TOKEN + yangi session_id
+    // qaytaradi. Foydalanuvchi kiritgan TOKEN shu qaytgan qiymatga mos
+    // kelishini ham tekshiramiz — token maydoni shu tariqa hamon ma'noli
+    // (noto'g'ri TOKEN kiritilsa, PASS to'g'ri bo'lsa ham rad etiladi).
+    // Eski usul /chat'ga soxta "__mragent_auth_check__" xabar yuborib
+    // tekshirardi — endi bunga hojat qolmadi, chunki session_id faqat
+    // /login orqali beriladi.
     async function verifyToken(pass, token) {
-      const res = await fetch(`${API_BASE}/chat`, {
+      const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Auth-Token": token,
-          "X-Login-Pass": pass
-        },
-        body: JSON.stringify({ message: "__mragent_auth_check__", category: "_auth", filename: "check" })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pass })
       });
-      return res.status !== 401;
+      if (res.status !== 200) return null;
+      const data = await res.json().catch(() => ({}));
+      if (!data.token || data.token !== token || !data.session_id) return null;
+      return data.session_id;
     }
 
     loginForm.addEventListener("submit", async (e) => {
@@ -951,12 +1048,16 @@ const firebaseConfig = {
       loginError.classList.add("hidden");
 
       try {
-        const ok = await verifyToken(pass, token);
-        if (ok) {
+        const sessionId = await verifyToken(pass, token);
+        if (sessionId) {
           LOGIN_PASS = pass;
           AUTH_TOKEN = token;
+          SESSION_ID = sessionId;
           localStorage.setItem("MRagent_pass", LOGIN_PASS);
           localStorage.setItem("MRagent_token", AUTH_TOKEN);
+          localStorage.setItem("MRagent_session", SESSION_ID);
+          markActive();
+          startInactivityWatcher();
           await showApp();
         } else {
           showLogin("Wrong password or token.");
@@ -970,9 +1071,7 @@ const firebaseConfig = {
     });
 
     logoutBtn.addEventListener("click", () => {
-      teardownTerminal();
-      closeTerminal();
-      showLogin();
+      doLogout();
     });
 
     function addMessage(text, kind = "bot", persist = true) {
@@ -1481,17 +1580,14 @@ function createThoughtPanel(sourceText) {
         if (typedConfirmation !== undefined) body.typed_confirmation = typedConfirmation;
         const res = await fetch(`${API_BASE}/confirm`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Auth-Token": AUTH_TOKEN,
-            "X-Login-Pass": LOGIN_PASS
-          },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(body)
         });
         if (res.status === 401) {
-          forceLogoutInvalidToken();
+          await handleAuthFailure(res);
           return false;
         }
+        markActive();
         // typed_confirmation_mismatch hali ham oddiy JSON (400) — bu SSE
         // stream boshlanishidan OLDIN, backend darhol shu xatoni qaytaradi.
         // Shuning uchun bu tekshiruv consumeAgentStream()dan oldin turadi.
@@ -1568,19 +1664,16 @@ function createThoughtPanel(sourceText) {
       try {
         const res = await fetch(`${API_BASE}/chat`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Auth-Token": AUTH_TOKEN,
-            "X-Login-Pass": LOGIN_PASS
-          },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ message, category, filename, tier, mode })
         });
 
         if (res.status === 401) {
           panel.remove();
-          forceLogoutInvalidToken();
+          await handleAuthFailure(res);
           return;
         }
+        markActive();
 
         await consumeAgentStream(res, panel, message);
       } catch (err) {
@@ -1616,23 +1709,38 @@ function createThoughtPanel(sourceText) {
       alert("File upload isn't wired up on the backend yet — this button is a placeholder for a future version.");
     });
 
-    // On load: if localStorage has a saved token, jump straight into the
+    // On load: if localStorage has a saved session, jump straight into the
     // chat screen — no separate "verify on boot" ping needed, because
     // showApp() immediately calls loadChats(), which is itself an
-    // authenticated GET /chats request. If the saved token is stale
-    // (backend token was rotated via mragent-auth-token), that first
-    // request comes back 401 and loadChats() calls forceLogoutInvalidToken()
-    // right away — so an invalid token is caught on the very first
-    // real network round-trip, not silently trusted.
+    // authenticated GET /chats request. If the saved credentials are stale
+    // (backend token was rotated via mragent-auth-token, or PASS/TOKEN are
+    // fine but the session simply timed out) that first request comes back
+    // 401 and loadChats() calls handleAuthFailure() right away — so a bad
+    // login is always caught on the very first real network round-trip,
+    // never silently trusted. On TOP of that, we also fail fast client-side
+    // before even touching the network: if MRagent_last_active shows more
+    // than SESSION_TTL_MS has passed since the last authenticated request
+    // (or there's no session_id saved at all — e.g. an older version of
+    // this page, or a logout that never fully completed), we go straight
+    // to the login screen instead of wasting a round-trip on credentials
+    // we already know are dead.
     async function tryAutoLogin() {
       const savedPass = localStorage.getItem("MRagent_pass");
       const savedToken = localStorage.getItem("MRagent_token");
-      if (!savedPass || !savedToken || !API_BASE) {
+      const savedSession = localStorage.getItem("MRagent_session");
+      if (!savedPass || !savedToken || !savedSession || !API_BASE) {
         showLogin();
+        return;
+      }
+      if (isSessionStale()) {
+        doLogout("You were away for more than a day — please sign in again.");
         return;
       }
       LOGIN_PASS = savedPass;
       AUTH_TOKEN = savedToken;
+      SESSION_ID = savedSession;
+      markActive();
+      startInactivityWatcher();
       await showApp();
     }
 
