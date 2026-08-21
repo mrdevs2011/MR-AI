@@ -5,61 +5,111 @@
    klasslar va inline style'larni override qilish (HTML o'zgarmagan holda)
    ===================================================================== */
 
-/* ---- Terminal font: JetBrains Mono, lokal .ttf fayllardan (fonts/) ---- */
+/* ---- Terminal font: JetBrains Mono (OFL-1.1, ochiq manba), lokal .woff2
+   fayllardan (fonts/) — avval .ttf'ga ishora qilardi, lekin fayllar mavjud
+   emas edi, shu bois terminal fallback shriftda ko'rinardi ---- */
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("fonts/JetBrainsMono-Regular.ttf") format("truetype");
+  src: url("fonts/JetBrainsMono-400.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("fonts/JetBrainsMono-Medium.ttf") format("truetype");
+  src: url("fonts/JetBrainsMono-500.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("fonts/JetBrainsMono-Bold.ttf") format("truetype");
+  src: url("fonts/JetBrainsMono-700.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
-/* ---- Custom fonts — lokal .woff2 fayllardan (fonts/), har biri O'Z NOMI
-   bilan alohida font-family (bular bir oilaning bold/italic varianti EMAS —
-   4 xil mustaqil shrift, shuning uchun har biriga alohida font-family kerak,
-   font-weight/font-style bilan sun'iy bog'lash noto'g'ri bo'lardi) ---- */
+/* ---- UI fonts — barchasi OFL-1.1 (Google Fonts), lokal .woff2 fayllardan
+   (fonts/). Space Grotesk: Claude.ai interfeysidagi Styrene'ga eng yaqin
+   bepul geometric-grotesque. Lora: Styrene emas, Claude.ai'ning serif
+   sarlavhalariga (Tiempos) yaqin, iliq matn-serifi. Ikkalasi ham variable
+   emas — kerakli og'irliklar alohida faylda ---- */
 @font-face {
   font-family: "MRFont Sans";
-  src: url("fonts/font-oddiy.woff2") format("woff2");
-  font-weight: 100 900; /* variable font — keng oralig'ini qo'llab-quvvatlaydi */
+  src: url("fonts/SpaceGrotesk-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Sans";
+  src: url("fonts/SpaceGrotesk-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Sans";
+  src: url("fonts/SpaceGrotesk-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Sans";
+  src: url("fonts/SpaceGrotesk-700.woff2") format("woff2");
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "MRFont Serif";
-  src: url("fonts/font-kursiv.woff2") format("woff2");
-  font-weight: 100 900;
+  src: url("fonts/Lora-400.woff2") format("woff2");
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: "MRFont Serif";
+  src: url("fonts/Lora-400-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Serif";
+  src: url("fonts/Lora-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Serif";
+  src: url("fonts/Lora-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Serif";
+  src: url("fonts/Lora-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+/* ---- MRFont Mono: terminaldan tashqarida ishlatiladigan kod/mono matn —
+   endi alohida shrift import qilmasdan, JetBrains Mono'ga alias qilindi
+   (bitta shriftni ikki marta yuklamaslik uchun) ---- */
 @font-face {
   font-family: "MRFont Mono";
-  src: url("fonts/font-belgilar.woff2") format("woff2");
-  font-weight: 400;
+  src: url("fonts/JetBrainsMono-400.woff2") format("woff2");
+  font-weight: 400 700;
   font-style: normal;
   font-display: swap;
 }
-@font-face {
-  font-family: "MRFont Icons";
-  src: url("fonts/font-qalin.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+/* MRFont Icons olib tashlandi — hech qayerda ishlatilmagan edi (piratlangan
+   shrift, --font-icons o'zgaruvchisi mavjud emas edi) */
 
 :root {
   --bg:            #151515;  /* asosiy fon — Claude.ai skrinshotdan olingan */
@@ -715,7 +765,7 @@ textarea:focus-visible:not(.composer-textarea) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent, #c96442);
+  background: var(--accent, #C4613E);
   animation: orbBounce 0.9s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -1032,16 +1082,3 @@ body,
   border-color: var(--border-strong) !important;
   border-top-color: var(--accent) !important;
 }
-
-/* =====================================================================
-   FONT FIX — Tailwind'ning .font-sans / .font-mono utility klasslari
-   o'zining hardcoded font-family zanjirini olib keladi (ui-sans-serif,
-   ui-monospace...) va bu klasslar tepadagi "code,kbd,pre,samp" tag-selector
-   bilan specificity kurashida custom shriftlarimizni yutib yuboradi —
-   ayniqsa <pre class="font-sans"> holatida (script.js:1533,1540,1548),
-   chunki pre uchun tag-selector monospace zanjiri specificity bo'yicha
-   .font-sans klassidan kuchli chiqadi. Shu ikki klassni custom shrift
-   o'zgaruvchilariga qayta bog'laymiz — fayl oxirida, shuning uchun
-   source-order + [class~=] specificity orqali g'olib bo'ladi. ---- */
-[class~="font-sans"] { font-family: var(--font-sans) !important; }
-[class~="font-mono"] { font-family: var(--font-mono) !important; }
