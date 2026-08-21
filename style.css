@@ -5,6 +5,29 @@
    klasslar va inline style'larni override qilish (HTML o'zgarmagan holda)
    ===================================================================== */
 
+/* ---- Terminal font: JetBrains Mono, lokal .ttf fayllardan (fonts/) ---- */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg:            #151515;  /* asosiy fon — Claude.ai skrinshotdan olingan */
   --bg-sidebar:    #111111;  /* sidebar — Claude.ai skrinshotdan aniqlangan, tuzatildi */

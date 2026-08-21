@@ -711,7 +711,7 @@ const firebaseConfig = {
       termInstance = new Terminal({
         cursorBlink: true,
         fontSize: 13,
-        fontFamily: "'SF Mono', Menlo, Consolas, monospace",
+        fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
         scrollback: 5000,
         theme: {
           background: "#0b0b0b",
