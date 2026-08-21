@@ -963,6 +963,13 @@ const firebaseConfig = {
       await loadChats();
       ensureActiveChat();
       input.focus();
+
+      // Sahifa (qayta) ochilganda — agar oldingi urinishda javob kutib
+      // turgan job qolgan bo'lsa (refresh, tab yopilishi, boshqa
+      // qurilmadan kirish), shu yerdan avtomatik davom ettiramiz. Bu
+      // qism butun fix'ning yuragi: ish backend'da hech qachon to'xtamagan,
+      // faqat UI uni ko'rsatishni to'xtatgan edi — shuni tiklaymiz.
+      resumeActiveJobIfAny();
     }
 
     // Har bir himoyalangan so'rovga qo'shiladigan header'lar — session_id
@@ -1922,96 +1929,199 @@ function createThoughtPanel(sourceText) {
       });
     }
 
-    // sendMessage() va confirmCommand() ikkalasi ham backend'dan SSE stream
-    // qaytaradi (ROADMAP: /confirm endi run_agent_loop'ga qaytib, zanjirni
-    // avtomatik davom ettiradi — oldin oddiy JSON qaytarardi). Bu funksiya
-    // ikkalasi uchun ham umumiy: bitta fetch Response'ni oladi, SSE
-    // frame'larni o'qib, thought panel + xabar kartalarini yangilaydi.
-    async function consumeAgentStream(res, panel, originalMessage) {
+    // ---------------------------------------------------------------------
+    // JOB POLLING — /chat va /confirm endi SSE stream QAYTARMAYDI. Ikkalasi
+    // ham darhol {job_id} bilan javob beradi, ish esa backend'da (server
+    // process ichidagi alohida Thread'da) davom etadi. Bu funksiya o'sha
+    // job_id'ni localStorage'ga yozadi va har ~1.2 sekundda /job/<id>/poll
+    // orqali yangi event'larni so'rab turadi.
+    //
+    // ENG MUHIM FARQI ESKI KOD BILAN: eski kod res.body.getReader() bilan
+    // BITTA HTTP connection'ni ochiq ushlab turardi — refresh yoki tab
+    // yopilsa o'sha reader o'lardi va bir joyda qolib qolardi (backend'da
+    // ham, chunki generator to'xtardi). Endi har bir poll — mustaqil, tez
+    // tugaydigan so'rov. Sahifani refresh qilsang, activeJobId localStorage-
+    // dan o'qib olinadi va poll davom etadi — xuddi hech narsa bo'lmagandek,
+    // chunki ishning o'zi hech qachon browser'ga bog'liq bo'lmagan.
+    const ACTIVE_JOB_KEY = "MRagent_active_job"; // { job_id, category, filename }
+    let currentPollTimer = null;
+    let currentPollAfter = 0;
+
+    function saveActiveJob(jobId, category, filename) {
+      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ job_id: jobId, category, filename }));
+    }
+
+    function clearActiveJob() {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    }
+
+    function loadActiveJob() {
+      try {
+        const raw = localStorage.getItem(ACTIVE_JOB_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // pollJob: bitta job_id tugaguncha (status === "done" bo'lguncha)
+    // takroriy so'rov yuboradi. Har chaqiruvda faqat YANGI event'larni
+    // (?after= orqali) so'raymiz — allaqachon ko'rilganlarini qayta
+    // yubormaydi, shuning uchun trafik kichik va oldin chizilgan box'lar
+    // qayta chizilib, ekranda ikki marta paydo bo'lmaydi.
+    async function pollJob(jobId, panel, originalMessage) {
+      currentPollAfter = 0;
       let sawAnyEvent = false;
 
-      // Ba'zi holatlarda backend hali ham oddiy JSON qaytarishi mumkin
-      // (masalan __mragent_auth_check__ yoki xato javoblar) — shuni SSE
-      // deb noto'g'ri o'qishga urinmaslik uchun avval content-type'ni
-      // tekshiramiz.
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("text/event-stream")) {
-        const data = await res.json();
-        panel?.remove();
-        if (data.error && !data.type) {
-          addMessage(data.error, "bot");
-        } else {
-          addMessage(data.response || "No response", "bot");
+      function stopPolling() {
+        if (currentPollTimer) {
+          clearTimeout(currentPollTimer);
+          currentPollTimer = null;
         }
+      }
+
+      return new Promise((resolve) => {
+        async function tick() {
+          let res;
+          try {
+            res = await fetch(`${API_BASE}/job/${encodeURIComponent(jobId)}/poll?after=${currentPollAfter}`, {
+              method: "GET",
+              headers: authHeaders({}),
+            });
+          } catch (err) {
+            // Tarmoq vaqtincha uzilishi (wifi, sleep va h.k.) — job_id
+            // hali ham localStorage'da, keyingi tick qayta urinadi.
+            // Ishni bekor qilmaymiz, faqat keyingi tickgacha kutamiz.
+            currentPollTimer = setTimeout(tick, 1500);
+            return;
+          }
+
+          if (res.status === 401) {
+            stopPolling();
+            clearActiveJob();
+            panel?.remove();
+            await handleAuthFailure(res);
+            resolve();
+            return;
+          }
+
+          if (res.status === 404) {
+            // Job serverda topilmadi — yoki juda eski (tozalangan), yoki
+            // server qayta ishga tushgan bo'lishi mumkin (xotiradagi
+            // JOBS shu bilan yo'qoladi). Foydalanuvchiga rost gapni
+            // aytamiz, uni cheksiz "thinking" holatida ushlab turmaymiz.
+            stopPolling();
+            clearActiveJob();
+            panel?.remove();
+            if (!sawAnyEvent) {
+              addMessage("Bu so'rov topilmadi (server qayta ishga tushgan bo'lishi mumkin). Qayta yozib ko'r.", "bot");
+            }
+            resolve();
+            return;
+          }
+
+          if (!res.ok) {
+            stopPolling();
+            clearActiveJob();
+            panel?.remove();
+            addMessage("Serverdan javob olishda xatolik yuz berdi.", "bot");
+            resolve();
+            return;
+          }
+
+          const data = await res.json();
+          currentPollAfter = data.next_after ?? currentPollAfter;
+
+          for (const rawFrame of data.events || []) {
+            // Backend har bir event'ni "data: {...}\n\n" (SSE frame)
+            // ko'rinishida yuboradi — buni eski parseSseChunk bilan
+            // parse qilamiz, shu bilan pastdagi barcha "evt.type"
+            // ishlov berish mantig'i o'zgarishsiz qoladi.
+            const { events } = parseSseChunk(rawFrame);
+            for (const evt of events) {
+              sawAnyEvent = true;
+              handleAgentEvent(evt, panel, originalMessage, (p) => { panel = p; });
+            }
+          }
+
+          if (data.status === "done") {
+            stopPolling();
+            clearActiveJob();
+            if (!sawAnyEvent) {
+              panel?.remove();
+              addMessage("No response from the backend.", "bot");
+            }
+            resolve();
+            return;
+          }
+
+          currentPollTimer = setTimeout(tick, 1200);
+        }
+
+        tick();
+      });
+    }
+
+    // handleAgentEvent: bitta SSE event'ni qanday chizishni hal qiladi —
+    // avvalgi consumeAgentStream ichidagi mantiqning o'zi, faqat endi
+    // alohida funksiyaga chiqarilgan, chunki uni ikki joydan chaqiramiz:
+    // (1) oddiy poll paytida, (2) sahifa refresh bo'lib, davom etayotgan
+    // job'ga qayta ulanganda.
+    function handleAgentEvent(evt, panel, originalMessage, setPanel) {
+      if (evt.type === "thinking") {
+        panel?.setLabel(evt.label || "...");
+      } else if (evt.type === "action") {
+        panel?.setLabel(evt.label || evt.target || "...");
+      } else if (evt.type === "step_result") {
+        panel?.commitLine(evt.label || `${evt.action} — ${evt.command || evt.path || evt.query || ""}`);
+        const inputText = evt.command || evt.path || evt.query || "";
+        addIOCard(inputText, evt.result || "", true, panel?.el || null);
+      } else if (evt.type === "final") {
+        panel?.remove();
+        setPanel(null);
+
+        if (evt.kind === "pending_confirmation") {
+          addMessage(evt.response, "pending");
+          if (evt.requires_typed_confirmation) {
+            addDangerConfirmCard(evt.command_id, evt.command);
+          } else {
+            addConfirmButton(evt.command_id);
+          }
+        } else if (evt.kind === "blocked") {
+          addMessage(evt.response, "error");
+        } else if (evt.kind === "error") {
+          addMessage(evt.response, "error");
+          if (evt.retryable && originalMessage) {
+            addRetryButton(originalMessage);
+          }
+        } else {
+          addMessageTyped(evt.response || "No response");
+        }
+      }
+    }
+
+    // Sahifa yuklanganda: agar oldingi session'dan tugallanmagan job qolgan
+    // bo'lsa (masalan foydalanuvchi javob kutayotib refresh bosgan yoki
+    // boshqa qurilmadan shu chat'ga kirgan), shu joydan poll'ni qayta
+    // boshlaymiz — xuddi hech qanday uzilish bo'lmagandek. Buni chaqiruvchi
+    // (showApp/loadChats dan keyin) chaqiradi.
+    async function resumeActiveJobIfAny() {
+      const saved = loadActiveJob();
+      if (!saved || !saved.job_id) return;
+
+      const active = getActiveChat();
+      // Faqat hozir ochiq turgan chat aynan shu job tegishli chatga mos
+      // kelsa davom ettiramiz — boshqa chatga o'tib ketilgan bo'lsa, eski
+      // job baribir backend'da davom etadi, faqat UI uni shu yerda
+      // ko'rsatmaydi (keyingi safar o'sha chatga qaytilganda ham job
+      // allaqachon tugagan bo'ladi, chat tarixi /chats orqali normal
+      // ko'rinadi).
+      if (active && (active.category !== saved.category || active.filename !== saved.filename)) {
         return;
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const { events, remainder } = parseSseChunk(buffer);
-        buffer = remainder;
-
-        for (const evt of events) {
-          sawAnyEvent = true;
-
-          if (evt.type === "thinking") {
-            // Backend endi aynan qaysi matnni ko'rsatish kerakligini
-            // `label` maydonida yuboradi — frontend o'zidan "Thinking"
-            // kabi status nomini o'ylab topmaydi, faqat kelganini chiqaradi.
-            panel?.setLabel(evt.label || "...");
-          } else if (evt.type === "action") {
-            panel?.setLabel(evt.label || evt.target || "...");
-          } else if (evt.type === "step_result") {
-            panel?.commitLine(evt.label || `${evt.action} — ${evt.command || evt.path || evt.query || ""}`);
-            // Box'ni HOZIR, shu step tugagan zahoti chizamiz — "final"
-            // kelguncha kutib, hammasini birdaniga tashlamaymiz. Shuning
-            // uchun har bir komanda/fayl amali real vaqtda, ketma-ket
-            // ekranga chiqib boradi, xuddi terminalda ishlayotgandek.
-            const inputText = evt.command || evt.path || evt.query || "";
-            addIOCard(inputText, evt.result || "", true, panel?.el || null);
-          } else if (evt.type === "final") {
-            panel?.remove();
-            panel = null; // keyingi "thinking" eventi kelsa (confirm zanjiri
-                           // davom etib, yana bir bosqich chiqsa), yangi panel
-                           // kerak bo'ladi — buni chaqiruvchi tomon boshqaradi.
-
-            if (evt.kind === "pending_confirmation") {
-              // Box'lar allaqachon step_result orqali jonli chizilgan —
-              // shu yerda evt.steps'ni qayta aylantirish ularni EKANGA
-              // TAKRORLAB chiqarardi (ikki marta ko'rinardi).
-              addMessage(evt.response, "pending");
-              if (evt.requires_typed_confirmation) {
-                addDangerConfirmCard(evt.command_id, evt.command);
-              } else {
-                addConfirmButton(evt.command_id);
-              }
-            } else if (evt.kind === "blocked") {
-              // ZONA 3 (qaytarib bo'lmaydigan amal) — hech qanday tasdiq
-              // yoki tugma yo'q, faqat aniq qizil xabar bilan nega
-              // bajarilmaganini tushuntiramiz.
-              addMessage(evt.response, "error");
-            } else if (evt.kind === "error") {
-              addMessage(evt.response, "error");
-              if (evt.retryable && originalMessage) {
-                addRetryButton(originalMessage);
-              }
-            } else {
-              await addMessageTyped(evt.response || "No response");
-            }
-          }
-        }
-      }
-
-      if (!sawAnyEvent) {
-        panel?.remove();
-        addMessage("No response from the backend.", "bot");
-      }
+      const panel = createThoughtPanel();
+      await pollJob(saved.job_id, panel, null);
     }
 
     async function confirmCommand(commandId, typedConfirmation) {
@@ -2047,13 +2157,20 @@ function createThoughtPanel(sourceText) {
           return true;
         }
 
-        // Muvaffaqiyatli confirm endi SSE stream — /chat bilan bir xil
-        // "thinking / action / step_result / final" event ketma-ketligini
-        // qaytaradi, chunki backend shu yerdan run_agent_loop'ni davom
-        // ettiradi. Shuning uchun bir marta ishlab, to'xtab qolish o'rniga
-        // agent qolgan rejasini (keyingi zona-2/3 amalgacha) o'zi bajaradi.
+        // Muvaffaqiyatli confirm endi darhol {job_id} qaytaradi — asl ish
+        // (run_agent_loop davomi) backend'da background Thread'da ketadi.
+        // Shu bilan bir marta ishlab to'xtab qolish o'rniga, agent qolgan
+        // rejasini (keyingi zona-2/3 amalgacha) o'zi bajaradi, VA refresh
+        // bossang ham bu ish to'xtamaydi.
+        const data = await res.json().catch(() => ({}));
+        if (!data.job_id) {
+          addMessage("Confirm failed: no job_id from backend.", "bot");
+          return true;
+        }
+        const active = getActiveChat();
+        saveActiveJob(data.job_id, (active && active.category) || "general", (active && active.filename) || "chat");
         const panel = createThoughtPanel();
-        await consumeAgentStream(res, panel);
+        await pollJob(data.job_id, panel, null);
         return true;
       } catch (err) {
         addMessage("The confirm request failed.", "bot");
@@ -2115,7 +2232,18 @@ function createThoughtPanel(sourceText) {
         }
         markActive();
 
-        await consumeAgentStream(res, panel, message);
+        const data = await res.json().catch(() => ({}));
+        if (!data.job_id) {
+          panel.remove();
+          addMessage(data.error || "No job_id from backend.", "bot");
+          return;
+        }
+        // job_id'ni localStorage'ga yozib qo'yamiz — shu bilan refresh
+        // bossang ham, sahifani qayta ochsang ham, resumeActiveJobIfAny()
+        // aynan shu ish qayerda qolgan bo'lsa, o'sha yerdan davom
+        // ettirishni biladi, chunki ishning o'zi backend'da tirik.
+        saveActiveJob(data.job_id, category, filename);
+        await pollJob(data.job_id, panel, message);
       } catch (err) {
         panel.remove();
         addMessage("Couldn't reach the backend.\nTry again in a moment.", "bot");
