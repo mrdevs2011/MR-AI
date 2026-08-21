@@ -1888,6 +1888,36 @@ function createThoughtPanel(sourceText) {
       chat.appendChild(div);
       chatScroll.scrollTop = chatScroll.scrollHeight;
 
+      function finish() {
+        const actions = document.createElement("div");
+        actions.className = "msg-actions";
+        actions.innerHTML = COPY_BTN_HTML;
+        container.appendChild(actions);
+        wireCopyButton(actions.querySelector(".copy-btn"), text);
+
+        const active = getActiveChat();
+        if (active) {
+          active.messages.push({ text, kind: "bot" });
+          saveChats();
+        }
+      }
+
+      // Kod bloki (```...```) bo'lgan javoblarda harf-baharf slice qilib
+      // marked.parse()ga berish xato: yarim ochilgan fence (masalan bitta
+      // yoki ikkita backtick) marked tomonidan noto'g'ri, chala parse
+      // qilinadi va ekranda chalkash belgilar ("\", "\\\\\\") chiqib
+      // qoladi. Shuning uchun bunday javoblarda animatsiyani o'tkazib
+      // yuborib, to'liq matnni bir martada render qilamiz — sekinroq
+      // "chiqish effekti" yo'qoladi, lekin render hech qachon buzilmaydi.
+      if (text.includes("```")) {
+        inner.innerHTML = (typeof marked !== "undefined")
+          ? marked.parse(text, { breaks: true })
+          : escapeHtml(text);
+        chatScroll.scrollTop = chatScroll.scrollHeight;
+        finish();
+        return Promise.resolve();
+      }
+
       return new Promise(resolve => {
         let i = 0;
         // Time-based reveal (~28ms per character) instead of a fixed
@@ -1911,17 +1941,7 @@ function createThoughtPanel(sourceText) {
           if (i < text.length) {
             requestAnimationFrame(tick);
           } else {
-            const actions = document.createElement("div");
-            actions.className = "msg-actions";
-            actions.innerHTML = COPY_BTN_HTML;
-            container.appendChild(actions);
-            wireCopyButton(actions.querySelector(".copy-btn"), text);
-
-            const active = getActiveChat();
-            if (active) {
-              active.messages.push({ text, kind: "bot" });
-              saveChats();
-            }
+            finish();
             resolve();
           }
         }
