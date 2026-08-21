@@ -294,7 +294,7 @@ const firebaseConfig = {
     const composer = document.createElement("div");
     composer.innerHTML = `
       <div id="sudoBanner" data-composer-part class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
-        SUDO MODE YOQIQ — hard block yo'q, faqat confirmation card himoyalaydi. Xavfli komandalarni ham confirm bossang, bajariladi.
+        SUDO MODE YOQIQ — qaytariladigan xavfli komandalar (orange) endi tasdiqsiz, avtomatik bajariladi. Qaytarib bo'lmaydigan (rm -rf /, mkfs, va h.k.) komandalar bu rejimda ham hech qachon bajarilmaydi.
       </div>
       <div data-composer-part class="max-w-[720px] mx-auto composer-box">
         <textarea id="message" rows="1" placeholder="Write a message..."
@@ -1430,7 +1430,10 @@ function createThoughtPanel() {
                 addConfirmButton(evt.command_id);
               }
             } else if (evt.kind === "blocked") {
-              addMessage(evt.response, "pending");
+              // ZONA 3 (qaytarib bo'lmaydigan amal) — hech qanday tasdiq
+              // yoki tugma yo'q, faqat aniq qizil xabar bilan nega
+              // bajarilmaganini tushuntiramiz.
+              addMessage(evt.response, "error");
             } else if (evt.kind === "error") {
               addMessage(evt.response, "error");
               if (evt.retryable && originalMessage) {
