@@ -33,6 +33,7 @@ const firebaseConfig = {
     const appScreen = document.getElementById("app-screen");
     const loginForm = document.getElementById("login-form");
     const loginPass = document.getElementById("login-pass");
+    const loginPassWrap = document.getElementById("login-pass-wrap");
     const loginOtp = document.getElementById("login-otp"); // hidden, combined value
     const loginOtpBoxes = document.getElementById("login-otp-boxes");
     const loginOtpWrap = document.getElementById("login-otp-wrap");
@@ -139,6 +140,10 @@ const firebaseConfig = {
           stopOtpTimer();
           otpStage = false;
           clearOtpBoxes();
+          loginPass.disabled = false;
+          loginPassWrap.classList.remove("hidden");
+          loginBtn.classList.remove("hidden");
+          loginBtn.textContent = "Continue";
         }
       };
       render();
@@ -1041,6 +1046,7 @@ const firebaseConfig = {
       loginBtn.textContent = "Continue";
       otpStage = false;
       loginOtpWrap.classList.add("hidden");
+      loginPassWrap.classList.remove("hidden");
       loginPass.disabled = false;
       stopOtpTimer();
       loginOtpTimer.classList.add("hidden");
@@ -1229,6 +1235,7 @@ const firebaseConfig = {
         if (ok) {
           otpStage = true;
           loginPass.disabled = true;
+          loginPassWrap.classList.add("hidden");
           loginOtpWrap.classList.remove("hidden");
           loginBtn.classList.add("hidden");
           focusFirstOtpBox();
