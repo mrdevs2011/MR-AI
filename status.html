@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<title>mragent — kompyuter holati</title>
+<title>mragent — computer status</title>
 <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
 <style>
@@ -121,12 +121,12 @@
 <body>
   <div class="card">
     <div class="logo loading" id="logo"><img src="splash.svg" alt="mragent"></div>
-    <div class="status-text"><span class="dot loading" id="dot"></span><span id="label">Tekshirilmoqda...</span></div>
+    <div class="status-text"><span class="dot loading" id="dot"></span><span id="label">Checking...</span></div>
     <div class="sub" id="sub">&nbsp;</div>
 
     <div class="login-box">
-      <input type="password" id="passInput" placeholder="Login parol" autocomplete="off">
-      <button id="loginBtn">Auth token olish</button>
+      <input type="password" id="passInput" placeholder="Login password" autocomplete="off">
+      <button id="loginBtn">Get auth token</button>
       <div class="login-result" id="loginResult"></div>
     </div>
   </div>
@@ -160,7 +160,7 @@
       if (status === "online" && ageMs < STALE_AFTER_MS) {
         setOnline(lastSeen);
       } else {
-        setOffline("Oxirgi marta ko'rilgan: " + lastSeen.toLocaleTimeString());
+        setOffline("Last seen: " + lastSeen.toLocaleTimeString());
       }
     }
 
@@ -171,7 +171,7 @@
         .onSnapshot(
           (doc) => {
             if (!doc.exists || !doc.data().lastSeen) {
-              setOffline("Hech qachon ulanmagan");
+              setOffline("Never connected");
               return;
             }
             const data = doc.data();
@@ -182,8 +182,8 @@
             staleTimer = setTimeout(evaluateAndRender, STALE_AFTER_MS + 500);
           },
           (err) => {
-            label.textContent = "Xatolik";
-            sub.textContent = "Firestore bilan bog'lanib bo'lmadi";
+            label.textContent = "Error";
+            sub.textContent = "Couldn't connect to Firestore";
             dot.className = "dot offline";
           }
         );
@@ -192,14 +192,14 @@
     function setOnline(lastSeen) {
       dot.className = "dot online";
       logo.className = "logo online";
-      label.textContent = "Kompyuter YONIQ";
-      sub.textContent = "Oxirgi signal: " + lastSeen.toLocaleTimeString();
+      label.textContent = "Computer ONLINE";
+      sub.textContent = "Last signal: " + lastSeen.toLocaleTimeString();
     }
 
     function setOffline(detail) {
       dot.className = "dot offline";
       logo.className = "logo offline";
-      label.textContent = "Kompyuter O'CHIQ";
+      label.textContent = "Computer OFFLINE";
       sub.textContent = detail;
     }
 
@@ -212,7 +212,7 @@
     async function getBackendUrl() {
       const doc = await db.collection("config").doc("tunnel").get();
       if (!doc.exists || !doc.data().url) {
-        throw new Error("Backend manzili topilmadi (tunnel offline bo'lishi mumkin)");
+        throw new Error("Backend address not found (tunnel might be offline)");
       }
       return doc.data().url.replace(/\/$/, "");
     }
@@ -220,12 +220,12 @@
     async function doLogin() {
       const pass = passInput.value.trim();
       if (!pass) {
-        loginResult.textContent = "Parolni kirit avval, bratan.";
+        loginResult.textContent = "Enter the password first.";
         loginResult.className = "login-result err";
         return;
       }
       loginBtn.disabled = true;
-      loginResult.textContent = "Tekshirilmoqda...";
+      loginResult.textContent = "Checking...";
       loginResult.className = "login-result";
       try {
         const backendUrl = await getBackendUrl();
@@ -235,25 +235,25 @@
           body: JSON.stringify({ pass })
         });
         if (res.status === 401) {
-          loginResult.textContent = "Parol noto'g'ri.";
+          loginResult.textContent = "Wrong password.";
           loginResult.className = "login-result err";
           return;
         }
         if (!res.ok) {
-          loginResult.textContent = "Server xatosi: " + res.status;
+          loginResult.textContent = "Server error: " + res.status;
           loginResult.className = "login-result err";
           return;
         }
         const data = await res.json();
-        loginResult.textContent = "TOKEN: " + data.token + "  (bosib nusxalash uchun)";
+        loginResult.textContent = "TOKEN: " + data.token + "  (click to copy)";
         loginResult.className = "login-result ok";
         loginResult.style.cursor = "pointer";
         loginResult.onclick = () => {
           navigator.clipboard.writeText(data.token);
-          loginResult.textContent = "Nusxalandi ✓";
+          loginResult.textContent = "Copied ✓";
         };
       } catch (e) {
-        loginResult.textContent = "Xatolik: " + e.message;
+        loginResult.textContent = "Error: " + e.message;
         loginResult.className = "login-result err";
       } finally {
         loginBtn.disabled = false;

@@ -294,7 +294,7 @@ const firebaseConfig = {
     const composer = document.createElement("div");
     composer.innerHTML = `
       <div id="sudoBanner" data-composer-part class="max-w-[720px] mx-auto mb-2 hidden rounded-lg px-3 py-2 text-[12px] font-medium" style="background:#3a1414; color:#ff6b6b; border:1px solid #5c1f1f;">
-        SUDO MODE YOQIQ — qaytariladigan xavfli komandalar (orange) endi tasdiqsiz, avtomatik bajariladi. Qaytarib bo'lmaydigan (rm -rf /, mkfs, va h.k.) komandalar bu rejimda ham hech qachon bajarilmaydi.
+        EXTENDED MODE ON — reversible risky commands (orange) now run automatically without confirmation. Irreversible commands (rm -rf /, mkfs, etc.) are never auto-run, even in this mode.
       </div>
       <div data-composer-part class="max-w-[720px] mx-auto composer-box">
         <textarea id="message" rows="1" placeholder="Write a message..."
@@ -328,7 +328,7 @@ const firebaseConfig = {
                 <div class="combo-group-divider"></div>
                 <button type="button" id="sudo-toggle-row" class="combo-toggle-row">
                   <span class="combo-item-dot" style="background:#ff6b6b"></span>
-                  <span class="combo-toggle-label">Sudo mode</span>
+                  <span class="combo-toggle-label">Extended mode</span>
                   <span id="sudo-switch" class="switch"><span class="switch-knob"></span></span>
                 </button>
               </div>
@@ -407,7 +407,7 @@ const firebaseConfig = {
     }
 
     function updateComboLabel() {
-      const m = modeSelect.value === "sudo" ? "Sudo" : "General";
+      const m = modeSelect.value === "sudo" ? "Extended" : "General";
       const t = TIER_OPTS.find(x => x.value === tierSelect.value);
       comboLabel.textContent = [m, t && t.label].filter(Boolean).join(" ");
       updateComboActiveState();
@@ -860,7 +860,7 @@ const firebaseConfig = {
     // /confirm yoki /chats so'rovi 401 qaytarsa, shu funksiya darhol
     // chaqiriladi — login ekraniga qaytaradi va eski token/parolni tozalaydi.
     function forceLogoutInvalidToken() {
-      showLogin("Token o'zgargan — qaytadan kirishing.");
+      showLogin("Token changed — please sign in again.");
     }
 
     async function loadTunnelUrl() {
@@ -906,7 +906,7 @@ const firebaseConfig = {
       btn = document.createElement("button");
       btn.id = "tunnel-retry-btn";
       btn.type = "button";
-      btn.textContent = "Qayta urinib ko'rish";
+      btn.textContent = "Retry";
       btn.className = "w-full text-[13px] text-[#ececec] bg-[#2f2f2f] hover:bg-[#3a3a3a] rounded-xl py-2 mt-2 transition";
       btn.addEventListener("click", () => {
         btn.remove();
@@ -1188,7 +1188,7 @@ function createThoughtPanel() {
         </button>`;
       div.querySelector("button").addEventListener("click", async (e) => {
         e.target.disabled = true;
-        e.target.textContent = "yuborilmoqda...";
+        e.target.textContent = "sending...";
         div.remove();
         input.value = originalMessage;
         await sendMessage();
@@ -1225,14 +1225,14 @@ function createThoughtPanel() {
       div.innerHTML = `
         <div class="max-w-full w-full rounded-2xl px-4 py-3 space-y-2" style="background:#3a1414; border:1px solid #5c1f1f;">
           <div class="text-[13px] font-semibold" style="color:#ff6b6b;">
-            XAVFLI, QAYTARIB BO'LMAYDIGAN KOMANDA
+            DANGEROUS, IRREVERSIBLE COMMAND
           </div>
           <div class="text-[13px] font-mono px-2 py-1.5 rounded" style="background:#1a0d0d; color:#ffb4b4; white-space:pre-wrap; word-break:break-all;">${escapeHtml(commandText)}</div>
-          <div class="text-[12px]" style="color:#e8a0a0;">Tasdiqlash uchun komandani XATOSIZ qayta yoz:</div>
+          <div class="text-[12px]" style="color:#e8a0a0;">Retype the command EXACTLY to confirm:</div>
           <input type="text" class="danger-typed w-full bg-transparent border rounded px-2 py-1.5 text-[13px] font-mono focus:outline-none" style="border-color:#5c1f1f; color:#ffb4b4;" placeholder="${escapeHtml(commandText)}" autocomplete="off" spellcheck="false" />
-          <div class="danger-error text-[12px] hidden" style="color:#ff6b6b;">Mos kelmadi yoki noto'g'ri — qaytadan urin.</div>
+          <div class="danger-error text-[12px] hidden" style="color:#ff6b6b;">Doesn't match — try again.</div>
           <button class="danger-btn w-full bg-red-800 text-[13px] px-4 py-2 rounded-full transition opacity-40 cursor-not-allowed" disabled>
-            Tasdiqlab bajarish
+            Confirm and run
           </button>
         </div>`;
 
@@ -1264,7 +1264,7 @@ function createThoughtPanel() {
         } else {
           errorEl.classList.remove("hidden");
           btn.disabled = false;
-          btn.textContent = "Tasdiqlab bajarish";
+          btn.textContent = "Confirm and run";
         }
       });
 
@@ -1590,7 +1590,7 @@ function createThoughtPanel() {
     // this is an honest stub for now instead of a fake working button.
     const attachBtn = document.getElementById("attach-btn");
     attachBtn?.addEventListener("click", () => {
-      alert("Fayl yuklash hali backendda yo'q — bu tugma keyingi versiya uchun joyi tayyorlab qo'yildi.");
+      alert("File upload isn't wired up on the backend yet — this button is a placeholder for a future version.");
     });
 
     // On load: if localStorage has a saved token, jump straight into the
