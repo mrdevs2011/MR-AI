@@ -1530,14 +1530,14 @@ const firebaseConfig = {
       if (isUser) {
         div.innerHTML = `
           <div class="max-w-[75%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user">
-            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+            <pre class="whitespace-pre-wrap">${escapeHtml(text)}</pre>
           </div>`;
       } else if (isPending) {
         // Command/file confirmations show the raw command verbatim —
         // monospace is correct here, this isn't prose.
         div.innerHTML = `
           <div class="max-w-full w-full text-[15px] leading-relaxed bubble-pending rounded-2xl px-4 py-2.5">
-            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+            <pre class="whitespace-pre-wrap">${escapeHtml(text)}</pre>
           </div>`;
       } else if (isError) {
         // OpenRouter band/timeout bo'lganda backend shu turdagi xabar
@@ -1545,7 +1545,7 @@ const firebaseConfig = {
         // alohida (qizil) ko'rinishda, oddiy chat pufagidan ajratib.
         div.innerHTML = `
           <div class="max-w-full w-full text-[15px] leading-relaxed bubble-error rounded-2xl px-4 py-2.5">
-            <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
+            <pre class="whitespace-pre-wrap">${escapeHtml(text)}</pre>
           </div>`;
       } else {
         // Normal bot replies: render as markdown, like a real assistant
