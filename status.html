@@ -116,16 +116,6 @@
   }
   .login-result.ok { color: var(--success); }
   .login-result.err { color: var(--danger); }
-  .panel { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); display: none; flex-direction: column; gap: 10px; text-align: left; }
-  .panel.show { display: flex; }
-  .panel-row { display: flex; gap: 8px; }
-  .panel-row button { flex: 1; background: var(--bg); border: 1px solid var(--border-strong); color: var(--ink); padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
-  .panel-row button:hover:not(:disabled) { border-color: var(--accent); }
-  .panel-row button:disabled { opacity: 0.5; cursor: default; }
-  .panel-row button.danger:hover:not(:disabled) { border-color: var(--danger); }
-  .token-box { font-size: 12px; word-break: break-all; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-height: 16px; cursor: pointer; }
-  .token-box.ok { color: var(--success); }
-  .hint { font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -136,20 +126,8 @@
 
     <div class="login-box">
       <input type="password" id="passInput" placeholder="Login password" autocomplete="off">
-      <button id="loginBtn">Unlock</button>
+      <button id="sendOtpBtn">Send OTP to email</button>
       <div class="login-result" id="loginResult"></div>
-    </div>
-
-    <div class="panel" id="panel">
-      <div class="token-box" id="tokenBox">Token hidden — press "View auth token"</div>
-      <div class="panel-row">
-        <button id="viewTokenBtn">View auth token</button>
-        <button id="sendOtpBtn">Send OTP to email</button>
-      </div>
-      <div class="panel-row">
-        <button id="regenTokenBtn" class="danger">Regenerate auth token</button>
-      </div>
-      <div class="hint" id="panelHint">&nbsp;</div>
     </div>
   </div>
 
@@ -239,24 +217,16 @@
 
     startListening();
 
-    // --- PASS kiritib AUTH_TOKEN olish ---
+    // --- PASS kiritib OTP yuborish ---
+    // Auth token butunlay olib tashlandi — bu sahifaning yagona vazifasi
+    // endi PASS to'g'ri bo'lsa emailga bir martalik OTP kod yuborish
+    // (login-otp maydoniga kiritish uchun, asosiy ilova login ekranida).
     // Backend URL'ni qo'lda yozmaymiz — Firestore'dagi config/tunnel
     // hujjatida allaqachon bor (cloudflared tunnel har start'da o'zini
     // shu yerga yozadi), status page ham shu manbadan o'qiydi.
     const passInput = document.getElementById("passInput");
-    const loginBtn = document.getElementById("loginBtn");
-    const loginResult = document.getElementById("loginResult");
-    const panel = document.getElementById("panel");
-    const tokenBox = document.getElementById("tokenBox");
-    const viewTokenBtn = document.getElementById("viewTokenBtn");
     const sendOtpBtn = document.getElementById("sendOtpBtn");
-    const regenTokenBtn = document.getElementById("regenTokenBtn");
-    const panelHint = document.getElementById("panelHint");
-
-    // Parolni faqat xotirada saqlaymiz (localStorage'ga yozmaymiz) — panel
-    // ochilgach, "View token" / "Send OTP" / "Regenerate" tugmalari shu
-    // parolni qayta-qayta backendga yuborish uchun ishlatadi.
-    let unlockedPass = null;
+    const loginResult = document.getElementById("loginResult");
 
     async function getBackendUrl() {
       const doc = await db.collection("config").doc("tunnel").get();
@@ -266,132 +236,51 @@
       return doc.data().url.replace(/\/$/, "");
     }
 
-    async function callWithPass(path) {
-      const backendUrl = await getBackendUrl();
-      const res = await fetch(backendUrl + path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pass: unlockedPass })
-      });
-      return res;
-    }
-
-    async function doLogin() {
+    async function doSendOtp() {
       const pass = passInput.value.trim();
       if (!pass) {
         loginResult.textContent = "Enter the password first.";
         loginResult.className = "login-result err";
         return;
       }
-      loginBtn.disabled = true;
-      loginResult.textContent = "Checking...";
+      sendOtpBtn.disabled = true;
+      loginResult.textContent = "Checking password...";
       loginResult.className = "login-result";
       try {
         const backendUrl = await getBackendUrl();
-        const res = await fetch(backendUrl + "/login", {
+        const res = await fetch(backendUrl + "/send-otp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pass })
         });
+        const data = await res.json().catch(() => ({}));
         if (res.status === 401) {
           loginResult.textContent = "Wrong password.";
           loginResult.className = "login-result err";
           return;
         }
-        if (!res.ok) {
-          loginResult.textContent = "Server error: " + res.status;
+        if (res.status === 500) {
+          loginResult.textContent = "Email isn't configured on the backend (OTP_SMTP_* / OTP_EMAIL_TO).";
           loginResult.className = "login-result err";
           return;
         }
-        // PASS to'g'ri — endi panel ochiladi, lekin token darhol
-        // ko'rsatilmaydi, "View auth token" bosilganda chiqadi.
-        unlockedPass = pass;
-        loginResult.textContent = "Unlocked ✓";
+        if (!res.ok || !data.ok) {
+          loginResult.textContent = "Couldn't send OTP.";
+          loginResult.className = "login-result err";
+          return;
+        }
+        loginResult.textContent = "OTP sent — check your email, it expires in " + (data.ttl_seconds || 60) + "s.";
         loginResult.className = "login-result ok";
-        panel.classList.add("show");
-        passInput.value = "";
       } catch (e) {
         loginResult.textContent = "Error: " + e.message;
         loginResult.className = "login-result err";
-      } finally {
-        loginBtn.disabled = false;
-      }
-    }
-
-    async function doViewToken() {
-      viewTokenBtn.disabled = true;
-      tokenBox.textContent = "Loading...";
-      tokenBox.className = "token-box";
-      try {
-        const res = await callWithPass("/login");
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.token) {
-          tokenBox.textContent = "Couldn't load token.";
-          return;
-        }
-        tokenBox.textContent = "TOKEN: " + data.token + "  (click to copy)";
-        tokenBox.className = "token-box ok";
-        tokenBox.onclick = () => {
-          navigator.clipboard.writeText(data.token);
-          tokenBox.textContent = "Copied ✓";
-        };
-      } catch (e) {
-        tokenBox.textContent = "Error: " + e.message;
-      } finally {
-        viewTokenBtn.disabled = false;
-      }
-    }
-
-    async function doSendOtp() {
-      sendOtpBtn.disabled = true;
-      panelHint.textContent = "Sending code to your email...";
-      try {
-        const res = await callWithPass("/send-otp");
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.ok) {
-          panelHint.textContent = "OTP sent — check your email, it expires in " + (data.ttl_seconds || 60) + "s.";
-        } else if (res.status === 500) {
-          panelHint.textContent = "Email isn't configured on the backend (OTP_SMTP_* / OTP_EMAIL_TO).";
-        } else {
-          panelHint.textContent = "Couldn't send OTP.";
-        }
-      } catch (e) {
-        panelHint.textContent = "Error: " + e.message;
       } finally {
         sendOtpBtn.disabled = false;
       }
     }
 
-    async function doRegenToken() {
-      if (!confirm("This invalidates the current token and logs out every device. Continue?")) return;
-      regenTokenBtn.disabled = true;
-      panelHint.textContent = "Regenerating...";
-      try {
-        const res = await callWithPass("/token/regenerate");
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.token) {
-          panelHint.textContent = "Couldn't regenerate token.";
-          return;
-        }
-        tokenBox.textContent = "TOKEN: " + data.token + "  (click to copy)";
-        tokenBox.className = "token-box ok";
-        tokenBox.onclick = () => {
-          navigator.clipboard.writeText(data.token);
-          tokenBox.textContent = "Copied ✓";
-        };
-        panelHint.textContent = "New token generated — every logged-in device was signed out.";
-      } catch (e) {
-        panelHint.textContent = "Error: " + e.message;
-      } finally {
-        regenTokenBtn.disabled = false;
-      }
-    }
-
-    loginBtn.addEventListener("click", doLogin);
-    passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
-    viewTokenBtn.addEventListener("click", doViewToken);
     sendOtpBtn.addEventListener("click", doSendOtp);
-    regenTokenBtn.addEventListener("click", doRegenToken);
+    passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSendOtp(); });
   </script>
 </body>
 </html>

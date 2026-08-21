@@ -17,7 +17,6 @@ const firebaseConfig = {
 
     let API_BASE = null;
     let LOGIN_PASS = "";
-    let AUTH_TOKEN = "";
     let SESSION_ID = "";
     // 1 kunlik harakatsizlik — backenddagi SESSION_TTL_SECONDS bilan bir xil
     // qiymat. Bu yerda ham nusxasi turadi, chunki tab OCHIQ qolib, hech
@@ -26,18 +25,14 @@ const firebaseConfig = {
     // buni faqat client tomonda taymer bilan ta'minlash mumkin.
     const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
     let inactivityWatcherId = null;
-    // Eski usul: token Firestore'dan avtomatik olinardi. Endi backend
-    // (main.py) endi TOKEN'ni Firestore'ga yozmaydi — xavfsizlik uchun,
-    // PASS bilmagan odam ham Firestore'dan o'qiy olmasin deb. Shuning
-    // uchun endi login formasi PASS bilan birga TOKEN'ni ham qo'lda
-    // so'raydi.
+    // Auth token butunlay olib tashlandi. Login endi faqat PASS + emailga
+    // yuboriladigan bir martalik OTP kod bilan ishlaydi.
 
     const bootScreen = document.getElementById("boot-screen");
     const loginScreen = document.getElementById("login-screen");
     const appScreen = document.getElementById("app-screen");
     const loginForm = document.getElementById("login-form");
     const loginPass = document.getElementById("login-pass");
-    const loginToken = document.getElementById("login-token");
     const loginOtp = document.getElementById("login-otp");
     const loginError = document.getElementById("login-error");
     const loginBtn = document.getElementById("login-btn");
@@ -698,7 +693,7 @@ const firebaseConfig = {
     // bash on the machine, through the same cloudflared tunnel as
     // everything else. Every keystroke goes to bash's stdin, every byte
     // bash writes comes straight back — this is functionally SSH over
-    // the tunnel, gated by the same password + auth token.
+    // the tunnel, gated by the same password + session.
     // -----------------------------------------------------------------
     let termInstance = null;
     let termFitAddon = null;
@@ -756,10 +751,10 @@ const firebaseConfig = {
       setTermStatus("connecting...", "#e0a020");
 
       // Browser WebSocket API can't set custom headers on the handshake,
-      // so auth travels as query params here instead of the X-Auth-Token /
-      // X-Login-Pass headers the rest of the app uses.
+      // so auth travels as query params here instead of the X-Login-Pass /
+      // X-Session-Id headers the rest of the app uses.
       const wsBase = API_BASE.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
-      const wsUrl = `${wsBase}/ws/term?token=${encodeURIComponent(AUTH_TOKEN)}&pass=${encodeURIComponent(LOGIN_PASS)}&session=${encodeURIComponent(SESSION_ID)}`;
+      const wsUrl = `${wsBase}/ws/term?pass=${encodeURIComponent(LOGIN_PASS)}&session=${encodeURIComponent(SESSION_ID)}`;
       const socket = new WebSocket(wsUrl);
       termSocket = socket;
 
@@ -851,7 +846,7 @@ const firebaseConfig = {
     // qo'yadigan yangi fetch chaqiruvi paydo bo'lmaydi.
     function authHeaders(extra) {
       return Object.assign(
-        { "X-Auth-Token": AUTH_TOKEN, "X-Login-Pass": LOGIN_PASS, "X-Session-Id": SESSION_ID },
+        { "X-Login-Pass": LOGIN_PASS, "X-Session-Id": SESSION_ID },
         extra || {}
       );
     }
@@ -918,10 +913,8 @@ const firebaseConfig = {
       appScreen.classList.add("hidden");
       loginScreen.classList.remove("hidden");
       LOGIN_PASS = "";
-      AUTH_TOKEN = "";
       SESSION_ID = "";
       localStorage.removeItem("MRagent_pass");
-      localStorage.removeItem("MRagent_token");
       localStorage.removeItem("MRagent_session");
       localStorage.removeItem("MRagent_last_active");
       stopInactivityWatcher();
@@ -934,17 +927,16 @@ const firebaseConfig = {
         loginError.classList.add("hidden");
       }
       loginPass.value = "";
-      loginToken.value = "";
       loginOtp.value = "";
       loginPass.focus();
     }
 
     // Har qanday himoyalangan so'rov 401 qaytarganda chaqiriladi — sabab
-    // backend'dan keladi ('unauthorized' — PASS/TOKEN o'zi noto'g'ri,
-    // odatda ular mragent-set-pass/mragent-auth-token bilan o'zgartirilgan
-    // bo'lsa; 'session_expired' — PASS/TOKEN to'g'ri, lekin 24 soatlik
-    // sessiya muddati tugagan). Ikkala holatda ham to'liq logout: eski
-    // pass/token/session hech qanday holatda brauzerda qolib ketmaydi.
+    // backend'dan keladi ('unauthorized' — PASS o'zi noto'g'ri, odatda u
+    // mragent-set-pass bilan o'zgartirilgan bo'lsa; 'session_expired' —
+    // PASS to'g'ri, lekin 24 soatlik sessiya muddati tugagan). Ikkala
+    // holatda ham to'liq logout: eski pass/session hech qanday holatda
+    // brauzerda qolib ketmaydi.
     async function handleAuthFailure(res) {
       let reason = "unauthorized";
       try {
@@ -955,7 +947,7 @@ const firebaseConfig = {
       }
       const message = reason === "session_expired"
         ? "Your session expired after a day of inactivity — please sign in again."
-        : "Token changed — please sign in again.";
+        : "Password changed — please sign in again.";
       doLogout(message);
     }
 
@@ -1011,20 +1003,20 @@ const firebaseConfig = {
       loginTunnelStatus.insertAdjacentElement("afterend", btn);
     }
 
-    // /login endpointi endi UCHTA narsa bilan chaqiriladi: PASS, TOKEN va
+    // /login endpointi endi IKKITA narsa bilan chaqiriladi: PASS va
     // emailga yuborilgan 60 soniyalik bir martalik OTP kod. Backend
-    // uchalasini ham tekshiradi (pass -> token -> otp, shu tartibda);
-    // biri noto'g'ri bo'lsa session ochilmaydi. OTP kodini status
-    // sahifasidagi "Send OTP to email" tugmasi orqali olish kerak.
-    async function verifyToken(pass, token, otp) {
+    // ikkalasini ham tekshiradi (pass -> otp, shu tartibda); biri
+    // noto'g'ri bo'lsa session ochilmaydi. OTP kodini status sahifasidagi
+    // "Send OTP to email" tugmasi orqali olish kerak.
+    async function verifyLogin(pass, otp) {
       const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pass, token, otp })
+        body: JSON.stringify({ pass, otp })
       });
       const data = await res.json().catch(() => ({}));
       if (res.status !== 200) return { sessionId: null, error: data.error || null };
-      if (!data.token || data.token !== token || !data.session_id) return { sessionId: null, error: "mismatch" };
+      if (!data.session_id) return { sessionId: null, error: "mismatch" };
       return { sessionId: data.session_id, error: null };
     }
 
@@ -1036,10 +1028,9 @@ const firebaseConfig = {
         return;
       }
       const pass = loginPass.value.trim();
-      const token = loginToken.value.trim();
       const otp = loginOtp.value.trim();
-      if (!pass || !token || !otp) {
-        loginError.textContent = "Password, auth token and OTP code are all required.";
+      if (!pass || !otp) {
+        loginError.textContent = "Password and OTP code are both required.";
         loginError.classList.remove("hidden");
         return;
       }
@@ -1049,13 +1040,11 @@ const firebaseConfig = {
       loginError.classList.add("hidden");
 
       try {
-        const { sessionId, error } = await verifyToken(pass, token, otp);
+        const { sessionId, error } = await verifyLogin(pass, otp);
         if (sessionId) {
           LOGIN_PASS = pass;
-          AUTH_TOKEN = token;
           SESSION_ID = sessionId;
           localStorage.setItem("MRagent_pass", LOGIN_PASS);
-          localStorage.setItem("MRagent_token", AUTH_TOKEN);
           localStorage.setItem("MRagent_session", SESSION_ID);
           markActive();
           startInactivityWatcher();
@@ -1063,7 +1052,7 @@ const firebaseConfig = {
         } else if (error === "invalid_or_expired_otp") {
           showLogin("OTP code is wrong or expired — send a new one from the status page.");
         } else {
-          showLogin("Wrong password or token.");
+          showLogin("Wrong password.");
         }
       } catch (err) {
         showLogin("Couldn't reach the backend. Is the tunnel up?");
@@ -1716,11 +1705,11 @@ function createThoughtPanel(sourceText) {
     // chat screen — no separate "verify on boot" ping needed, because
     // showApp() immediately calls loadChats(), which is itself an
     // authenticated GET /chats request. If the saved credentials are stale
-    // (backend token was rotated via mragent-auth-token, or PASS/TOKEN are
-    // fine but the session simply timed out) that first request comes back
-    // 401 and loadChats() calls handleAuthFailure() right away — so a bad
-    // login is always caught on the very first real network round-trip,
-    // never silently trusted. On TOP of that, we also fail fast client-side
+    // (PASS was rotated via mragent-set-pass, or PASS is fine but the
+    // session simply timed out) that first request comes back 401 and
+    // loadChats() calls handleAuthFailure() right away — so a bad login is
+    // always caught on the very first real network round-trip, never
+    // silently trusted. On TOP of that, we also fail fast client-side
     // before even touching the network: if MRagent_last_active shows more
     // than SESSION_TTL_MS has passed since the last authenticated request
     // (or there's no session_id saved at all — e.g. an older version of
@@ -1729,9 +1718,8 @@ function createThoughtPanel(sourceText) {
     // we already know are dead.
     async function tryAutoLogin() {
       const savedPass = localStorage.getItem("MRagent_pass");
-      const savedToken = localStorage.getItem("MRagent_token");
       const savedSession = localStorage.getItem("MRagent_session");
-      if (!savedPass || !savedToken || !savedSession || !API_BASE) {
+      if (!savedPass || !savedSession || !API_BASE) {
         showLogin();
         return;
       }
@@ -1740,7 +1728,6 @@ function createThoughtPanel(sourceText) {
         return;
       }
       LOGIN_PASS = savedPass;
-      AUTH_TOKEN = savedToken;
       SESSION_ID = savedSession;
       markActive();
       startInactivityWatcher();
