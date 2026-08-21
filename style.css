@@ -1032,3 +1032,16 @@ body,
   border-color: var(--border-strong) !important;
   border-top-color: var(--accent) !important;
 }
+
+/* =====================================================================
+   FONT FIX — Tailwind'ning .font-sans / .font-mono utility klasslari
+   o'zining hardcoded font-family zanjirini olib keladi (ui-sans-serif,
+   ui-monospace...) va bu klasslar tepadagi "code,kbd,pre,samp" tag-selector
+   bilan specificity kurashida custom shriftlarimizni yutib yuboradi —
+   ayniqsa <pre class="font-sans"> holatida (script.js:1533,1540,1548),
+   chunki pre uchun tag-selector monospace zanjiri specificity bo'yicha
+   .font-sans klassidan kuchli chiqadi. Shu ikki klassni custom shrift
+   o'zgaruvchilariga qayta bog'laymiz — fayl oxirida, shuning uchun
+   source-order + [class~=] specificity orqali g'olib bo'ladi. ---- */
+[class~="font-sans"] { font-family: var(--font-sans) !important; }
+[class~="font-mono"] { font-family: var(--font-mono) !important; }
