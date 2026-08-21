@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <title>mragent — computer status</title>
 <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
@@ -39,6 +39,7 @@
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 8px 24px rgba(0,0,0,0.12);
+    width: 340px;
   }
   .dot {
     width: 10px;
@@ -73,11 +74,65 @@
     font-size: 14px;
     color: var(--muted);
   }
+  .auth-title {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    font-weight: 500;
+    margin-bottom: 18px;
+  }
+  .auth-input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 15px;
+    outline: none;
+  }
+  .auth-input:focus { border-color: var(--accent); }
+  .auth-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .auth-btn:hover { background: var(--accent-hover); }
+  .auth-btn:disabled { opacity: 0.6; cursor: default; }
+  .auth-error {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--danger);
+    min-height: 16px;
+  }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="logo loading" id="logo"><img src="../splash.svg" alt="mragent"></div>
+  <!-- PAROL EKRANI — status ma'lumoti (online/offline) shu forma orqasida
+       yashiringan, chunki bu ma'lumot avval hech qanday auth'siz, saytga
+       kirgan HAR KIM'ga ochiq edi. Endi bir marta parol so'raladi, keyin
+       localStorage'da saqlanadi. PASS CLI'dan (mragent-set-pass) o'zgarsa,
+       backend qayta ishga tushganda yangi STATUS_AUTH_HASH yozadi — bu
+       yerdagi localStorage'dagi eski hash bilan mos kelmay qoladi va
+       forma qayta ko'rsatiladi (client-side solishtirish, 0ms — server
+       so'rovi kerak emas, Firestore onSnapshot orqali kelgan qiymat
+       bilan solishtiriladi). -->
+  <div class="card" id="authCard">
+    <div class="auth-title">Enter password</div>
+    <input type="password" class="auth-input" id="authInput" placeholder="Status password" autocomplete="current-password">
+    <button class="auth-btn" id="authBtn">Unlock</button>
+    <div class="auth-error" id="authError">&nbsp;</div>
+  </div>
+
+  <div class="card hidden" id="statusCard">
+    <div class="logo loading" id="logo"><img src="splash.svg" alt="mragent"></div>
     <div class="status-text"><span class="dot loading" id="dot"></span><span id="label">Checking...</span></div>
     <div class="sub" id="sub">&nbsp;</div>
   </div>
@@ -95,22 +150,97 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    const authCard = document.getElementById("authCard");
+    const authInput = document.getElementById("authInput");
+    const authBtn = document.getElementById("authBtn");
+    const authError = document.getElementById("authError");
+    const statusCard = document.getElementById("statusCard");
     const dot = document.getElementById("dot");
     const label = document.getElementById("label");
     const sub = document.getElementById("sub");
     const logo = document.getElementById("logo");
 
-    // Presence pattern + staleness fallback: backend faqat status
-    // o'zgarganda yozadi (online/offline), lekin hard power-off (svet
-    // ketishi, tugmani bosib o'chirish) holatida SIGTERM kelmaydi va
-    // "offline" hech qachon yozilmaydi — Firestore'da "online" abadiy
-    // qolib ketadi. Shu holatni ushlash uchun: agar status="online"
-    // bo'lsa-da lastSeen juda eskirgan bo'lsa (>15s, chunki refresh_loop
-    // 240s'da bir yozadi — demak buni faqat client-side timerda tekshirish
-    // kerak), "offline" deb ko'rsatamiz.
+    const LS_VERSION_KEY = "MRagent_status_auth_version";
+    let API_BASE = null;
+    let currentAuthVersion = null;  // Firestore'dan kelgan joriy hash
+
+    // ---- 1) config/tunnel'dan backend URL, config/status_auth'dan joriy
+    // hash — ikkalasi ham real-time onSnapshot orqali kuzatiladi, chunki
+    // PASS o'zgarganda hash o'zgaradi va sahifa allaqachon ochiq bo'lsa
+    // ham darhol qayta qulflanishi kerak (0ms, sahifani yangilashsiz).
+    db.collection("config").doc("tunnel").onSnapshot((doc) => {
+      if (doc.exists && doc.data().url) {
+        API_BASE = doc.data().url.replace(/\/$/, "");
+      }
+    });
+
+    db.collection("config").doc("status_auth").onSnapshot((doc) => {
+      if (!doc.exists || !doc.data().version) return;
+      currentAuthVersion = doc.data().version;
+      const savedVersion = localStorage.getItem(LS_VERSION_KEY);
+      if (savedVersion && savedVersion === currentAuthVersion) {
+        showStatus();
+      } else {
+        // Versiya mos kelmadi (parol o'zgargan) yoki hali umuman
+        // saqlanmagan — localStorage'ni tozalab, parol so'raymiz.
+        localStorage.removeItem(LS_VERSION_KEY);
+        showAuthGate();
+      }
+    });
+
+    function showAuthGate() {
+      statusCard.classList.add("hidden");
+      authCard.classList.remove("hidden");
+      if (unsubscribeStatus) { unsubscribeStatus(); unsubscribeStatus = null; }
+    }
+
+    function showStatus() {
+      authCard.classList.add("hidden");
+      statusCard.classList.remove("hidden");
+      startListening();
+    }
+
+    async function submitAuth() {
+      const pass = authInput.value;
+      if (!pass) return;
+      if (!API_BASE) {
+        authError.textContent = "Tunnel not found yet — wait a moment and retry";
+        return;
+      }
+      authBtn.disabled = true;
+      authError.textContent = "";
+      try {
+        const res = await fetch(`${API_BASE}/status-auth`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pass }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          localStorage.setItem(LS_VERSION_KEY, data.version);
+          authInput.value = "";
+          showStatus();
+        } else {
+          authError.textContent = "Wrong password";
+        }
+      } catch (e) {
+        authError.textContent = "Couldn't reach the backend";
+      } finally {
+        authBtn.disabled = false;
+      }
+    }
+
+    authBtn.addEventListener("click", submitAuth);
+    authInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitAuth();
+    });
+
+    // ---- 2) Presence pattern + staleness fallback (o'zgarishsiz, faqat
+    // endi parol tasdiqlangandan keyin ishga tushadi) ----
     const STALE_AFTER_MS = 15 * 1000;
     let lastSnapshot = null;
     let staleTimer = null;
+    let unsubscribeStatus = null;
 
     function evaluateAndRender() {
       if (!lastSnapshot) return;
@@ -123,10 +253,9 @@
       }
     }
 
-    let unsubscribe = null;
-
     function startListening() {
-      unsubscribe = db.collection("config").doc("heartbeat")
+      if (unsubscribeStatus) return;  // ikki marta obuna bo'lib qolmaslik uchun
+      unsubscribeStatus = db.collection("config").doc("heartbeat")
         .onSnapshot(
           (doc) => {
             if (!doc.exists || !doc.data().lastSeen) {
@@ -137,10 +266,6 @@
             lastSnapshot = { status: data.status, lastSeen: data.lastSeen.toDate() };
             evaluateAndRender();
 
-            // Timer'ni qayta o'rnatamiz: agar shu vaqtdan STALE_AFTER_MS
-            // ichida yangi yozuv kelmasa (masalan hard power-off bo'lib,
-            // Firestore'dagi qiymat "online"da muzlab qolsa), qo'lda
-            // staleness tekshiruvini ishga tushiramiz.
             if (staleTimer) clearTimeout(staleTimer);
             staleTimer = setTimeout(evaluateAndRender, STALE_AFTER_MS + 500);
           },
@@ -165,8 +290,6 @@
       label.textContent = "Computer OFFLINE";
       sub.textContent = detail;
     }
-
-    startListening();
   </script>
 </body>
 </html>
