@@ -1083,7 +1083,7 @@ const firebaseConfig = {
     }
 
     async function loadTunnelUrl() {
-      loginTunnelStatus.textContent = "looking for tunnel...";
+      loginTunnelStatus.textContent = "connecting...";
       try {
         // Firestore'ning o'z "offline" deb qaror qilishi ichki SDK
         // darajasida juda uzoq davom etishi mumkin (ayniqsa ad-blocker
@@ -1104,9 +1104,9 @@ const firebaseConfig = {
 
         if (doc.exists && doc.data().url) {
           API_BASE = doc.data().url.replace(/\/$/, "");
-          loginTunnelStatus.textContent = "tunnel connected, enter your password";
+          loginTunnelStatus.textContent = "";
         } else {
-          loginTunnelStatus.textContent = "tunnel not found (Firestore empty)";
+          loginTunnelStatus.textContent = "couldn't connect — try again";
           showTunnelRetry();
         }
       } catch (e) {
@@ -1194,7 +1194,7 @@ const firebaseConfig = {
           showLogin("Wrong password.");
         }
       } catch (err) {
-        showLogin("Couldn't reach the backend. Is the tunnel up?");
+        showLogin("Couldn't reach the backend. Try again in a moment.");
       } finally {
         otpSubmitting = false;
         setOtpBoxesDisabled(false);
@@ -1208,7 +1208,7 @@ const firebaseConfig = {
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!API_BASE) {
-        loginError.textContent = "Tunnel not found yet, wait a moment and try again.";
+        loginError.textContent = "Not connected yet, wait a moment and try again.";
         loginError.classList.remove("hidden");
         return;
       }
@@ -1250,7 +1250,7 @@ const firebaseConfig = {
           loginError.classList.remove("hidden");
         }
       } catch (err) {
-        showLogin("Couldn't reach the backend. Is the tunnel up?");
+        showLogin("Couldn't reach the backend. Try again in a moment.");
       } finally {
         loginBtn.disabled = false;
         if (!otpStage) loginBtn.textContent = "Continue";
@@ -1865,7 +1865,7 @@ function createThoughtPanel(sourceText) {
         await consumeAgentStream(res, panel, message);
       } catch (err) {
         panel.remove();
-        addMessage("Couldn't reach the backend.\nIs the tunnel up?", "bot");
+        addMessage("Couldn't reach the backend.\nTry again in a moment.", "bot");
       } finally {
         sendBtn.disabled = false;
         input.focus();
