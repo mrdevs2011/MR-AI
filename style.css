@@ -28,6 +28,39 @@
   font-display: swap;
 }
 
+/* ---- Custom fonts — lokal .woff2 fayllardan (fonts/), har biri O'Z NOMI
+   bilan alohida font-family (bular bir oilaning bold/italic varianti EMAS —
+   4 xil mustaqil shrift, shuning uchun har biriga alohida font-family kerak,
+   font-weight/font-style bilan sun'iy bog'lash noto'g'ri bo'lardi) ---- */
+@font-face {
+  font-family: "MRFont Sans";
+  src: url("fonts/font-oddiy.woff2") format("woff2");
+  font-weight: 100 900; /* variable font — keng oralig'ini qo'llab-quvvatlaydi */
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Serif";
+  src: url("fonts/font-kursiv.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Mono";
+  src: url("fonts/font-belgilar.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MRFont Icons";
+  src: url("fonts/font-qalin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg:            #151515;  /* asosiy fon — Claude.ai skrinshotdan olingan */
   --bg-sidebar:    #111111;  /* sidebar — Claude.ai skrinshotdan aniqlangan, tuzatildi */
@@ -49,9 +82,9 @@
   --pending-bg:    #252114;  /* taxminiy */
   --pending-border:#524727;  /* taxminiy */
   --success:       #7FB069;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif;
-  --font-serif: "Source Serif Pro", Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --font-mono: "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "MRFont Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Helvetica, Arial, sans-serif;
+  --font-serif: "MRFont Serif", "Source Serif Pro", Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-mono: "MRFont Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
 * { font-family: var(--font-sans); }
