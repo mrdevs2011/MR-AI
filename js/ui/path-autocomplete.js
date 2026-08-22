@@ -128,7 +128,7 @@ export function applyTypedParts(token, newParts) {
   input.focus();
   input.setSelectionRange(newCaret, newCaret);
   autoResizeInput(input);
-  refreshPathDropdown();
+  refreshPathDropdown(true);
 }
 
 // ArrowLeft at the end of the token: drill OUT to the parent folder
@@ -161,6 +161,7 @@ export function renderPathDropdown() {
     row.addEventListener("mouseenter", () => {
       pathDropdownActiveIndex = i;
       renderPathDropdown();
+      syncInputWithActiveItem();
     });
     row.addEventListener("mousedown", (e) => {
       e.preventDefault(); // don't steal focus from the textarea before we apply the pick
@@ -168,6 +169,30 @@ export function renderPathDropdown() {
     });
     pathItemsList.appendChild(row);
   });
+}
+
+// While arrowing through the dropdown (or hovering a row), live-preview
+// the highlighted item's name into the textarea's current "/token" —
+// WITHOUT closing the dropdown or resetting the fetch/filter state
+// (unlike applyPathPick, which commits the pick and may trigger a
+// fresh browse). Only called from explicit navigation (arrow keys,
+// mouse hover) — NOT from every renderPathDropdown() call, since that
+// also fires on the initial fetch before the user has picked anything,
+// which would overwrite their typed text unprompted.
+function syncInputWithActiveItem() {
+  const item = pathDropdownItems[pathDropdownActiveIndex];
+  if (!item) return;
+  const token = currentPathToken();
+  if (!token) return;
+  const dirPart = token.text.slice(0, token.text.lastIndexOf("/") + 1); // keeps "/a/b/" so far
+  const preview = dirPart + item.name + (item.is_dir ? "/" : "");
+  if (preview === token.text) return; // already showing this — avoid pointless caret resets
+  const before = input.value.slice(0, pathDropdownTokenStart);
+  const after = input.value.slice(pathDropdownTokenStart + token.text.length);
+  input.value = before + preview + after;
+  const newCaret = (before + preview).length;
+  input.setSelectionRange(newCaret, newCaret);
+  autoResizeInput(input);
 }
 
 export function currentPathToken() {
@@ -185,7 +210,7 @@ export function currentPathToken() {
   return { start, text: between };
 }
 
-export async function refreshPathDropdown() {
+export async function refreshPathDropdown(forceRefresh = false) {
   const token = currentPathToken();
   if (!token || token.text.length < 1) { // needs at least the "/" itself
     hidePathDropdown();
@@ -195,12 +220,15 @@ export async function refreshPathDropdown() {
 
   // Breadcrumb shows immediately on a bare "/" — no need to wait for
   // the backend. The items list underneath only fetches once there's
-  // at least one more typed char, same as before.
+  // at least one more typed char, same as before — UNLESS forceRefresh
+  // is set (used right after picking a folder via Tab/Enter/click/
+  // ArrowRight), in which case we always fetch so the next level opens
+  // immediately without requiring the user to type anything.
   renderBreadcrumb(token.text);
   pathDropdown.style.display = "block";
   positionPathDropdown();
 
-  if (token.text.length < 2) { // "/" plus at least 1 more char
+  if (!forceRefresh && token.text.length < 2) { // "/" plus at least 1 more char
     pathDropdownItems = [];
     pathDropdownActiveIndex = -1;
     renderPathDropdown();
@@ -242,7 +270,7 @@ export function applyPathPick(item) {
   input.setSelectionRange(newCaret, newCaret);
   autoResizeInput(input);
   if (item.is_dir) {
-    refreshPathDropdown(); // stay open, drill into the folder just picked
+    refreshPathDropdown(true); // stay open, drill into the folder just picked — no typing required
   } else {
     hidePathDropdown();
   }
@@ -259,15 +287,14 @@ input.addEventListener("keydown", (e) => {
 
   if (e.key === "ArrowDown") {
     e.preventDefault();
-    console.log("[path-autocomplete] ArrowDown", { before: pathDropdownActiveIndex, itemsLen: pathDropdownItems.length });
     pathDropdownActiveIndex = Math.min(pathDropdownActiveIndex + 1, pathDropdownItems.length - 1);
-    console.log("[path-autocomplete] ArrowDown after", pathDropdownActiveIndex);
     renderPathDropdown();
+    syncInputWithActiveItem();
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
-    console.log("[path-autocomplete] ArrowUp", { before: pathDropdownActiveIndex, itemsLen: pathDropdownItems.length });
     pathDropdownActiveIndex = Math.max(pathDropdownActiveIndex - 1, 0);
     renderPathDropdown();
+    syncInputWithActiveItem();
   } else if (e.key === "ArrowLeft" && caretAtTokenEnd) {
     // Only hijack Left/Right when the caret sits at the end of the
     // "/token" (the normal spot while autocompleting) — mid-token
