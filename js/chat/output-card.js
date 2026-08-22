@@ -1,112 +1,119 @@
 /* =====================================================================
-   output-card.js — AI /output/ ga yozgan, foydalanuvchiga tayyor
-   berilgan faylning yuklab olish kartochkasi (Claude.ai file-card
-   uslubida: chapda ikonka, o'rtada nom+tur, o'ngda "Download" tugmasi).
+   send-message.js — sendMessage() va uning composer wiring'i.
+   script.js'dan ko'chirildi: sendMessage (2222), autoResizeInput
+   wiring + Enter-to-send keydown (2285-2306).
 
-   MUHIM: event-handler.js bu faylni allaqachon import qilib turardi
-   (`import { addOutputCard } from '../chat/output-card.js'`) va
-   chaqirardi ham, lekin fayl o'zi hech qachon yozilmagan edi — shu
-   sabab har safar AI /output/ ga fayl yozganda front-end import
-   xatosiga uchrardi. Shu yerda to'ldirildi.
+   Roadmap Step 10 shu funksiyani "main.js ichida yoki alohida
+   js/chat/send-message.js'da qoldirish mumkin, ikkalasi ham to'g'ri"
+   deb belgilagan — shu yerga chiqarildi, chunki main.js'ni faqat
+   orkestratsiya (import tartibi + DOMContentLoaded) uchun toza
+   saqlash maqsadga muvofiq (Uch oltin qoida #3: main.js'ga to'g'ridan-
+   to'g'ri kod yozilmaydi).
 
-   Auth eslatmasi: bu loyihada auth cookie orqali emas, custom header
-   (X-Login-Pass / X-Session-Id, ko'r auth/session.js -> authHeaders())
-   orqali ishlaydi. Shuning uchun oddiy <a href="..."> tugmasi ishlamaydi
-   (headersiz so'rov 401 qaytaradi) — fetch() bilan authHeaders() qo'shib
-   olib, blob'ni Object URL orqali yuklab beramiz.
+   MUHIM: bu fayl chat/, agent/, ui/ uchtasiga ham bog'liq — roadmap
+   buni aynan shunday tasvirlagan (path autocomplete, image attach, va
+   job polling shu yerdan chaqiriladi).
    ===================================================================== */
 
-import { getActiveChat, saveChats } from './chat-storage.js';
-import { authHeaders } from '../auth/session.js';
+import { authHeaders, markActive } from '../auth/session.js';
+import { API_BASE } from '../state/store.js';
+import { getActiveChat } from './chat-storage.js';
+import { setEmptyState } from './chat-history.js';
+import { addMessage } from './message-render.js';
+import { autoResizeInput } from '../utils/dom.js';
+import { hidePathDropdown, isPathDropdownOpenWithSelection } from '../ui/path-autocomplete.js';
+import { getPendingImageDataUrl, clearPendingImage } from '../ui/attach.js';
+import { createThoughtPanel } from '../agent/thought-panel.js';
+import { saveActiveJob, pollJob } from '../agent/job-polling.js';
+import { resetOutputCardDedup } from './output-card.js';
 
-function getEls() {
-  return {
-    chat: document.getElementById("chat-inner"),
-    chatScroll: document.getElementById("chat"),
-  };
-}
+const input = document.getElementById("message");
+const sendBtn = document.getElementById("send");
 
-// Fayl kengaytmasidan "turi" yorlig'ini chiqarib beradi (rasmdagi kabi
-// "HTML", "PY", "TXT"...). Kengaytma bo'lmasa umumiy "FILE".
-function fileTypeLabel(name) {
-  const base = name.split("/").pop() || name;
-  const dot = base.lastIndexOf(".");
-  if (dot <= 0 || dot === base.length - 1) return "FILE";
-  return base.slice(dot + 1).toUpperCase();
-}
+export async function sendMessage() {
+  if (!API_BASE) return;
+  const message = input.value.trim();
+  if (!message) return;
 
-function baseName(name) {
-  return name.split("/").pop() || name;
-}
+  // Yangi so'rov = yangi turn: output-card dedup xotirasini tozalab
+  // qo'yamiz, aks holda bu turndagi "index.html" o'tgan turndagi
+  // "index.html" kartochkasi bilan bir xil deb hisoblanib, ustidan
+  // yozilib ketadi.
+  resetOutputCardDedup();
 
-const FILE_ICON_SVG = `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-    <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke-linejoin="round"/>
-    <path d="M15 2v5h5" stroke-linejoin="round"/>
-  </svg>`;
+  hidePathDropdown();
 
-async function downloadFile(btn, file, category, filename) {
-  const { API_BASE } = await import('../state/store.js');
-  const original = btn.textContent;
-  btn.textContent = "...";
-  btn.disabled = true;
+  const active = getActiveChat();
+  const category = (active && active.category) || "general";
+  const filename = (active && active.filename) || "chat";
+  const tier = document.getElementById("tier").value || "high";
+  const mode = document.getElementById("mode").value || "general";
+
+  // If an image is staged (see attach handler below), it rides along
+  // with this one message so the model can look at it, then gets
+  // cleared — same one-shot-per-turn behavior as typing a question
+  // about a picture you just showed someone.
+  const imageToSend = getPendingImageDataUrl();
+  clearPendingImage();
+
+  addMessage(message, "user");
+  setEmptyState(false);
+  input.value = "";
+  autoResizeInput(input);
+  sendBtn.disabled = true;
+
+  const panel = createThoughtPanel(message);
+
   try {
-    const url = `${API_BASE}/download-output/${encodeURIComponent(category)}/${encodeURIComponent(filename)}/${file.split("/").map(encodeURIComponent).join("/")}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error("download failed: " + res.status);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = baseName(file);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch (e) {
-    btn.textContent = "Xato";
-    setTimeout(() => { btn.textContent = original; }, 1500);
-    return;
-  } finally {
-    btn.disabled = false;
-  }
-  btn.textContent = original;
-}
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ message, category, filename, tier, mode, image: imageToSend || undefined })
+    });
 
-export function addOutputCard(file, category, filename, persist = true, beforeEl = null) {
-  const { chat, chatScroll } = getEls();
-  const div = document.createElement("div");
-  div.className = "flex justify-start w-full";
-
-  const name = baseName(file);
-  const type = fileTypeLabel(file);
-
-  div.innerHTML = `
-    <div class="output-card">
-      <div class="output-card-icon">${FILE_ICON_SVG}</div>
-      <div class="output-card-info">
-        <div class="output-card-name">${name}</div>
-        <div class="output-card-type">${type}</div>
-      </div>
-      <button type="button" class="output-card-download">Download</button>
-    </div>`;
-
-  const btn = div.querySelector(".output-card-download");
-  btn.addEventListener("click", () => downloadFile(btn, file, category, filename));
-
-  if (beforeEl && beforeEl.parentNode === chat) {
-    chat.insertBefore(div, beforeEl);
-  } else {
-    chat.appendChild(div);
-  }
-  chatScroll.scrollTop = chatScroll.scrollHeight;
-
-  if (persist) {
-    const active = getActiveChat();
-    if (active) {
-      active.messages.push({ kind: "output_file", file });
-      saveChats();
+    if (res.status === 401) {
+      panel.remove();
+      const { handleAuthFailure } = await import('../auth/login.js');
+      await handleAuthFailure(res);
+      return;
     }
+    markActive();
+
+    const data = await res.json().catch(() => ({}));
+    if (!data.job_id) {
+      panel.remove();
+      addMessage(data.error || "No job_id from backend.", "bot");
+      return;
+    }
+    // job_id'ni localStorage'ga yozib qo'yamiz — shu bilan refresh
+    // bossang ham, sahifani qayta ochsang ham, resumeActiveJobIfAny()
+    // aynan shu ish qayerda qolgan bo'lsa, o'sha yerdan davom
+    // ettirishni biladi, chunki ishning o'zi backend'da tirik.
+    saveActiveJob(data.job_id, category, filename);
+    await pollJob(data.job_id, panel, message);
+  } catch (err) {
+    panel.remove();
+    addMessage("Couldn't reach the backend.\nTry again in a moment.", "bot");
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
   }
-  return div;
 }
+
+sendBtn.addEventListener("click", sendMessage);
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    // If the "/" path dropdown is open AND actually has a pickable
+    // item highlighted, Enter picks that suggestion instead of
+    // sending — path-autocomplete.js's own keydown listener (registered
+    // separately) handles that case. A bare "/" with no items yet
+    // (breadcrumb-only) must NOT block sending.
+    if (isPathDropdownOpenWithSelection()) return;
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// ---- composer textarea auto-grow (1 line -> up to ~200px, then scrolls) ----
+input.addEventListener("input", () => autoResizeInput(input));
+requestAnimationFrame(() => autoResizeInput(input));
