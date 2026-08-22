@@ -46,6 +46,7 @@ pathDropdown.appendChild(pathItemsList);
 let pathDropdownItems = [];
 let pathDropdownActiveIndex = -1;
 let pathDropdownTokenStart = -1; // index in input.value where the current "/token" begins
+let pathDropdownBaseDir = ""; // the stable "/a/b/" directory part items are listed under — set once per fetch, read by syncInputWithActiveItem so preview text doesn't drift as it mutates the input
 let pathBrowseAbortController = null;
 
 export function hidePathDropdown() {
@@ -55,6 +56,7 @@ export function hidePathDropdown() {
   pathDropdownItems = [];
   pathDropdownActiveIndex = -1;
   pathDropdownTokenStart = -1;
+  pathDropdownBaseDir = "";
 }
 
 export function positionPathDropdown() {
@@ -179,16 +181,25 @@ export function renderPathDropdown() {
 // mouse hover) — NOT from every renderPathDropdown() call, since that
 // also fires on the initial fetch before the user has picked anything,
 // which would overwrite their typed text unprompted.
+//
+// MUHIM: dirPart pathDropdownBaseDir'dan olinadi (refreshPathDropdown
+// har fetch boshida qayd etadi), currentPathToken()'ning HOZIRGI
+// matnidan EMAS. Sabab: bu funksiya inputni har chaqirilganda
+// o'zgartiradi, shuning uchun keyingi chaqiriqda currentPathToken()
+// endi o'zimiz yozib qo'ygan (allaqachon mutatsiyaga uchragan) matnni
+// o'qib, "/chats/" o'rniga "/chats/chat_foo/" kabi noto'g'ri chuqurroq
+// dirPart hisoblab chiqarardi — natijada har ArrowDown bosilganda
+// tanlov noto'g'ri (aslida hali fetch qilinmagan) chuqurlikka yozilib,
+// ro'yxat elementlari orqaga-oldinga "sakrab" ko'rinar edi.
 function syncInputWithActiveItem() {
   const item = pathDropdownItems[pathDropdownActiveIndex];
   if (!item) return;
-  const token = currentPathToken();
-  if (!token) return;
-  const dirPart = token.text.slice(0, token.text.lastIndexOf("/") + 1); // keeps "/a/b/" so far
-  const preview = dirPart + item.name + (item.is_dir ? "/" : "");
-  if (preview === token.text) return; // already showing this — avoid pointless caret resets
+  if (pathDropdownTokenStart === -1) return;
+  const preview = pathDropdownBaseDir + item.name + (item.is_dir ? "/" : "");
+  const currentTokenText = input.value.slice(pathDropdownTokenStart, input.selectionStart);
+  if (preview === currentTokenText) return; // already showing this — avoid pointless caret resets
   const before = input.value.slice(0, pathDropdownTokenStart);
-  const after = input.value.slice(pathDropdownTokenStart + token.text.length);
+  const after = input.value.slice(input.selectionStart);
   input.value = before + preview + after;
   const newCaret = (before + preview).length;
   input.setSelectionRange(newCaret, newCaret);
@@ -238,6 +249,12 @@ export async function refreshPathDropdown(forceRefresh = false) {
   const active = getActiveChat();
   const category = (active && active.category) || "general";
   const filename = (active && active.filename) || "chat";
+
+  // Snapshot the directory part NOW, before the async fetch, so later
+  // ArrowUp/Down syncs always write into the same slot regardless of
+  // how many times the input got mutated while the request was in
+  // flight or afterwards.
+  pathDropdownBaseDir = token.text.endsWith("/") ? token.text : token.text.slice(0, token.text.lastIndexOf("/") + 1);
 
   if (pathBrowseAbortController) pathBrowseAbortController.abort();
   pathBrowseAbortController = new AbortController();
