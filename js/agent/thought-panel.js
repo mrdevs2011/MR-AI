@@ -33,6 +33,19 @@ function getEls() {
 // guessing wrong.
 const _SENDING_LABEL = { uz: "So'rov yuborilmoqda", ru: "Отправка запроса", en: "Sending request" };
 
+// PONDER WORDS — Claude uslubidagi "o'lik vaqt to'ldiruvchi" so'zlar.
+// Backend "thinking"/sending_request event'idan keyin, LLM birinchi
+// haqiqiy tokenini (yoki birinchi action'ini) chiqarguncha o'tadigan
+// bo'sh oraliqda — hech qanday real ma'lumotga bog'liq bo'lmagan,
+// SOF vizual signal: "tizim ishlayapti, osilib qolmagan". Shu sabab
+// backend'dan kelmaydi, mutlaqo frontend-only va random.
+const _PONDER_WORDS = {
+  uz: ["Mulohaza qilinmoqda", "Fikr yuritilmoqda", "Chamalanmoqda", "O'ylanmoqda", "Miya ishlatilmoqda", "Tahlil qilinmoqda", "Reja tuzilmoqda"],
+  ru: ["Обдумывается", "Размышляет", "Взвешивает", "Прикидывает", "Соображает", "Анализирует", "Формулирует ответ"],
+  en: ["Pondering", "Picturing", "Mulling", "Contemplating", "Noodling", "Percolating", "Ruminating", "Puzzling"],
+};
+const _PONDER_INTERVAL_MS = 1700;
+
 // STEP UI — Claude Code uslubidagi step ikonkalari (lucide-uslubidagi
 // oddiy, ikki rangli chiziqli SVG'lar). action nomi bo'yicha tanlanadi;
 // noma'lum action bo'lsa terminal ikonkasi (STEP_ICONS.command) default
@@ -105,9 +118,47 @@ export function createThoughtPanel(sourceText) {
   let liveStep = null;
   let liveSpanEl = null;
 
+  // PONDER WORDS — interval ID va "shu so'zni ketma-ket 2 marta chiqarma"
+  // uchun oxirgi tanlangan so'z indeksini saqlaymiz.
+  let ponderIntervalId = null;
+  let lastPonderIdx = -1;
+
+  function stopPondering() {
+    if (ponderIntervalId !== null) {
+      clearInterval(ponderIntervalId);
+      ponderIntervalId = null;
+    }
+  }
+
   return {
     el: wrapper,
+    // logEl — tashqariga (event-handler.js) atayin ochilgan: shu orqali
+    // output-card (yuklab olish kartochkasi) HAM shu quti ICHIGA
+    // qo'shiladi, chat'ga alohida emas. Natija: panel yopilsa/collapse
+    // bo'lsa (thought-log-collapsed klassi), ICHIDAGI HAMMA narsa —
+    // step boxlar HAM, download kartochkasi HAM — birga yopiladi.
+    logEl,
+    markHasContent() { hasContent = true; },
+    // PONDER WORDS: LLM javob generatsiya qilayotgan "o'lik vaqt"da
+    // chaqiriladi (backend "sending_request" thinking event'i kelganda).
+    // Har chaqirilganda avvalgi interval'ni tozalab, yangisini boshlaydi
+    // — shuning uchun ikkinchi marta chaqirilsa ham xavfsiz (masalan
+    // ketma-ket ikkita "thinking" event kelib qolsa).
+    startPondering() {
+      stopPondering();
+      const words = _PONDER_WORDS[lang] || _PONDER_WORDS.uz;
+      const pick = () => {
+        let idx = Math.floor(Math.random() * words.length);
+        if (words.length > 1 && idx === lastPonderIdx) idx = (idx + 1) % words.length;
+        lastPonderIdx = idx;
+        labelEl.textContent = words[idx];
+      };
+      pick();
+      ponderIntervalId = setInterval(pick, _PONDER_INTERVAL_MS);
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+    },
     setLabel(text) {
+      stopPondering();
       labelEl.textContent = text;
       chatScroll.scrollTop = chatScroll.scrollHeight;
     },
@@ -122,6 +173,7 @@ export function createThoughtPanel(sourceText) {
     // ochiladigan blok o'rniga inline diff badge ko'rsatiladi ("main.py
     // +12 -3") — backend _line_diff_stats() orqali hisoblab beradi.
     addStep(evt) {
+      stopPondering();
       const action = evt.action || "command";
       if (stepCounts[action] !== undefined) stepCounts[action] += 1;
       hasContent = true;
@@ -183,6 +235,7 @@ export function createThoughtPanel(sourceText) {
       // ko'rinishi kerak — "thought-line" emas, alohida "thought-reasoning"
       // klassi bilan.
       if (!text) return;
+      stopPondering();
       const line = document.createElement("div");
       line.className = "thought-reasoning";
       line.innerHTML = `<span>${escapeHtml(text)}</span>`;
@@ -195,6 +248,7 @@ export function createThoughtPanel(sourceText) {
       // qatorga qo'shiladi (textContent += — innerHTML emas, shu bilan
       // XSS xavfsiz va tez, escapeHtml() har harfda chaqirilmaydi).
       if (!delta) return;
+      stopPondering();
       if (liveStep !== step || !liveSpanEl) {
         // Yangi agent qadami boshlandi (yoki bu — shu panelning birinchi
         // delta'si) — oldingi qatorni "muzlatib", yangisini ochamiz.
@@ -210,6 +264,7 @@ export function createThoughtPanel(sourceText) {
       chatScroll.scrollTop = chatScroll.scrollHeight;
     },
     remove() {
+      stopPondering();
       wrapper.remove();
     },
     // finish(): "final" event kelganda chaqiriladi. remove()dan farqi —
@@ -225,6 +280,7 @@ export function createThoughtPanel(sourceText) {
     // chatda qoldirishning ma'nosi yo'q, shuning uchun butunlay
     // o'chiramiz, xuddi eski remove() kabi.
     finish() {
+      stopPondering();
       if (!hasContent) {
         wrapper.remove();
         return;

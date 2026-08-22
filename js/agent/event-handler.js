@@ -23,7 +23,15 @@ import {
 // job'ga qayta ulanganda.
 export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
   if (evt.type === "thinking") {
-    panel?.setLabel(evt.label || "...");
+    // PONDER WORDS: bu event LLM javob generatsiya qilib bo'lgunicha
+    // (birinchi haqiqiy action/delta kelgunicha) faqat BIR MARTA keladi
+    // — backend'dagi statik "So'rov yuborilmoqda..." label o'rniga endi
+    // Claude uslubidagi tasodifiy, aylanib turuvchi so'zlar (Pondering/
+    // Picturing/Mulling va h.k.) ko'rsatiladi. Har qanday keyingi HAQIQIY
+    // event (action/step_result/model_thinking_delta) kelgan zahoti
+    // panel ichida avtomatik to'xtaydi (qarang: thought-panel.js
+    // stopPondering() chaqiruvlari).
+    panel?.startPondering();
   } else if (evt.type === "model_thinking") {
     // XATO FIX: avval backend bu event'ni ham {"type": "thinking", ...}
     // deb yuborardi (yuqoridagi loading-indicator bilan bir xil nom) —
@@ -57,7 +65,13 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
     if (evt.output_file) {
       const active = getActiveChat();
       if (active) {
-        addOutputCard(evt.output_file, active.category, active.filename, true, panel?.el || null);
+        // ENDI: output-card chat'ga alohida emas, panel.logEl ICHIGA
+        // qo'shiladi — shu bilan panel collapse bo'lganda download
+        // kartochkasi ham step boxlar bilan birga yopiladi/ochiladi.
+        // beforeEl endi kerak emas (tartib logEl ichida table
+        // qo'shilish tartibi bilan o'zi to'g'ri keladi).
+        addOutputCard(evt.output_file, active.category, active.filename, true, null, panel?.logEl || null);
+        panel?.markHasContent();
       }
     }
   } else if (evt.type === "final") {

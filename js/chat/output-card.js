@@ -82,8 +82,9 @@ async function downloadFile(btn, file, category, filename) {
 // doim "shu faylning yangi versiyasi" degani, boshqa fayl emas.
 const _liveCardsByName = new Map();
 
-export function addOutputCard(file, category, filename, persist = true, beforeEl = null) {
+export function addOutputCard(file, category, filename, persist = true, beforeEl = null, container = null) {
   const { chat, chatScroll } = getEls();
+  const target = container || chat;
   const name = baseName(file);
   const type = fileTypeLabel(file);
 
@@ -135,10 +136,10 @@ export function addOutputCard(file, category, filename, persist = true, beforeEl
   const btn = div.querySelector(".output-card-download");
   btn.addEventListener("click", () => downloadFile(btn, file, category, filename));
 
-  if (beforeEl && beforeEl.parentNode === chat) {
-    chat.insertBefore(div, beforeEl);
+  if (beforeEl && beforeEl.parentNode === target) {
+    target.insertBefore(div, beforeEl);
   } else {
-    chat.appendChild(div);
+    target.appendChild(div);
   }
   chatScroll.scrollTop = chatScroll.scrollHeight;
 
