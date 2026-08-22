@@ -48,8 +48,19 @@ let pathDropdownActiveIndex = -1;
 let pathDropdownTokenStart = -1; // index in input.value where the current "/token" begins
 let pathDropdownBaseDir = ""; // the stable "/a/b/" directory part items are listed under — set once per fetch, read by syncInputWithActiveItem so preview text doesn't drift as it mutates the input
 let pathBrowseAbortController = null;
+let blurHideTimer = null; // handle for the delayed hidePathDropdown() below — must be cancelable, see blur listener
 
 export function hidePathDropdown() {
+  // Kill any in-flight browse-path fetch FIRST — otherwise it can
+  // resolve after we've already cleared state below and repopulate
+  // pathDropdownItems/pathDropdownBaseDir for a dropdown that's
+  // supposed to be dead (a "zombie" state: invisible but stale data
+  // sitting in module state, ready to corrupt the NEXT open if any
+  // function reads it before a fresh fetch overwrites it).
+  if (pathBrowseAbortController) {
+    pathBrowseAbortController.abort();
+    pathBrowseAbortController = null;
+  }
   pathDropdown.style.display = "none";
   pathBreadcrumb.innerHTML = "";
   pathItemsList.innerHTML = "";
@@ -222,6 +233,11 @@ export function currentPathToken() {
 }
 
 export async function refreshPathDropdown(forceRefresh = false) {
+  // Any pending blur-close is stale the moment we're actively
+  // refreshing the dropdown (typing, or a forced refresh after a
+  // pick) — cancel it so it can't sneak in and close a dropdown
+  // that's clearly still in use.
+  if (blurHideTimer) { clearTimeout(blurHideTimer); blurHideTimer = null; }
   const token = currentPathToken();
   if (!token || token.text.length < 1) { // needs at least the "/" itself
     hidePathDropdown();
@@ -332,7 +348,24 @@ input.addEventListener("keydown", (e) => {
 input.addEventListener("blur", () => {
   // Small delay so a mousedown-triggered pick on the dropdown still
   // registers before the dropdown gets torn down on blur.
-  setTimeout(hidePathDropdown, 150);
+  //
+  // BUG FIX: this timer used to be fire-and-forget. If the textarea
+  // blurred and refocused within the 150ms window (tab-away-and-back,
+  // clicking a breadcrumb chip, fast refocus on mobile), the OLD timer
+  // was still armed and would fire hidePathDropdown() ~150ms later —
+  // silently killing a dropdown the user had just reopened by typing.
+  // Fix: track the timer handle and clear any previous one before
+  // arming a new one, so only the LATEST blur can ever close it, and
+  // an input/focus cycle within the window cancels it via
+  // refreshPathDropdown() below.
+  if (blurHideTimer) clearTimeout(blurHideTimer);
+  blurHideTimer = setTimeout(() => {
+    blurHideTimer = null;
+    hidePathDropdown();
+  }, 150);
+});
+input.addEventListener("focus", () => {
+  if (blurHideTimer) { clearTimeout(blurHideTimer); blurHideTimer = null; }
 });
 window.addEventListener("resize", () => { if (pathDropdown.style.display === "block") positionPathDropdown(); });
 
