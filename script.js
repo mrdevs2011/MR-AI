@@ -2230,6 +2230,13 @@ function createThoughtPanel(sourceText) {
       const tier = document.getElementById("tier").value || "high";
       const mode = document.getElementById("mode").value || "general";
 
+      // If an image is staged (see attach handler below), it rides along
+      // with this one message so the model can look at it, then gets
+      // cleared — same one-shot-per-turn behavior as typing a question
+      // about a picture you just showed someone.
+      const imageToSend = pendingImageDataUrl;
+      clearPendingImage();
+
       addMessage(message, "user");
       setEmptyState(false);
       input.value = "";
@@ -2242,7 +2249,7 @@ function createThoughtPanel(sourceText) {
         const res = await fetch(`${API_BASE}/chat`, {
           method: "POST",
           headers: authHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ message, category, filename, tier, mode })
+          body: JSON.stringify({ message, category, filename, tier, mode, image: imageToSend || undefined })
         });
 
         if (res.status === 401) {
@@ -2290,11 +2297,105 @@ function createThoughtPanel(sourceText) {
     input.addEventListener("input", autoResizeInput);
     requestAnimationFrame(autoResizeInput);
 
-    // ---- "+" attach button: no upload endpoint on the backend yet, so
-    // this is an honest stub for now instead of a fake working button.
+    // ---- "+" attach button: images get staged as an inline preview and
+    // ride along with the NEXT message you send (data:image/...;base64
+    // straight to POST /chat, so the vision-capable model can actually
+    // look at it — see call_openrouter's image_data_url handling on the
+    // backend). Anything else is uploaded straight to disk via /upload,
+    // same as before, since only images are analyzable by the model.
     const attachBtn = document.getElementById("attach-btn");
+    const attachInput = document.createElement("input");
+    attachInput.type = "file";
+    attachInput.className = "visually-hidden-select"; // reuse existing hide-but-keep-in-DOM class
+    document.body.appendChild(attachInput);
+
+    let pendingImageDataUrl = null;
+    let pendingImagePreviewEl = null;
+
+    function clearPendingImage() {
+      pendingImageDataUrl = null;
+      if (pendingImagePreviewEl) {
+        pendingImagePreviewEl.remove();
+        pendingImagePreviewEl = null;
+      }
+    }
+
+    function showPendingImagePreview(dataUrl, fileName) {
+      clearPendingImage();
+      pendingImageDataUrl = dataUrl;
+
+      const chip = document.createElement("div");
+      chip.style.cssText = "display:flex;align-items:center;gap:8px;max-width:720px;margin:0 auto 8px;padding:6px 10px;border-radius:10px;background:#1c1c1c;border:1px solid #333;";
+      chip.innerHTML = `
+        <img src="${dataUrl}" alt="${fileName}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;" />
+        <span style="flex:1;font-size:12px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fileName} — will be analyzed with your next message</span>
+        <button type="button" title="Remove" style="background:none;border:none;color:#999;cursor:pointer;font-size:16px;line-height:1;">×</button>
+      `;
+      chip.querySelector("button").addEventListener("click", clearPendingImage);
+
+      // Insert right above whichever composer copy is currently visible
+      // (empty-state slot or bottom-pinned footer slot).
+      const activeComposer = document.querySelector("#composer-slot-empty .composer-box, #composer-slot-footer .composer-box");
+      (activeComposer || composer).parentElement.insertBefore(chip, activeComposer || composer.firstChild);
+      pendingImagePreviewEl = chip;
+    }
+
     attachBtn?.addEventListener("click", () => {
-      alert("File upload isn't wired up on the backend yet — this button is a placeholder for a future version.");
+      if (!API_BASE) return;
+      attachInput.value = ""; // allow re-picking the same file twice in a row
+      attachInput.click();
+    });
+
+    attachInput.addEventListener("change", async () => {
+      const file = attachInput.files && attachInput.files[0];
+      if (!file) return;
+
+      if (file.type && file.type.startsWith("image/")) {
+        // Stage it — no network call yet. It gets attached to /chat's
+        // JSON body the moment the user actually sends a message.
+        const reader = new FileReader();
+        reader.onload = () => showPendingImagePreview(reader.result, file.name);
+        reader.onerror = () => addMessage("Couldn't read that image file.", "bot");
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      // Non-image files: unchanged behavior, straight to disk.
+      const active = getActiveChat();
+      const category = (active && active.category) || "general";
+      const filename = (active && active.filename) || "chat";
+
+      addMessage(`Uploading ${file.name}…`, "user", false);
+      setEmptyState(false);
+
+      const form = new FormData();
+      form.append("file", file);
+      form.append("category", category);
+      form.append("filename", filename);
+
+      try {
+        const res = await fetch(`${API_BASE}/upload`, {
+          method: "POST",
+          headers: authHeaders(), // no Content-Type here — the browser sets
+                                   // the multipart boundary itself for FormData
+          body: form
+        });
+
+        if (res.status === 401) {
+          await handleAuthFailure(res);
+          return;
+        }
+        markActive();
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.uploaded) {
+          addMessage(data.error || "Upload failed.", "bot");
+          return;
+        }
+        addMessage(`Uploaded "${data.filename}" (${data.size} bytes).`, "bot");
+      } catch (err) {
+        addMessage("Couldn't reach the backend to upload the file.", "bot");
+      }
     });
 
     // On load: if localStorage has a saved session, jump straight into the
