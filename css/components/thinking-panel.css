@@ -132,3 +132,45 @@
   align-items: flex-start;
   animation: fadeInThought .55s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ---- yakunlangan thinking blok: Claude uslubidagi yopiq/ochiladigan
+   panel. finish() javob tayyor bo'lgach thinking-row'ni o'chirib, shu
+   toggle tugmasini qo'shadi — thought-log o'zi DOMda qoladi, faqat
+   default holatda yashirilgan (max-height: 0), tugma bosilganda ochiladi. */
+.thought-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  margin-bottom: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.thought-log-toggle:hover {
+  color: var(--ink-secondary);
+}
+.thought-log-toggle::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+.thought-log-toggle[aria-expanded="true"]::before {
+  transform: rotate(90deg);
+}
+.thought-log-collapsed {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease;
+}
+.thought-log-collapsed.thought-log-open {
+  max-height: 2000px; /* uzun thinking matnlarini ham to'liq sig'diradi */
+  opacity: 1;
+  margin-bottom: 6px;
+}

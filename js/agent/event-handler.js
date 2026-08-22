@@ -56,7 +56,11 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
       addIOCard(inputText, evt.result || "", true, panel?.el || null, !!evt.blocked);
     }
   } else if (evt.type === "final") {
-    panel?.remove();
+    // finish(): "remove()"dan farqli — agar panelda haqiqiy thinking/
+    // action yozuvlari bo'lsa, ularni yo'qotmasdan, faqat animatsion
+    // qatorni olib tashlab, yopiq/ochiladigan blokka aylantiradi (bo'sh
+    // panel bo'lsa, hamon oddiy remove() kabi butunlay o'chadi).
+    panel?.finish();
     setPanel(null);
 
     if (evt.kind === "pending_confirmation") {

@@ -53,6 +53,7 @@ export function createThoughtPanel(sourceText) {
   const logEl = wrapper.querySelector("#thought-log");
   const rowEl = wrapper.querySelector("#thinking-row");
   const labelEl = wrapper.querySelector("#thinking-label");
+  let hasContent = false; // true as soon as anything lands in logEl — decides whether finish() leaves a collapsible block behind or removes the whole panel
 
   return {
     el: wrapper,
@@ -67,6 +68,7 @@ export function createThoughtPanel(sourceText) {
       line.className = "thought-line";
       line.innerHTML = `<span class="check">·</span><span>${escapeHtml(text)}</span>`;
       logEl.appendChild(line);
+      hasContent = true;
       chatScroll.scrollTop = chatScroll.scrollHeight;
     },
     addThought(text) {
@@ -81,10 +83,41 @@ export function createThoughtPanel(sourceText) {
       line.className = "thought-reasoning";
       line.innerHTML = `<span>${escapeHtml(text)}</span>`;
       logEl.appendChild(line);
+      hasContent = true;
       chatScroll.scrollTop = chatScroll.scrollHeight;
     },
     remove() {
       wrapper.remove();
+    },
+    // finish(): "final" event kelganda chaqiriladi. remove()dan farqi —
+    // butun panelni o'chirib tashlamaydi. Buning o'rniga faqat animatsion
+    // thinking-row'ni (orb + shimmer label + nuqtalar) yo'q qiladi, va
+    // agar log ichida haqiqatan biror narsa yozilgan bo'lsa (commitLine/
+    // addThought hech bo'lmasa bir marta chaqirilgan bo'lsa), logEl'ni
+    // Claude uslubidagi yopiq/ochiladigan blokka o'raydi — shu bilan
+    // "qanday o'ylagani" yakuniy javobdan pastda (aslida undan OLDIN,
+    // DOM tartibida) turib qoladi, foydalanuvchi xohlasa ochib ko'radi.
+    // Agar hech narsa yozilmagan bo'lsa (masalan juda qisqa/tez javob,
+    // hech qanday thinking/action bo'lmagan holat) — bo'sh qobiqni
+    // chatda qoldirishning ma'nosi yo'q, shuning uchun butunlay
+    // o'chiramiz, xuddi eski remove() kabi.
+    finish() {
+      if (!hasContent) {
+        wrapper.remove();
+        return;
+      }
+      rowEl.remove();
+      logEl.classList.add("thought-log-collapsed");
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "thought-log-toggle";
+      toggle.textContent = "Fikrlash jarayoni";
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.addEventListener("click", () => {
+        const isOpen = logEl.classList.toggle("thought-log-open");
+        toggle.setAttribute("aria-expanded", String(isOpen));
+      });
+      wrapper.querySelector("div").insertBefore(toggle, logEl);
     }
   };
 }
