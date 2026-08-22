@@ -126,10 +126,13 @@ export async function renderMessages() {
   setEmptyState(isEmpty);
   if (isEmpty) return;
   const { addIOCard } = await import('./io-card.js');
+  const { addOutputCard } = await import('./output-card.js');
   const { addMessage } = await import('./message-render.js');
   active.messages.forEach(m => {
     if (m.kind === "io") {
       addIOCard(m.input, m.output, false);
+    } else if (m.kind === "output_file") {
+      addOutputCard(m.file, active.category, active.filename, false);
     } else {
       addMessage(m.text, m.kind, false);
     }

@@ -1,0 +1,69 @@
+/* =====================================================================
+   output-card.css — AI /output/ ga yozgan, foydalanuvchiga tayyor
+   berilgan faylning yuklab olish kartochkasi (Claude.ai file-card
+   uslubida: chapda fayl-turi ikonkasi, o'rtada nom+tur, o'ngda
+   "Download" tugmasi). base.css'dagi CSS o'zgaruvchilariga bog'liq.
+   ===================================================================== */
+
+.output-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  max-width: 420px;
+}
+
+.output-card-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--bg-code);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.output-card-icon svg { width: 20px; height: 20px; }
+
+.output-card-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.output-card-name {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.output-card-type {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.output-card-download {
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.output-card-download:hover { background: var(--border); }
+.output-card-download:active { transform: translateY(1px); }
