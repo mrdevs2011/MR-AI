@@ -2285,10 +2285,12 @@ function createThoughtPanel(sourceText) {
     sendBtn.addEventListener("click", sendMessage);
     input.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
-        // If the "/" path dropdown is open, Enter picks the highlighted
-        // suggestion instead of sending — the second keydown listener
-        // below (registered after the dropdown exists) handles that case.
-        if (pathDropdown.style.display === "block") return;
+        // If the "/" path dropdown is open AND actually has a pickable
+        // item highlighted, Enter picks that suggestion instead of
+        // sending — the second keydown listener below (registered after
+        // the dropdown exists) handles that case. A bare "/" with no
+        // items yet (breadcrumb-only) must NOT block sending.
+        if (pathDropdown.style.display === "block" && pathDropdownActiveIndex >= 0 && pathDropdownItems.length) return;
         e.preventDefault();
         sendMessage();
       }
@@ -2309,8 +2311,20 @@ function createThoughtPanel(sourceText) {
     // resolve_path() rules the AI itself uses, including the "/chats/..."
     // virtual root), so what you pick is guaranteed to be a real path.
     const pathDropdown = document.createElement("div");
-    pathDropdown.style.cssText = "position:absolute;z-index:50;display:none;max-height:220px;overflow-y:auto;min-width:240px;background:#1c1c1c;border:1px solid #333;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;";
+    pathDropdown.style.cssText = "position:absolute;z-index:50;display:none;max-width:min(420px,90vw);background:#1c1c1c;border:1px solid #333;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);overflow:hidden;";
     document.body.appendChild(pathDropdown);
+
+    // Breadcrumb bar: sits on top of the items list, inside the same box.
+    // Fixed root the user always stands in — everything typed after "/"
+    // is appended live as extra segments (mragent / user / chats / ...).
+    const PATH_ROOT_SEGMENTS = ["mragent", "user"];
+    const pathBreadcrumb = document.createElement("div");
+    pathBreadcrumb.style.cssText = "display:flex;align-items:center;flex-wrap:wrap;gap:2px;padding:7px 10px;font-size:12px;color:#999;border-bottom:1px solid #2a2a2a;background:#181818;user-select:none;";
+    pathDropdown.appendChild(pathBreadcrumb);
+
+    const pathItemsList = document.createElement("div");
+    pathItemsList.style.cssText = "max-height:220px;overflow-y:auto;padding:4px;";
+    pathDropdown.appendChild(pathItemsList);
 
     let pathDropdownItems = [];
     let pathDropdownActiveIndex = -1;
@@ -2319,7 +2333,8 @@ function createThoughtPanel(sourceText) {
 
     function hidePathDropdown() {
       pathDropdown.style.display = "none";
-      pathDropdown.innerHTML = "";
+      pathBreadcrumb.innerHTML = "";
+      pathItemsList.innerHTML = "";
       pathDropdownItems = [];
       pathDropdownActiveIndex = -1;
       pathDropdownTokenStart = -1;
@@ -2333,8 +2348,95 @@ function createThoughtPanel(sourceText) {
       pathDropdown.style.transform = "translateY(-100%)"; // open upward, composer sits at the bottom
     }
 
+    // Rebuilds "/typed/text" -> ["chats", "proj1"] (typed parts only, no leading slash).
+    function typedPathParts(tokenText) {
+      return tokenText.slice(1).split("/").filter(Boolean);
+    }
+
+    function renderBreadcrumb(tokenText) {
+      pathBreadcrumb.innerHTML = "";
+      const typedParts = typedPathParts(tokenText);
+      const isGhost = typedParts.length === 0; // bare "/" -> show "chats" as a dim placeholder
+      const segments = isGhost ? [...PATH_ROOT_SEGMENTS, "chats"] : [...PATH_ROOT_SEGMENTS, ...typedParts];
+
+      segments.forEach((seg, i) => {
+        const isLast = i === segments.length - 1;
+        const ghost = isGhost && isLast;
+        const clickable = !ghost; // every real segment can be clicked to jump back
+
+        const chip = document.createElement("span");
+        chip.textContent = seg;
+        chip.style.cssText = "padding:2px 4px;border-radius:4px;white-space:nowrap;" +
+          (ghost ? "color:#666;font-style:italic;" : "color:#bbb;") +
+          (isLast && !ghost ? "color:#fff;font-weight:600;" : "") +
+          (clickable ? "cursor:pointer;" : "cursor:default;");
+        if (clickable) {
+          chip.addEventListener("mouseenter", () => { chip.style.background = "#2e2e2e"; });
+          chip.addEventListener("mouseleave", () => { chip.style.background = "transparent"; });
+          chip.addEventListener("mousedown", (e) => {
+            e.preventDefault(); // keep textarea focus
+            jumpBreadcrumbTo(i);
+          });
+        }
+        pathBreadcrumb.appendChild(chip);
+
+        if (!isLast) {
+          const sep = document.createElement("span");
+          sep.textContent = "/";
+          sep.style.cssText = "color:#555;padding:0 1px;";
+          pathBreadcrumb.appendChild(sep);
+        }
+      });
+    }
+
+    // Clicking a breadcrumb chip at index i truncates the typed token back
+    // to that level. i counts across PATH_ROOT_SEGMENTS + typed parts, so
+    // clicking "mragent" or "user" (the fixed root) collapses to a bare "/".
+    function jumpBreadcrumbTo(i) {
+      const token = currentPathToken();
+      if (!token) return;
+      const typedParts = typedPathParts(token.text);
+      const rootLen = PATH_ROOT_SEGMENTS.length;
+      const keep = Math.max(0, i - rootLen + 1); // how many typed parts survive
+      applyTypedParts(token, typedParts.slice(0, keep));
+    }
+
+    // Writes newParts back into the current "/token" and re-renders.
+    function applyTypedParts(token, newParts) {
+      const newToken = "/" + newParts.join("/") + (newParts.length ? "/" : "");
+      const before = input.value.slice(0, token.start);
+      const after = input.value.slice(token.start + token.text.length);
+      input.value = before + newToken + after;
+      const newCaret = (before + newToken).length;
+      input.focus();
+      input.setSelectionRange(newCaret, newCaret);
+      autoResizeInput();
+      refreshPathDropdown();
+    }
+
+    // ArrowLeft at the end of the token: drill OUT to the parent folder
+    // (go up one level, dropping the last typed segment).
+    function stepBreadcrumbBack() {
+      const token = currentPathToken();
+      if (!token) return;
+      const typedParts = typedPathParts(token.text);
+      if (!typedParts.length) return; // already at bare "/", nothing to go up from
+      applyTypedParts(token, typedParts.slice(0, -1));
+    }
+
+    // ArrowRight at the end of the token: drill INTO the currently
+    // highlighted folder in the items list below (Right = go deeper).
+    function stepBreadcrumbForward() {
+      const token = currentPathToken();
+      if (!token) return;
+      const picked = pathDropdownItems[pathDropdownActiveIndex];
+      if (!picked || !picked.is_dir) return; // only folders can be entered
+      const typedParts = typedPathParts(token.text);
+      applyTypedParts(token, [...typedParts, picked.name]);
+    }
+
     function renderPathDropdown() {
-      pathDropdown.innerHTML = "";
+      pathItemsList.innerHTML = "";
       pathDropdownItems.forEach((item, i) => {
         const row = document.createElement("div");
         row.textContent = (item.is_dir ? "📁 " : "📄 ") + item.name;
@@ -2347,9 +2449,8 @@ function createThoughtPanel(sourceText) {
           e.preventDefault(); // don't steal focus from the textarea before we apply the pick
           applyPathPick(item);
         });
-        pathDropdown.appendChild(row);
+        pathItemsList.appendChild(row);
       });
-      pathDropdown.style.display = pathDropdownItems.length ? "block" : "none";
     }
 
     function currentPathToken() {
@@ -2369,11 +2470,25 @@ function createThoughtPanel(sourceText) {
 
     async function refreshPathDropdown() {
       const token = currentPathToken();
-      if (!token || token.text.length < 2) { // "/" plus at least 1 more char
+      if (!token || token.text.length < 1) { // needs at least the "/" itself
         hidePathDropdown();
         return;
       }
       pathDropdownTokenStart = token.start;
+
+      // Breadcrumb shows immediately on a bare "/" — no need to wait for
+      // the backend. The items list underneath only fetches once there's
+      // at least one more typed char, same as before.
+      renderBreadcrumb(token.text);
+      pathDropdown.style.display = "block";
+      positionPathDropdown();
+
+      if (token.text.length < 2) { // "/" plus at least 1 more char
+        pathDropdownItems = [];
+        pathDropdownActiveIndex = -1;
+        renderPathDropdown();
+        return;
+      }
 
       const active = getActiveChat();
       const category = (active && active.category) || "general";
@@ -2389,7 +2504,7 @@ function createThoughtPanel(sourceText) {
         const data = await res.json().catch(() => ({}));
         pathDropdownItems = Array.isArray(data.entries) ? data.entries : [];
         pathDropdownActiveIndex = pathDropdownItems.length ? 0 : -1;
-        if (pathDropdownItems.length) positionPathDropdown();
+        positionPathDropdown();
         renderPathDropdown();
       } catch (err) {
         if (err.name !== "AbortError") hidePathDropdown();
@@ -2422,6 +2537,9 @@ function createThoughtPanel(sourceText) {
 
     input.addEventListener("keydown", (e) => {
       if (pathDropdown.style.display !== "block") return;
+      const token = currentPathToken();
+      const caretAtTokenEnd = token && input.selectionStart === token.start + token.text.length;
+
       if (e.key === "ArrowDown") {
         e.preventDefault();
         pathDropdownActiveIndex = Math.min(pathDropdownActiveIndex + 1, pathDropdownItems.length - 1);
@@ -2430,6 +2548,15 @@ function createThoughtPanel(sourceText) {
         e.preventDefault();
         pathDropdownActiveIndex = Math.max(pathDropdownActiveIndex - 1, 0);
         renderPathDropdown();
+      } else if (e.key === "ArrowLeft" && caretAtTokenEnd) {
+        // Only hijack Left/Right when the caret sits at the end of the
+        // "/token" (the normal spot while autocompleting) — mid-token
+        // editing keeps native caret movement untouched.
+        e.preventDefault();
+        stepBreadcrumbBack();
+      } else if (e.key === "ArrowRight" && caretAtTokenEnd) {
+        e.preventDefault();
+        stepBreadcrumbForward();
       } else if (e.key === "Tab" || (e.key === "Enter" && pathDropdownActiveIndex >= 0)) {
         e.preventDefault();
         if (pathDropdownItems[pathDropdownActiveIndex]) applyPathPick(pathDropdownItems[pathDropdownActiveIndex]);
