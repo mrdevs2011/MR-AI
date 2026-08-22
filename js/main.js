@@ -13,8 +13,7 @@
    2) selects.js, sidebar.js, terminal.js — o'zini avtomatik ishga
       tushiradigan modullar (top-level side-effect bor), composer
       tayyor bo'lgandan keyin yuklanishi kerak.
-   3) path-autocomplete.js, attach.js — composer ichidagi #message/
-      #attach-btn'ga bog'liq.
+   3) attach.js — composer ichidagi #attach-btn'ga bog'liq.
    4) send-message.js — hammasidan keyin, chunki sendMessage() ularning
       barchasini ishlatadi.
    5) auth/session.js, auth/login.js — mustaqil, lekin showApp()
@@ -33,7 +32,6 @@ import './ui/composer.js';
 import './ui/selects.js';
 import './ui/sidebar.js';
 import './ui/terminal.js';
-import './ui/path-autocomplete.js';
 import './ui/attach.js';
 
 import { sendMessage } from './chat/send-message.js';

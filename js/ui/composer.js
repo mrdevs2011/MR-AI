@@ -6,7 +6,7 @@
    slot bilan almashtirib turadi.
    script.js'dan ko'chirildi: composer DOM qurilishi (422-473-qatorlar).
 
-   MUHIM: bu fayl ui/selects.js, ui/path-autocomplete.js, ui/attach.js,
+   MUHIM: bu fayl ui/selects.js, ui/attach.js,
    chat/*, agent/* — bularning barchasidan OLDIN yuklanishi kerak,
    chunki ular composer ichidagi #mode, #tier, #message, #send va
    boshqa elementlarni document.getElementById orqali qidiradi. main.js

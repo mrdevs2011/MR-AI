@@ -21,7 +21,6 @@ import { getActiveChat } from './chat-storage.js';
 import { setEmptyState } from './chat-history.js';
 import { addMessage } from './message-render.js';
 import { autoResizeInput } from '../utils/dom.js';
-import { hidePathDropdown, isPathDropdownOpenWithSelection } from '../ui/path-autocomplete.js';
 import { getPendingImageDataUrl, clearPendingImage } from '../ui/attach.js';
 import { createThoughtPanel } from '../agent/thought-panel.js';
 import { saveActiveJob, pollJob } from '../agent/job-polling.js';
@@ -40,8 +39,6 @@ export async function sendMessage() {
   // "index.html" kartochkasi bilan bir xil deb hisoblanib, ustidan
   // yozilib ketadi.
   resetOutputCardDedup();
-
-  hidePathDropdown();
 
   const active = getActiveChat();
   const category = (active && active.category) || "general";
@@ -103,12 +100,6 @@ export async function sendMessage() {
 sendBtn.addEventListener("click", sendMessage);
 input.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) {
-    // If the "/" path dropdown is open AND actually has a pickable
-    // item highlighted, Enter picks that suggestion instead of
-    // sending — path-autocomplete.js's own keydown listener (registered
-    // separately) handles that case. A bare "/" with no items yet
-    // (breadcrumb-only) must NOT block sending.
-    if (isPathDropdownOpenWithSelection()) return;
     e.preventDefault();
     sendMessage();
   }
