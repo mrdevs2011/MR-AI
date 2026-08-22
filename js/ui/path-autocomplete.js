@@ -256,6 +256,15 @@ export async function refreshPathDropdown(forceRefresh = false) {
   positionPathDropdown();
 
   if (!forceRefresh && token.text.length < 2) { // "/" plus at least 1 more char
+    // BUG FIX: this branch used to just clear pathDropdownItems and
+    // return WITHOUT touching pathBrowseAbortController. If a fetch
+    // for a longer token was already in flight (user typed "/ab",
+    // request went out, then hit backspace back down to "/a"), that
+    // in-flight response would land seconds later and silently
+    // repopulate pathDropdownItems with entries for the WRONG,
+    // already-abandoned directory — the dropdown would show stale
+    // results the user never asked for. Abort it here too.
+    if (pathBrowseAbortController) { pathBrowseAbortController.abort(); pathBrowseAbortController = null; }
     pathDropdownItems = [];
     pathDropdownActiveIndex = -1;
     renderPathDropdown();
