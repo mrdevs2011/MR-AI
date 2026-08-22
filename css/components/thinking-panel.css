@@ -133,6 +133,100 @@
   animation: fadeInThought .55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ---- STEP UI — Claude Code uslubidagi ochiladigan/yopiladigan step
+   kartochkasi. Har bir step_result (command/read_file/list_dir/
+   web_search/write_file) endi shu blokka aylanadi — bash input va
+   Output ENDI thought-log ICHIDA joylashadi, alohida tashqi karta
+   sifatida emas. ---- */
+.thought-step {
+  animation: fadeInThought .55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.thought-step-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 3px 0;
+  margin: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+.thought-step-header-static {
+  cursor: default;
+}
+.thought-step-header:not(.thought-step-header-static):hover {
+  color: var(--ink-secondary);
+}
+.thought-step-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+.thought-step-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thought-step-chevron {
+  font-size: 10px;
+  opacity: 0.6;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.thought-step-open > .thought-step-header .thought-step-chevron {
+  transform: rotate(90deg);
+}
+.thought-step-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono, monospace);
+}
+.thought-step-badge .diff-file {
+  color: var(--muted);
+  opacity: 0.75;
+}
+.thought-step-badge .diff-add { color: #4caf7d; }
+.thought-step-badge .diff-remove { color: #d16969; }
+.thought-step-body {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+  margin-left: 20px;
+}
+.thought-step-open .thought-step-body {
+  max-height: 2000px;
+  opacity: 1;
+  margin: 4px 0 6px 20px;
+}
+/* .io-section / .io-header / .io-content — avval io-card.js tashqi
+   kartasiga tegishli edi (chat oqimida, doim ochiq), endi xuddi shu
+   uslub thought-step-body ICHIDA, kichraytirilgan holda ishlatiladi. */
+.thought-step-body .io-section + .io-section {
+  margin-top: 6px;
+}
+.thought-step-body .io-header {
+  font-size: 11px;
+  opacity: 0.65;
+  margin-bottom: 2px;
+}
+.thought-step-body .io-content {
+  font-size: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
 /* ---- yakunlangan thinking blok: Claude uslubidagi yopiq/ochiladigan
    panel. finish() javob tayyor bo'lgach thinking-row'ni o'chirib, shu
    toggle tugmasini qo'shadi — thought-log o'zi DOMda qoladi, faqat
