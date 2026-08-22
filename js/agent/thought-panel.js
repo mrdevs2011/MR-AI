@@ -69,6 +69,20 @@ export function createThoughtPanel(sourceText) {
       logEl.appendChild(line);
       chatScroll.scrollTop = chatScroll.scrollHeight;
     },
+    addThought(text) {
+      // Model'ning ichki fikrlash matni (backend "model_thinking" SSE
+      // event'i) — bu "step_result" emas (hech qanday action bajarilmadi),
+      // shuning uchun commitLine()dagi checkmark uslubi mos emas.
+      // Vizual jihatdan italic/muted, oddiy action qatorlaridan alohida
+      // ko'rinishi kerak — "thought-line" emas, alohida "thought-reasoning"
+      // klassi bilan.
+      if (!text) return;
+      const line = document.createElement("div");
+      line.className = "thought-reasoning";
+      line.innerHTML = `<span>${escapeHtml(text)}</span>`;
+      logEl.appendChild(line);
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+    },
     remove() {
       wrapper.remove();
     }

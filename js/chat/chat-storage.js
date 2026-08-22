@@ -65,6 +65,17 @@ export function backendMessagesToUi(messages, outputs) {
     if (m.role === "pending" || m.role === "error") {
       return { text: m.content, kind: "bot" };
     }
+    if (m.role === "THINKING") {
+      // XATO FIX: bu branch yo'q edi — "THINKING" roli generic else'ga
+      // tushib, kind: "bot" bilan oddiy assistant xabari sifatida
+      // ko'rsatilardi (refresh/reload'dan keyin). Live SSE paytida esa
+      // bu matn thought-panel ichida alohida, italic/muted qatorda
+      // ko'rinadi (thought-panel.js addThought()). Ikkalasi bir xil
+      // ko'rinishi uchun alohida "thought" kind qo'shildi — pastda
+      // renderMessages() (chat-history.js) buni thought-panel bilan bir
+      // xil vizual uslubda chizadi, oddiy chat pufakchasi sifatida emas.
+      return { text: m.content, kind: "thought" };
+    }
     return {
       text: m.content,
       kind: m.role === "USER" ? "user" : "bot",

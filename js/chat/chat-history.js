@@ -133,6 +133,17 @@ export async function renderMessages() {
       addIOCard(m.input, m.output, false, null, !!m.blocked);
     } else if (m.kind === "output_file") {
       addOutputCard(m.file, active.category, active.filename, false);
+    } else if (m.kind === "thought") {
+      // Live SSE paytidagi thought-panel.js addThought() bilan bir xil
+      // vizual uslub (.thought-reasoning, thinking-panel.css) — reload
+      // bo'lgandan keyin ham model'ning ichki fikrlash matni oddiy chat
+      // pufakchasi emas, alohida ko'rinishda qolishi uchun.
+      const { chat: chatEl } = getEls();
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex justify-start w-full";
+      wrapper.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-1"><div class="thought-reasoning"><span></span></div></div>`;
+      wrapper.querySelector(".thought-reasoning span").textContent = m.text || "";
+      chatEl.appendChild(wrapper);
     } else {
       addMessage(m.text, m.kind, false);
     }

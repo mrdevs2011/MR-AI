@@ -25,6 +25,14 @@ import {
 export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
   if (evt.type === "thinking") {
     panel?.setLabel(evt.label || "...");
+  } else if (evt.type === "model_thinking") {
+    // XATO FIX: avval backend bu event'ni ham {"type": "thinking", ...}
+    // deb yuborardi (yuqoridagi loading-indicator bilan bir xil nom) —
+    // shu sabab evt.label yo'qligi uchun panel "..." deb qolib, haqiqiy
+    // model fikrlash matni (evt.text) hech qachon ko'rinmasdi, hech
+    // qanday xato ham bermasdan. Endi backend buni "model_thinking" deb
+    // alohida yuboradi, va bu yerda alohida chizamiz.
+    panel?.addThought(evt.text);
   } else if (evt.type === "action") {
     panel?.setLabel(evt.label || evt.target || "...");
   } else if (evt.type === "step_result") {

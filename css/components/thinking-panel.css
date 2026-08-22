@@ -118,3 +118,17 @@
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* .thought-reasoning — model'ning ichki fikrlash matni ("model_thinking"
+   SSE event'i). .thought-line'dan atayin farqlanadi: bu bajarilgan
+   action emas (checkmark yo'q), balki modelning "qanday o'ylayotgani" —
+   shuning uchun italic va biroz xiraroq, action-log qatorlaridan
+   vizual ravishda ajralib turishi kerak. */
+.thought-reasoning {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+  opacity: 0.8;
+  display: flex;
+  align-items: flex-start;
+  animation: fadeInThought .55s cubic-bezier(0.16, 1, 0.3, 1);
+}
