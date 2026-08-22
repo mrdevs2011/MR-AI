@@ -45,7 +45,13 @@ composer.innerHTML = `
             <option value="medium" selected>Super</option>
             <option value="low">Nano</option>
           </select>
-          <button type="button" id="combo-btn" class="combo-btn" title="Mode & speed">
+          <select id="provider" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
+            <option value="auto" selected>Auto</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="groq">Groq</option>
+            <option value="gemini">Gemini</option>
+          </select>
+          <button type="button" id="combo-btn" class="combo-btn" title="Mode, speed & provider">
             <span class="pill-dot" id="mode-dot"></span>
             <span id="combo-label">General Super</span>
             <svg class="combo-caret" width="10" height="6" viewBox="0 0 10 6" fill="none">
@@ -55,6 +61,9 @@ composer.innerHTML = `
           <div id="combo-dropdown" class="combo-dropdown hidden">
             <div class="combo-group-label">General</div>
             <div id="combo-items"></div>
+            <div class="combo-group-divider"></div>
+            <div class="combo-group-label">Provider</div>
+            <div id="combo-provider-items"></div>
             <div class="combo-group-divider"></div>
             <button type="button" id="sudo-toggle-row" class="combo-toggle-row">
               <span class="combo-item-dot" style="background:#ff6b6b"></span>

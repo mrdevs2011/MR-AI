@@ -18,6 +18,7 @@ const sudoBanner = document.getElementById("sudoBanner");
 const modeDot = document.getElementById("mode-dot");
 const tierSelect = document.getElementById("tier");
 const tierDot = document.getElementById("tier-dot");
+const providerSelect = document.getElementById("provider");
 
 const MODE_COLORS = { general: "#4caf7a", sudo: "#ff6b6b" };
 const TIER_COLORS = { high: "#8e5cf7", medium: "#f5a623", low: "#6b6b6b" };
@@ -61,13 +62,28 @@ const TIER_OPTS = [
   { value: "medium", label: "Super", model: "nvidia/nemotron-3-super-120b-a12b:free" },
   { value: "low", label: "Nano", model: "nvidia/nemotron-3-nano-30b-a3b:free" },
 ];
+// PROVIDER — qaysi API orqali chaqirilishini majburan tanlash. "auto"
+// (default) — backend'dagi eski fallback zanjiri (OpenRouter -> Groq ->
+// Gemini). Boshqasi tanlansa, backend FAQAT o'sha provayderni ishlatadi,
+// fallback qilmaydi (qarang: main.py'dagi call_openrouter provider
+// override mantiqi).
+const PROVIDER_OPTS = [
+  { value: "auto", label: "Auto", model: "OpenRouter \u2192 Groq \u2192 Gemini fallback" },
+  { value: "openrouter", label: "OpenRouter", model: "10-key rotation, fallback yo'q" },
+  { value: "groq", label: "Groq", model: "tezkor, rasm (vision) qo'llamaydi" },
+  { value: "gemini", label: "Gemini", model: "gemini-2.0-flash, rasmni qo'llaydi" },
+];
 const comboItemsWrap = document.getElementById("combo-items");
+const comboProviderItemsWrap = document.getElementById("combo-provider-items");
 const sudoToggleRow = document.getElementById("sudo-toggle-row");
 const sudoSwitch = document.getElementById("sudo-switch");
 
 export function updateComboActiveState() {
-  comboDropdown.querySelectorAll(".combo-item").forEach(btn => {
+  comboDropdown.querySelectorAll(".combo-item[data-tier]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tier === tierSelect.value);
+  });
+  comboDropdown.querySelectorAll(".combo-item[data-provider]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.provider === providerSelect.value);
   });
   sudoSwitch.classList.toggle("on", modeSelect.value === "sudo");
   sudoToggleRow.classList.toggle("danger", modeSelect.value === "sudo");
@@ -76,17 +92,26 @@ export function updateComboActiveState() {
 export function updateComboLabel() {
   const m = modeSelect.value === "sudo" ? "Extended" : "General";
   const t = TIER_OPTS.find(x => x.value === tierSelect.value);
-  comboLabel.textContent = [m, t && t.label].filter(Boolean).join(" ");
+  const p = PROVIDER_OPTS.find(x => x.value === providerSelect.value);
+  const providerSuffix = p && p.value !== "auto" ? ` \u00b7 ${p.label}` : "";
+  comboLabel.textContent = [m, t && t.label].filter(Boolean).join(" ") + providerSuffix;
   updateComboActiveState();
 }
 
-// Tier pick and sudo toggle each update state + UI on their own — no
-// shared "selectCombo(mode, tier)" needed since they no longer change
-// together. Tier picks close the dropdown (it's a real choice); the
-// toggle leaves it open (people flip it and immediately reconsider).
+// Tier pick, provider pick, and sudo toggle each update state + UI on
+// their own — no shared "selectCombo(...)" needed since all three are
+// orthogonal and don't change together. Tier/provider picks close the
+// dropdown (real choices); the toggle leaves it open (people flip it
+// and immediately reconsider).
 export function selectTier(tierValue) {
   tierSelect.value = tierValue;
   updateTierDot();
+  updateComboLabel();
+  closeComboDropdown();
+}
+
+export function selectProvider(providerValue) {
+  providerSelect.value = providerValue;
   updateComboLabel();
   closeComboDropdown();
 }
@@ -113,6 +138,18 @@ export function buildComboDropdown() {
     btn.addEventListener("click", () => selectTier(t.value));
     comboItemsWrap.appendChild(btn);
   });
+
+  comboProviderItemsWrap.innerHTML = "";
+  PROVIDER_OPTS.forEach(p => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "combo-item";
+    btn.dataset.provider = p.value;
+    btn.innerHTML = `<span class="combo-item-text"><span class="combo-item-label">${p.label}</span><span class="combo-item-model">${p.model}</span></span>`;
+    btn.addEventListener("click", () => selectProvider(p.value));
+    comboProviderItemsWrap.appendChild(btn);
+  });
+
   updateComboActiveState();
 }
 

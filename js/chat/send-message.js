@@ -45,6 +45,7 @@ export async function sendMessage() {
   const filename = (active && active.filename) || "chat";
   const tier = document.getElementById("tier").value || "high";
   const mode = document.getElementById("mode").value || "general";
+  const provider = document.getElementById("provider").value || "auto";
 
   // If an image is staged (see attach handler below), it rides along
   // with this one message so the model can look at it, then gets
@@ -65,7 +66,7 @@ export async function sendMessage() {
     const res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ message, category, filename, tier, mode, image: imageToSend || undefined })
+      body: JSON.stringify({ message, category, filename, tier, mode, provider, image: imageToSend || undefined })
     });
 
     if (res.status === 401) {
