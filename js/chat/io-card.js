@@ -66,16 +66,16 @@ export function formatIOOutput(out) {
   return `${bodyHtml}<span class="${cls}">exit code ${escapeHtml(code)}</span>`;
 }
 
-export function addIOCard(inputText, outputText, persist = true, beforeEl = null) {
+export function addIOCard(inputText, outputText, persist = true, beforeEl = null, blocked = false) {
   const { chat, chatScroll } = getEls();
   const div = document.createElement("div");
   div.className = "flex justify-start w-full";
   const out = (outputText && outputText.trim()) ? outputText : "(no output)";
-  const isErr = /\[Exit code: [1-9]/.test(out) || /^Execution error:/.test(out) || /^Command timed out/.test(out);
+  const isErr = blocked || /\[Exit code: [1-9]/.test(out) || /^Execution error:/.test(out) || /^Command timed out/.test(out);
   div.innerHTML = `
-    <div class="max-w-full w-full io-card">
+    <div class="max-w-full w-full io-card${blocked ? " io-card-blocked" : ""}">
       <div class="io-section">
-        <div class="io-header">bash</div>
+        <div class="io-header">bash${blocked ? ` <span class="io-blocked-badge">BLOCKED</span>` : ""}</div>
         <pre class="io-content">${highlightBash(inputText || "")}</pre>
       </div>
       <div class="io-section">
@@ -99,9 +99,10 @@ export function addIOCard(inputText, outputText, persist = true, beforeEl = null
   if (persist) {
     const active = getActiveChat();
     if (active) {
-      active.messages.push({ kind: "io", input: inputText, output: outputText });
+      active.messages.push({ kind: "io", input: inputText, output: outputText, blocked });
       saveChats();
     }
   }
+
   return div;
 }

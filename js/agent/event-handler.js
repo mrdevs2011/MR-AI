@@ -41,11 +41,11 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
       if (active) {
         addOutputCard(evt.output_file, active.category, active.filename, true, panel?.el || null);
       } else {
-        addIOCard(evt.command || evt.path || evt.query || "", evt.result || "", true, panel?.el || null);
+        addIOCard(evt.command || evt.path || evt.query || "", evt.result || "", true, panel?.el || null, !!evt.blocked);
       }
     } else {
       const inputText = evt.command || evt.path || evt.query || "";
-      addIOCard(inputText, evt.result || "", true, panel?.el || null);
+      addIOCard(inputText, evt.result || "", true, panel?.el || null, !!evt.blocked);
     }
   } else if (evt.type === "final") {
     panel?.remove();

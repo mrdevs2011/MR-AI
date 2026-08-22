@@ -130,7 +130,7 @@ export async function renderMessages() {
   const { addMessage } = await import('./message-render.js');
   active.messages.forEach(m => {
     if (m.kind === "io") {
-      addIOCard(m.input, m.output, false);
+      addIOCard(m.input, m.output, false, null, !!m.blocked);
     } else if (m.kind === "output_file") {
       addOutputCard(m.file, active.category, active.filename, false);
     } else {

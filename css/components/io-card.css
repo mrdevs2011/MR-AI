@@ -38,6 +38,22 @@
 .io-content.io-output-err { color: var(--ink-secondary); }
 .io-exit-ok { color: var(--success); font-weight: 500; }
 .io-exit-err { color: var(--danger); font-weight: 500; }
+/* ---- blocked action kartasi (Xato #5 kuzatuvi: addIOCard() ilgari
+   blocked holat uchun umuman alohida rang/belgi bermas edi) ---- */
+.io-card-blocked { border-color: var(--danger-border); background: var(--danger-bg); }
+.io-blocked-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
 /* ---- bash syntax highlight tokenlari ---- */
 .tok-cmd    { color: #7EB6E8; }
 .tok-flag   { color: var(--accent); }

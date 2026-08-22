@@ -48,10 +48,28 @@ export function getChatsCount() {
 // keyin qayd etilgan ketma-ketlikda joylashadi — shuning uchun avval
 // after_message_index bo'yicha barqaror (stable) saralanadi.
 export function backendMessagesToUi(messages, outputs) {
-  const ui = (messages || []).map(m => ({
-    text: m.content,
-    kind: m.role === "USER" ? "user" : "bot",
-  }));
+  const ui = (messages || []).map(m => {
+    if (m.role === "action") {
+      // Bug #5 frontend fix: parse_chat_file() backend'da ACTION+RESULT
+      // juftini {role:"action", input, output, blocked} shaklida qaytaradi,
+      // lekin bu mapping ularni tekshirmasdan hammasini "bot" qilib,
+      // yo'q .content maydonini olib text:undefined chiqarardi. addIOCard()
+      // chat-history.js:132da kind==="io"ni kutadi — shu shaklga o'giramiz.
+      // blocked flag endi addIOCard()ga to'g'ridan-to'g'ri uzatiladi (5-chi
+      // parametr, io-card.js), u yerda haqiqiy CSS (io-card-blocked,
+      // io-blocked-badge) bilan ko'rsatiladi — shuning uchun bu yerda output
+      // matnini o'zgartirish (masalan "[BLOCKED]" prefiks qo'shish) shart
+      // emas, xom output shaklini saqlab qolamiz.
+      return { kind: "io", input: m.input, output: m.output, blocked: !!m.blocked };
+    }
+    if (m.role === "pending" || m.role === "error") {
+      return { text: m.content, kind: "bot" };
+    }
+    return {
+      text: m.content,
+      kind: m.role === "USER" ? "user" : "bot",
+    };
+  });
   if (outputs && outputs.length) {
     const sorted = [...outputs].sort((a, b) => a.after_message_index - b.after_message_index);
     let offset = 0;
