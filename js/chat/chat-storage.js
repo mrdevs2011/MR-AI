@@ -36,11 +36,33 @@ export function getChatsCount() {
 
 // Backend roles are USER/ASSISTANT; the UI's own message shape uses
 // kind "user"/"bot". This maps one to the other on load.
-export function backendMessagesToUi(messages) {
-  return (messages || []).map(m => ({
+//
+// `outputs` — GET /chats endi har bir chat uchun identifier.json'dan
+// o'qilgan ro'yxatni ham qaytaradi: [{after_message_index, file, size,
+// ts}, ...]. Har biri "shu USER xabaridan keyin AI bu faylni yozgan"
+// degani — shuning uchun uni aynan o'sha indeksdan KEYINGI o'ringa
+// (before the assistant's following reply, matching the live-stream
+// chronology: write_file happens mid-turn, "done" text comes last)
+// "output_file" kind sifatida qistirib qo'yamiz. Bir nechta output bir
+// xil indeksga tegishli bo'lsa (bitta turnda bir nechta fayl), ular
+// keyin qayd etilgan ketma-ketlikda joylashadi — shuning uchun avval
+// after_message_index bo'yicha barqaror (stable) saralanadi.
+export function backendMessagesToUi(messages, outputs) {
+  const ui = (messages || []).map(m => ({
     text: m.content,
     kind: m.role === "USER" ? "user" : "bot",
   }));
+  if (outputs && outputs.length) {
+    const sorted = [...outputs].sort((a, b) => a.after_message_index - b.after_message_index);
+    let offset = 0;
+    for (const o of sorted) {
+      const insertAt = o.after_message_index + 1 + offset;
+      if (insertAt < 0 || insertAt > ui.length) continue; // buzilgan/eski yozuv — jim o'tkazib yuboramiz
+      ui.splice(insertAt, 0, { kind: "output_file", file: o.file });
+      offset++;
+    }
+  }
+  return ui;
 }
 
 export async function loadChats() {
@@ -64,7 +86,7 @@ export async function loadChats() {
       title: (c.messages.find(m => m.role === "USER") || {}).content || "New chat",
       category: c.category,
       filename: c.filename,
-      messages: backendMessagesToUi(c.messages),
+      messages: backendMessagesToUi(c.messages, c.outputs),
     }));
   } catch (e) {
     console.error("Chatlarni yuklab bo'lmadi:", e);
