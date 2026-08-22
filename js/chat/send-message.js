@@ -25,6 +25,7 @@ import { hidePathDropdown, isPathDropdownOpenWithSelection } from '../ui/path-au
 import { getPendingImageDataUrl, clearPendingImage } from '../ui/attach.js';
 import { createThoughtPanel } from '../agent/thought-panel.js';
 import { saveActiveJob, pollJob } from '../agent/job-polling.js';
+import { resetOutputCardDedup } from './output-card.js';
 
 const input = document.getElementById("message");
 const sendBtn = document.getElementById("send");
@@ -33,6 +34,12 @@ export async function sendMessage() {
   if (!API_BASE) return;
   const message = input.value.trim();
   if (!message) return;
+
+  // Yangi so'rov = yangi turn: output-card dedup xotirasini tozalab
+  // qo'yamiz, aks holda bu turndagi "index.html" o'tgan turndagi
+  // "index.html" kartochkasi bilan bir xil deb hisoblanib, ustidan
+  // yozilib ketadi.
+  resetOutputCardDedup();
 
   hidePathDropdown();
 
