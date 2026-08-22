@@ -2224,6 +2224,8 @@ function createThoughtPanel(sourceText) {
       const message = input.value.trim();
       if (!message) return;
 
+      hidePathDropdown();
+
       const active = getActiveChat();
       const category = (active && active.category) || "general";
       const filename = (active && active.filename) || "chat";
@@ -2283,6 +2285,10 @@ function createThoughtPanel(sourceText) {
     sendBtn.addEventListener("click", sendMessage);
     input.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
+        // If the "/" path dropdown is open, Enter picks the highlighted
+        // suggestion instead of sending — the second keydown listener
+        // below (registered after the dropdown exists) handles that case.
+        if (pathDropdown.style.display === "block") return;
         e.preventDefault();
         sendMessage();
       }
@@ -2296,6 +2302,148 @@ function createThoughtPanel(sourceText) {
     }
     input.addEventListener("input", autoResizeInput);
     requestAnimationFrame(autoResizeInput);
+
+    // ---- "/" path autocomplete: while typing a "/..." token in the
+    // textarea, show a live dropdown of real files/folders from the
+    // backend (relative to this chat's current session cwd — same
+    // resolve_path() rules the AI itself uses, including the "/chats/..."
+    // virtual root), so what you pick is guaranteed to be a real path.
+    const pathDropdown = document.createElement("div");
+    pathDropdown.style.cssText = "position:absolute;z-index:50;display:none;max-height:220px;overflow-y:auto;min-width:240px;background:#1c1c1c;border:1px solid #333;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;";
+    document.body.appendChild(pathDropdown);
+
+    let pathDropdownItems = [];
+    let pathDropdownActiveIndex = -1;
+    let pathDropdownTokenStart = -1; // index in input.value where the current "/token" begins
+    let pathBrowseAbortController = null;
+
+    function hidePathDropdown() {
+      pathDropdown.style.display = "none";
+      pathDropdown.innerHTML = "";
+      pathDropdownItems = [];
+      pathDropdownActiveIndex = -1;
+      pathDropdownTokenStart = -1;
+    }
+
+    function positionPathDropdown() {
+      const rect = input.getBoundingClientRect();
+      pathDropdown.style.left = rect.left + "px";
+      pathDropdown.style.width = Math.max(240, rect.width) + "px";
+      pathDropdown.style.top = (rect.top - 8 + window.scrollY) + "px";
+      pathDropdown.style.transform = "translateY(-100%)"; // open upward, composer sits at the bottom
+    }
+
+    function renderPathDropdown() {
+      pathDropdown.innerHTML = "";
+      pathDropdownItems.forEach((item, i) => {
+        const row = document.createElement("div");
+        row.textContent = (item.is_dir ? "📁 " : "📄 ") + item.name;
+        row.style.cssText = "padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" + (i === pathDropdownActiveIndex ? "background:#333;" : "");
+        row.addEventListener("mouseenter", () => {
+          pathDropdownActiveIndex = i;
+          renderPathDropdown();
+        });
+        row.addEventListener("mousedown", (e) => {
+          e.preventDefault(); // don't steal focus from the textarea before we apply the pick
+          applyPathPick(item);
+        });
+        pathDropdown.appendChild(row);
+      });
+      pathDropdown.style.display = pathDropdownItems.length ? "block" : "none";
+    }
+
+    function currentPathToken() {
+      // Finds the "/..." token that touches the caret, if any — e.g. with
+      // "look at /chats/foo/im" and caret at the end, returns
+      // { start, text: "/chats/foo/im" }.
+      const caret = input.selectionStart;
+      const upToCaret = input.value.slice(0, caret);
+      const start = upToCaret.lastIndexOf("/");
+      if (start === -1) return null;
+      // Bail if there's whitespace between the "/" and the caret's word —
+      // i.e. only trigger inside one unbroken path token.
+      const between = upToCaret.slice(start);
+      if (/\s/.test(between)) return null;
+      return { start, text: between };
+    }
+
+    async function refreshPathDropdown() {
+      const token = currentPathToken();
+      if (!token || token.text.length < 2) { // "/" plus at least 1 more char
+        hidePathDropdown();
+        return;
+      }
+      pathDropdownTokenStart = token.start;
+
+      const active = getActiveChat();
+      const category = (active && active.category) || "general";
+      const filename = (active && active.filename) || "chat";
+
+      if (pathBrowseAbortController) pathBrowseAbortController.abort();
+      pathBrowseAbortController = new AbortController();
+
+      try {
+        const url = `${API_BASE}/browse-path?path=${encodeURIComponent(token.text)}&category=${encodeURIComponent(category)}&filename=${encodeURIComponent(filename)}`;
+        const res = await fetch(url, { headers: authHeaders(), signal: pathBrowseAbortController.signal });
+        if (res.status === 401) { hidePathDropdown(); return; }
+        const data = await res.json().catch(() => ({}));
+        pathDropdownItems = Array.isArray(data.entries) ? data.entries : [];
+        pathDropdownActiveIndex = pathDropdownItems.length ? 0 : -1;
+        if (pathDropdownItems.length) positionPathDropdown();
+        renderPathDropdown();
+      } catch (err) {
+        if (err.name !== "AbortError") hidePathDropdown();
+      }
+    }
+
+    function applyPathPick(item) {
+      if (pathDropdownTokenStart === -1) return;
+      const token = currentPathToken();
+      if (!token) return;
+      const dirPart = token.text.slice(0, token.text.lastIndexOf("/") + 1); // keeps the "/a/b/" so far
+      const replacement = dirPart + item.name + (item.is_dir ? "/" : "");
+      const before = input.value.slice(0, pathDropdownTokenStart);
+      const after = input.value.slice(pathDropdownTokenStart + token.text.length);
+      input.value = before + replacement + after;
+      const newCaret = (before + replacement).length;
+      input.focus();
+      input.setSelectionRange(newCaret, newCaret);
+      autoResizeInput();
+      if (item.is_dir) {
+        refreshPathDropdown(); // stay open, drill into the folder just picked
+      } else {
+        hidePathDropdown();
+      }
+    }
+
+    input.addEventListener("input", () => {
+      refreshPathDropdown();
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (pathDropdown.style.display !== "block") return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        pathDropdownActiveIndex = Math.min(pathDropdownActiveIndex + 1, pathDropdownItems.length - 1);
+        renderPathDropdown();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        pathDropdownActiveIndex = Math.max(pathDropdownActiveIndex - 1, 0);
+        renderPathDropdown();
+      } else if (e.key === "Tab" || (e.key === "Enter" && pathDropdownActiveIndex >= 0)) {
+        e.preventDefault();
+        if (pathDropdownItems[pathDropdownActiveIndex]) applyPathPick(pathDropdownItems[pathDropdownActiveIndex]);
+      } else if (e.key === "Escape") {
+        hidePathDropdown();
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      // Small delay so a mousedown-triggered pick on the dropdown still
+      // registers before the dropdown gets torn down on blur.
+      setTimeout(hidePathDropdown, 150);
+    });
+    window.addEventListener("resize", () => { if (pathDropdown.style.display === "block") positionPathDropdown(); });
 
     // ---- "+" attach button: images get staged as an inline preview and
     // ride along with the NEXT message you send (data:image/...;base64
