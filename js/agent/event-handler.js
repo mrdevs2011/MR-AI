@@ -4,12 +4,11 @@
 
    Dependency graph: sse-parser.js va thought-panel.js'dan keyingi
    qavat — bu ikkisi (parsed event + panel obyekti)ni ishlatadi,
-   shuningdek chat/ moduli funksiyalariga (addIOCard, addMessage,
+   shuningdek chat/ moduli funksiyalariga (addOutputCard, addMessage,
    addMessageTyped, addConfirmButton, addDangerConfirmCard) bog'liq.
    job-polling.js — bu faylni chaqiradigan eng yuqori qavat.
    ===================================================================== */
 
-import { addIOCard } from '../chat/io-card.js';
 import { addOutputCard } from '../chat/output-card.js';
 import { getActiveChat } from '../chat/chat-storage.js';
 import {
@@ -31,29 +30,35 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
     // shu sabab evt.label yo'qligi uchun panel "..." deb qolib, haqiqiy
     // model fikrlash matni (evt.text) hech qachon ko'rinmasdi, hech
     // qanday xato ham bermasdan. Endi backend buni "model_thinking" deb
-    // alohida yuboradi, va bu yerda alohida chizamiz.
+    // alohida yuboradi. THINKING FEATURE — 3-QADAM: bu endi faqat
+    // job_id yo'q (nazariy) holatdagi fallback — oddiy oqimda backend
+    // buning o'rniga "model_thinking_delta" yuboradi (pastda).
     panel?.addThought(evt.text);
+  } else if (evt.type === "model_thinking_delta") {
+    // THINKING FEATURE — 3-QADAM: canli, harf-harf oqim (Claude uslubi).
+    // Backend har bir yangi bo'lakni model javobi HALI kelayotganda
+    // (call_openrouter() qaytishini kutmasdan) yuboradi — panel shu
+    // matnni mavjud qatorga qo'shib boradi, evt.step o'zgarganda esa
+    // yangi qator ochadi (keyingi agent qadami boshlanganini bildiradi).
+    panel?.appendThoughtDelta(evt.text, evt.step);
   } else if (evt.type === "action") {
     panel?.setLabel(evt.label || evt.target || "...");
   } else if (evt.type === "step_result") {
-    panel?.commitLine(evt.label || `${evt.action} — ${evt.command || evt.path || evt.query || ""}`);
-    // write_file "/output/<nom>" konvensiyasi bilan yozilgan bo'lsa,
-    // backend step_result'ga "output_file" maydonini qo'shadi — bunday
-    // holda oddiy bash-uslubidagi input/output kartochkasi (addIOCard)
-    // o'rniga haqiqiy yuklab olish kartochkasi ko'rsatiladi. category/
-    // filename shu yerda YO'Q (SSE payload'da kelmaydi) — lekin live
-    // oqim faqat HOZIR ochiq turgan chat uchun ishlaydi, shuning uchun
-    // getActiveChat() xavfsiz manba.
+    // STEP UI: endi har bir step o'zining ochiladigan/yopiladigan
+    // blokchasi sifatida to'g'ridan-to'g'ri thinking panel ICHIGA
+    // qo'shiladi (Claude Code uslubi) — eski commitLine() (matn qatori)
+    // + tashqi addIOCard() (alohida, doim ochiq karta) kombinatsiyasi
+    // o'rniga. write_file "/output/<nom>" konvensiyasi bilan yozilgan
+    // bo'lsa, addStep() shunchaki qisqa yozuv qoladi (ochilmaydi), ASL
+    // yuklab olish kartochkasini esa hamon addOutputCard() chizadi —
+    // bu ikkalasi bir-birini to'ldiradi, bittasi ikkinchisini
+    // almashtirmaydi.
+    panel?.addStep(evt);
     if (evt.output_file) {
       const active = getActiveChat();
       if (active) {
         addOutputCard(evt.output_file, active.category, active.filename, true, panel?.el || null);
-      } else {
-        addIOCard(evt.command || evt.path || evt.query || "", evt.result || "", true, panel?.el || null, !!evt.blocked);
       }
-    } else {
-      const inputText = evt.command || evt.path || evt.query || "";
-      addIOCard(inputText, evt.result || "", true, panel?.el || null, !!evt.blocked);
     }
   } else if (evt.type === "final") {
     // finish(): "remove()"dan farqli — agar panelda haqiqiy thinking/
