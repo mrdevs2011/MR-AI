@@ -1,0 +1,260 @@
+/* =====================================================================
+   selects.css — mode/tier pill select'lar va combo select (birlashtirilgan
+   tugma + dropdown, sudo toggle switch bilan). Interactive JS-driven
+   komponent — .open-below, .active, .hidden klasslari JS orqali
+   qo'shiladi/olinadi. base.css'dagi CSS o'zgaruvchilariga bog'liq.
+   Ko'chirildi: style.css dan (STEP 4), o'zgartirilmadi.
+   ===================================================================== */
+
+/* ---- pill select'lar (mode / tier) ---- */
+.pill-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 10px 5px 9px;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.pill-select-wrap:hover {
+  border-color: var(--border-strong);
+}
+.pill-select-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(217,119,87,0.15);
+}
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent);
+  transition: background-color .15s ease;
+}
+.pill-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding-right: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2383827A' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right center;
+  cursor: pointer;
+}
+.pill-select:focus {
+  outline: none;
+}
+.pill-select option {
+  background: var(--bg-elevated);
+  color: var(--ink);
+}
+.pill-select option:checked,
+.pill-select option:hover,
+.pill-select option:focus {
+  background: var(--bg-hover) !important;
+  color: var(--ink) !important;
+}
+.pill-select-wrap.flat {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 2px;
+  gap: 4px;
+}
+.pill-select-wrap.flat:hover { background: var(--bg-hover); }
+.pill-select-wrap.flat .pill-dot { display: none; }
+.pill-select-wrap.flat .pill-select {
+  color: var(--muted);
+  font-size: 13px;
+  padding-right: 0;
+  background-image: none;
+}
+.pill-select-wrap.flat.has-caret .pill-select {
+  padding-right: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2383827A' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right center;
+}
+
+/* ---- combo select: mode+tier birlashtirilgan tugma + dropdown ---- */
+.visually-hidden-select {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  border: 0;
+}
+.combo-select-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.combo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.combo-btn:hover { background: var(--bg-hover); color: var(--ink-secondary); }
+.combo-caret { color: #83827A; flex-shrink: 0; }
+.combo-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3);
+  z-index: 50;
+  min-width: 260px;
+  animation: comboDropdownIn .14s cubic-bezier(.16,1,.3,1);
+  transform-origin: bottom right;
+}
+@keyframes comboDropdownIn {
+  from { opacity: 0; transform: scale(.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.combo-dropdown.open-below { transform-origin: top right; }
+.combo-dropdown.hidden { display: none; }
+.combo-dropdown.open-below {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+.combo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 13.5px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: background-color .1s ease, color .1s ease;
+  text-align: left;
+  width: 100%;
+}
+.combo-item:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.combo-item.active {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+.combo-item.active::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  margin-left: auto;
+  margin-top: 5px;
+  border-right: 1.6px solid var(--accent);
+  border-bottom: 1.6px solid var(--accent);
+  transform: rotate(45deg) translateY(-1px);
+  flex-shrink: 0;
+}
+.combo-item-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px transparent;
+  margin-top: 2px;
+  align-self: flex-start;
+}
+.combo-item.active .combo-item-dot {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.combo-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  white-space: normal;
+}
+.combo-item-label {
+  color: inherit;
+}
+.combo-item-model {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-group-label {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.combo-group-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
+}
+
+/* Sudo toggle row: same button footprint as .combo-item, but it's a
+   switch, not a pick — a distinct type deserves distinct affordance. */
+.combo-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 13.5px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: background-color .1s ease, color .1s ease;
+  width: 100%;
+}
+.combo-toggle-row:hover { background: var(--bg-hover); color: var(--ink); }
+.combo-toggle-row.danger { background: rgba(255,107,107,.08); color: #ff9494; }
+.combo-toggle-row.danger:hover { background: rgba(255,107,107,.14); }
+.combo-toggle-label { flex: 1; text-align: left; }
+
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color .15s ease;
+}
+.switch-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--ink-secondary);
+  transition: transform .15s cubic-bezier(.4,0,.2,1), background-color .15s ease;
+}
+.switch.on { background: #ff6b6b; }
+.switch.on .switch-knob { transform: translateX(13px); background: #fff; }

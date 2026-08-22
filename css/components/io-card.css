@@ -1,0 +1,46 @@
+/* =====================================================================
+   io-card.css — bajarilgan buyruqlar uchun INPUT/OUTPUT kartasi (Claude
+   Code uslubida) + bash syntax highlight token ranglari (highlightBash()
+   funksiyasi shu klasslarni ishlatadi — JS o'zi Step 9'da ko'chadi).
+   base.css'dagi CSS o'zgaruvchilariga bog'liq.
+   Ko'chirildi: style.css dan (STEP 5), o'zgartirilmadi.
+   ===================================================================== */
+
+/* ---- bajarilgan buyruqlar uchun INPUT / OUTPUT kartasi (Claude Code uslubida) ---- */
+.io-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-code);
+}
+.io-section { padding: 12px 14px 14px; }
+.io-section:not(:last-child) { border-bottom: 1px solid var(--border); }
+.io-header {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+.io-content {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.io-content.io-output-err { color: var(--ink-secondary); }
+.io-exit-ok { color: var(--success); font-weight: 500; }
+.io-exit-err { color: var(--danger); font-weight: 500; }
+/* ---- bash syntax highlight tokenlari ---- */
+.tok-cmd    { color: #7EB6E8; }
+.tok-flag   { color: var(--accent); }
+.tok-str    { color: var(--success); }
+.tok-op     { color: var(--muted); }
+.tok-path   { color: var(--ink); }

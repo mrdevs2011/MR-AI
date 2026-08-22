@@ -1,0 +1,244 @@
+/* =====================================================================
+   layout.css — sahifa skeleti: sidebar joylashuvi, header-menu-btn,
+   sidebar-brand + brand-orb (logo/video hover), composer quti.
+   base.css'dagi CSS o'zgaruvchilariga bog'liq (--bg-hover va h.k.).
+   Ko'chirildi: script/style.css dan (STEP 2), o'zgartirilmadi.
+   ===================================================================== */
+
+/* ---- sidebar: default (icon-only) / hover-preview (overlay) / pinned
+   (real layout space) — uch xil holat, Claude.ai'dagi kabi ----
+
+   Parent (#app-screen) flex container bo'lgani uchun #sidebar odatiy
+   holda flex-item: uning width'i qo'shni #chat-panel'ning kengligiga
+   bevosita ta'sir qiladi. Shu narsa aynan PINNED holatda kerak (chat
+   panel chinakam suriladi), lekin PREVIEW holatida kerak emas — shuning
+   uchun preview vaqtida position:absolute qo'yiladi, bu #sidebar'ni
+   flow'dan olib tashlaydi va uning width'i endi #chat-panel'ga umuman
+   ta'sir qilmaydi (garchi CSS width qiymati o'zi hali ishlaydi). */
+.sidebar-collapsible {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  /* Kenglik instant o'zgaradi — hech qanday slide/width animatsiyasi yo'q. */
+  transition: none;
+}
+
+/* PINNED — click bilan yoqilgan. Haqiqiy layout kengligi, chat panel
+   suriladi. Fon rangi (bir oz "to'qroq"/"top") pastroqda, umumiy
+   #sidebar background override qoidasi yonida belgilangan — bir joyda
+   bitta manba, ikki joyda takrorlanmasin deb. */
+.sidebar-collapsible.pinned {
+  width: 320px; /* preview kengligi bilan bir xil — click qilganda qisqarib ketmasin */
+  min-width: 320px;
+}
+
+/* HOVER-PREVIEW — faqat mouseenter bilan, pinned BO'LMAGANDA. Overlay:
+   position:absolute qo'yilgani uchun flex-parent'dagi width endi joy
+   egallamaydi (0 bo'lib qoladi), shuning uchun #chat-panel va undagi
+   toggle-icon hech qachon siljimaydi — sidebar ularning USTIGA chiqadi.
+   Kenglik pinned'dan atayin kengroq: "ancha ochroq bolsin" talabi shu —
+   preview holatda ko'proq matn/joy ko'rinsin, chunki bu vaqtinchalik va
+   layout hech kimga ta'sir qilmaydi, kengroq qilish arzon. */
+.sidebar-collapsible.hover-preview:not(.pinned) {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 320px;
+  z-index: 45; /* chat-panel va uning header'idan tepada, ammo backdrop/modal'lardan past */
+  box-shadow: 4px 0 24px rgba(0,0,0,.35), 1px 0 0 var(--border);
+  /* Fade IN va fade OUT ikkalasi ham shu opacity transition orqali —
+     .preview-visible klassi JS tomonidan bir frame kechikish bilan
+     qo'shiladi/olib tashlanadi (pastdagi izohga qarang). */
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+.sidebar-collapsible.hover-preview.preview-visible:not(.pinned) {
+  opacity: 1;
+}
+
+/* Sidebar preview/pinned ochilganda ichki kontent (New chat, Bash va h.k.)
+   header'dagi hamburger icon bilan bir qatorda chiqmasin deb, header
+   balandligi (h-14 = 56px) qadar yuqoridan bo'sh joy qo'shiladi — shu
+   bo'sh joydan keyin "New chat" tugmasi boshlanadi. */
+#sidebar-top-content {
+  margin-top: 56px;
+}
+/* Ichki kontent (matnlar, tugmalar) faqat sidebar chinakam kengaygan
+   paytda ko'rinadi — default (icon-only) width:0 holatida befoyda
+   siqilib qolmasin deb, opacity bilan yashiriladi. */
+.sidebar-collapsible:not(.pinned):not(.hover-preview) .sidebar-fade {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  /* Mobile'da "preview" degan tushuncha yo'q — faqat pinned/yopiq,
+     slide-over sifatida, eski xatti-harakat saqlanadi. */
+  #sidebar {
+    position: fixed !important;
+    top: 0; left: 0; bottom: 0;
+    z-index: 40;
+    width: 82vw !important;
+    max-width: 300px;
+    min-width: 0 !important;
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  #sidebar:not(.pinned) { transform: translateX(-100%); }
+  #sidebar.pinned { transform: translateX(0); }
+  #sidebar:not(.pinned) .sidebar-fade { opacity: 0; pointer-events: none; }
+  #sidebar.pinned .sidebar-fade { opacity: 1; pointer-events: auto; }
+  #sidebar-backdrop:not(.hidden) { display: block; }
+}#sidebar-backdrop {
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(61,57,41,0.35);
+}
+
+/* header-menu-btn hover-preview sidebar (z-index:45, position:absolute)
+   ustida joylashgani uchun uning USTIDA qolishi kerak — aks holda sidebar
+   uni fizik bosib qo'yadi va toggle ishlamay qoladi (topilgan bug). */
+#header-menu-btn {
+  position: relative;
+  z-index: 50;
+  /* Hech qanday slide/harakat animatsiyasi yo'q — pozitsiya instant
+     o'zgaradi. Faqat fade (opacity) kerak bo'lgan joylarda ishlatiladi. */
+  transition: none;
+}
+
+#sidebar-brand {
+  height: 56px; /* chat-header (h-14) bilan bir xil balandlik — icon bilan bitta qatorda tekis tursin */
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #ececec;
+  transition: opacity .22s ease;
+}
+#sidebar-brand.hidden { display: none; }
+#sidebar-brand:not(.hidden) { display: flex; }
+
+/* ---- brand orb: hover qilganda statik logo o'rniga jonli webm silliq
+   crossfade bilan chiqadi ---- */
+.brand-orb {
+  position: relative;
+  cursor: default;
+}
+.brand-orb-static,
+.brand-orb-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.brand-orb-video {
+  opacity: 0;
+  /* Video fon'da doim autoplay+loop bilan ishlab turadi (pastda hech
+     qachon to'xtatilmaydi) — shuning uchun hover bosilgan zahoti u allaqachon
+     "tayyor" holatda, faqat opacity bilan yumshoq ko'rinadi. Agar buning
+     o'rniga JS orqali har hover'da .play() chaqirilsa, birinchi kadr(lar)
+     kechikib, "tiq" etib boshlanishi mumkin edi — shu sabab bu yondashuv
+     tanlandi. */
+  transition: opacity .35s ease;
+}
+#sidebar-brand:hover .brand-orb-video {
+  opacity: 1;
+}
+#sidebar-brand:hover .brand-orb-static {
+  opacity: 0;
+  transition: opacity .35s ease;
+}
+
+.composer-toolbar-right { gap: 0 !important; }
+.composer-toolbar-right .divider-dot {
+  color: var(--border-strong);
+  font-size: 12px;
+  margin: 0 1px;
+}
+.composer-toolbar-right .send-btn { margin-left: 10px; }
+
+/* ---- composer: chegaralangan quti ---- */
+.composer-box {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  padding: 12px 12px 8px 16px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.composer-box:focus-within {
+  border-color: var(--border-strong);
+}
+.composer-textarea {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  appearance: none;
+  -webkit-appearance: none;
+  overflow-y: auto;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 24px;
+  max-height: 200px;
+  padding: 2px 0 10px 0;
+  font-family: inherit;
+  box-sizing: content-box;
+}
+.composer-textarea::placeholder { color: var(--muted); }
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.composer-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.composer-icon-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  transition: background-color .12s ease, border-color .12s ease;
+  flex-shrink: 0;
+}
+.composer-icon-btn:hover { background: var(--bg-hover); }
+.send-btn {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #FFFFFF;
+  display: flex; align-items: center; justify-content: center;
+  border: none;
+  transition: background-color .12s ease, opacity .12s ease;
+  flex-shrink: 0;
+}
+.send-btn:hover { background: var(--accent-hover); }
+.send-btn:disabled { opacity: .35; }
+
+/* ---- chat panel header: border + sarlavha fade-in (STEP 5'da qo'shildi,
+   roadmap'da aniq joy ko'rsatilmagan edi, header/chrome mantig'iga
+   yaqinligi uchun shu yerga qo'ydim) ---- */
+#chat-header {
+  border-bottom: 1px solid transparent;
+}
+
+#chat-title {
+  opacity: 0;
+  animation: chatTitleFadeIn .5s ease forwards;
+}
+@keyframes chatTitleFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

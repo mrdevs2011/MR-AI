@@ -1,0 +1,75 @@
+/* =====================================================================
+   chat-bubbles.css — chat bubble variantlari (user/bot/pending/error),
+   bot javoblarining markdown render uslubi (.prose-bot), va xabar
+   ostidagi hover action qatori (copy tugmasi va h.k.).
+   base.css'dagi CSS o'zgaruvchilariga bog'liq.
+   Ko'chirildi: style.css dan (STEP 3), o'zgartirilmadi.
+   ===================================================================== */
+
+/* ---- chat bubble'lar ---- */
+.bubble-user { background: #2C2B29; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+.bubble-bot { color: var(--ink); }
+.bubble-pending { background: var(--pending-bg); border: 1px solid var(--pending-border); }
+.bubble-error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); }
+
+/* ---- bot javoblari uchun render qilingan markdown ---- */
+.prose-bot { line-height: 1.65; color: var(--ink); }
+.prose-bot p { margin: 0 0 0.7em 0; }
+.prose-bot p:last-child { margin-bottom: 0; }
+.prose-bot strong { font-weight: 600; color: var(--ink); }
+.prose-bot em { font-style: italic; }
+.prose-bot ul, .prose-bot ol { margin: 0.3em 0 0.7em 1.3em; }
+.prose-bot ul { list-style: disc; }
+.prose-bot ol { list-style: decimal; }
+.prose-bot li { margin: 0.15em 0; }
+.prose-bot h1, .prose-bot h2, .prose-bot h3 {
+  font-family: var(--font-serif);
+  font-weight: 600; color: var(--ink); margin: 0.8em 0 0.4em 0;
+}
+.prose-bot h1 { font-size: 1.25em; }
+.prose-bot h2 { font-size: 1.15em; }
+.prose-bot h3 { font-size: 1.05em; }
+.prose-bot code {
+  background: var(--bg-code); color: var(--ink);
+  padding: 0.15em 0.4em; border-radius: 5px;
+  font-family: var(--font-mono); font-size: 0.88em;
+}
+.prose-bot pre {
+  background: var(--bg-code); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; overflow-x: auto; margin: 0.5em 0;
+}
+.prose-bot pre code { background: none; padding: 0; font-size: 0.85em; }
+.prose-bot blockquote {
+  border-left: 3px solid var(--accent); padding-left: 12px; color: var(--ink-secondary); margin: 0.5em 0;
+}
+.prose-bot a { color: var(--accent); text-decoration: underline; }
+.prose-bot hr { border: none; border-top: 1px solid var(--border); margin: 0.8em 0; }
+
+/* ---- assistant javobi ostidagi hover action qatori (copy va h.k. — Claude'dagidek) ---- */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.flex.justify-start:hover .msg-actions,
+.msg-actions.copied {
+  opacity: 1;
+}
+.msg-action-btn {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.msg-action-btn:hover { background: var(--bg-hover); color: var(--ink-secondary); }
+.msg-action-btn.copy-btn.just-copied { color: var(--success); }
+@media (max-width: 767px) {
+  .msg-actions { opacity: 1; }
+}

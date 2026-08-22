@@ -1,0 +1,20 @@
+/* =====================================================================
+   main.css — YAKUNIY FAYL, faqat @import. Hech qanday selector yozilmasin
+   (KRITIK QOIDA — agar shu yerga to'g'ridan-to'g'ri stil yozilsa, 2-3
+   oydan keyin bu yana bitta gigant style.css'ga aylanadi).
+
+   Import tartibi muhim: pastdan yuqoriga qarab ko'proq "override qiluvchi"
+   bo'lib boradi. legacy-overrides.css eng oxirida — sababi shu faylning
+   o'zida yozilgan (bu haqda "achiq haqiqat" — u roadmap'da ko'rsatilmagan,
+   o'zim qaror qilib joylashtirdim).
+   ===================================================================== */
+
+@import url('base.css');
+@import url('layout.css');
+@import url('components/chat-bubbles.css');
+@import url('components/sidebar.css');
+@import url('components/selects.css');
+@import url('components/thinking-panel.css');
+@import url('components/io-card.css');
+@import url('components/login.css');
+@import url('components/legacy-overrides.css');

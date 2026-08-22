@@ -1,0 +1,32 @@
+/* =====================================================================
+   login.css — login ekrani: kirish kartasi, input maydonlari, sarlavha
+   (#welcome bilan bir xil serif shrift qoidasini ulashadi).
+   base.css'dagi CSS o'zgaruvchilariga bog'liq.
+   Ko'chirildi: style.css dan (STEP 5), o'zgartirilmadi.
+   ===================================================================== */
+
+/* ---- katta xush kelibsiz sarlavha va login brend nomi — serif, Claude-vibe ---- */
+#welcome,
+.login-card h1 {
+  font-family: var(--font-serif) !important;
+  font-weight: 500 !important;
+}
+
+.login-input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.login-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(217,119,87,0.15);
+  outline: none;
+}
+
+.login-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(61,57,41,0.06), 0 8px 24px rgba(61,57,41,0.05);
+}

@@ -1,0 +1,88 @@
+/* =====================================================================
+   sidebar.css — sidebar ICHIDAGI elementlar: qidiruv qatori, har bir
+   chat qatori (sarlavha + o'chirish tugmasi). Sidebarning o'zi qayerda
+   joylashishi/ochilib-yopilishi — bu layout.css'da (STEP 2).
+   base.css'dagi CSS o'zgaruvchilariga bog'liq.
+   Ko'chirildi: style.css dan (STEP 3), o'zgartirilmadi.
+   ===================================================================== */
+
+.sidebar-item {
+  transition: background-color .12s ease;
+}
+
+/* ---- sidebar: chat qidiruv qatori (Claude'dagi "Search chats") ---- */
+.sidebar-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 10px;
+  color: var(--muted);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.sidebar-search-wrap:focus-within {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+.sidebar-search-wrap svg { color: var(--muted); }
+.sidebar-search-wrap input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--ink);
+  font-size: 13px;
+}
+.sidebar-search-wrap input::placeholder { color: var(--muted); }
+
+/* ---- sidebar: har bir chat qatori + hover'da chiqadigan o'chirish tugmasi ---- */
+.chat-item-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  transition: background-color .12s ease;
+}
+.chat-item-row:hover,
+.chat-item-row.active {
+  background: var(--bg-hover);
+}
+.chat-item-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  padding: 8px 6px 8px 12px;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chat-item-row.active .chat-item-title,
+.chat-item-row:hover .chat-item-title { color: var(--ink); }
+.chat-item-delete {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  margin-right: 6px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease, background-color .12s ease, color .12s ease;
+}
+.chat-item-row:hover .chat-item-delete,
+.chat-item-row:focus-within .chat-item-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+.chat-item-delete:hover { background: var(--danger-bg); color: var(--danger); }
+.chat-item-delete:disabled { opacity: .4; pointer-events: none; }

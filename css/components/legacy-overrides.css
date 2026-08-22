@@ -1,0 +1,67 @@
+/* =====================================================================
+   legacy-overrides.css — index.html hali o'zgartirilmagani uchun,
+   undagi Tailwind arbitrary-value klasslar ("text-[#ececec]" kabi) va
+   inline style atributlari ("style=background:#212121") shu yerda
+   attribute-selector orqali qayta ranglanadi.
+
+   MUHIM (achiq haqiqat): bu blok asl 10-step roadmap'da HECH QAYERGA
+   tayinlanmagan edi — audit uni o'tkazib yuborgan. O'zim qaror qildim:
+   alohida fayl qildim va main.css'da ENG OXIRIDA import qilinadi —
+   chunki bu "vaqtinchalik yamalar" qatlami (index.html hali refactor
+   qilinmagan joylarni yopib turadi), boshqa barcha component'lardan
+   KEYIN yuklanishi kerak. Hammasi !important bo'lgani uchun amalda
+   tartib natijaga ta'sir qilmaydi, lekin niyat/mantiq shu: bu fayl —
+   "yamoq qatlami", asosiy dizayn tizimi emas. Agar kelajakda index.html
+   to'g'ridan-to'g'ri semantik klasslar bilan yozilsa (Tailwind
+   arbitrary-value'lar olib tashlansa) — bu fayl butunlay o'chiriladi.
+
+   Terminal panel (#term-panel) atayin QORAYICHIGA qoldirildi — real
+   terminal doim to'q fonda o'qilishi qulayroq, IDE'lar ham shunday qiladi.
+   ===================================================================== */
+
+/* =====================================================================
+   OVERRIDE BLOKI — index.html o'zgartirilmagani uchun, undagi Tailwind
+   arbitrary-value klasslar ("text-[#ececec]" kabi) va inline style
+   atributlari ("style=background:#212121") shu yerda attribute-selector
+   orqali qayta ranglanadi. index.html'ga hech narsa qo'shilmadi/o'chirilmadi.
+   Terminal panel (#term-panel) atayin QORAYICHIGA qoldirildi — real
+   terminal doim to'q fonda o'qilishi qulayroq, IDE'lar ham shunday qiladi.
+   ===================================================================== */
+
+/* Tailwind arbitrary text/bg/border klasslari — token aynan mos kelganda */
+[class~="text-[#ececec]"]   { color: var(--ink) !important; }
+[class~="text-[#8e8e8e]"]   { color: var(--muted) !important; }
+[class~="text-[#d9d9d9]"]   { color: var(--ink-secondary) !important; }
+[class~="text-[#a8a8a8]"]   { color: var(--muted) !important; }
+[class~="text-[#f2555a]"]   { color: var(--danger) !important; }
+[class~="border-[#4d4d4d]"] { border-color: var(--border-strong) !important; }
+
+/* hover: variantlar ham xuddi shu tokenlar bilan qidiriladi */
+[class~="hover:bg-[#2a2a2a]"]:hover { background-color: var(--bg-hover) !important; }
+[class~="bg-[#2a2a2a]"]             { background-color: var(--bg-sidebar) !important; }
+
+/* Login submit tugmasi: bg-[#ececec] hover:bg-white text-[#212121] */
+[class~="bg-[#ececec]"]     { background-color: var(--accent) !important; }
+[class~="hover:bg-white"]:hover { background-color: var(--accent-hover) !important; }
+[class~="text-[#212121]"]   { color: #FFFFFF !important; }
+
+/* body va ekran konteynerlarida inline style="background:#212121" bor */
+body,
+#boot-screen,
+#login-screen,
+#app-screen,
+#chat-panel {
+  background: var(--bg) !important;
+}
+#sidebar:not(.pinned) { background: var(--bg-sidebar) !important; }
+#sidebar.pinned { background: #111111 !important; }
+#sidebar.hover-preview:not(.pinned) { background: #20201f !important; }
+
+/* avatar doiralari: inline style="background:#ececec" — terracotta qildik */
+[style*="background:#ececec"] { background: var(--accent) !important; }
+
+/* boot ekranidagi spinner: border-2 border-[#4d4d4d] border-t-[#ececec] */
+[class~="border-[#4d4d4d]"][class~="border-t-[#ececec]"] {
+  border-color: var(--border-strong) !important;
+  border-top-color: var(--accent) !important;
+}
