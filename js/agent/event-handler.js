@@ -10,6 +10,8 @@
    ===================================================================== */
 
 import { addIOCard } from '../chat/io-card.js';
+import { addOutputCard } from '../chat/output-card.js';
+import { getActiveChat } from '../chat/chat-storage.js';
 import {
   addMessage, addMessageTyped, addConfirmButton, addDangerConfirmCard,
   addRetryButton,
@@ -27,8 +29,24 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
     panel?.setLabel(evt.label || evt.target || "...");
   } else if (evt.type === "step_result") {
     panel?.commitLine(evt.label || `${evt.action} — ${evt.command || evt.path || evt.query || ""}`);
-    const inputText = evt.command || evt.path || evt.query || "";
-    addIOCard(inputText, evt.result || "", true, panel?.el || null);
+    // write_file "/output/<nom>" konvensiyasi bilan yozilgan bo'lsa,
+    // backend step_result'ga "output_file" maydonini qo'shadi — bunday
+    // holda oddiy bash-uslubidagi input/output kartochkasi (addIOCard)
+    // o'rniga haqiqiy yuklab olish kartochkasi ko'rsatiladi. category/
+    // filename shu yerda YO'Q (SSE payload'da kelmaydi) — lekin live
+    // oqim faqat HOZIR ochiq turgan chat uchun ishlaydi, shuning uchun
+    // getActiveChat() xavfsiz manba.
+    if (evt.output_file) {
+      const active = getActiveChat();
+      if (active) {
+        addOutputCard(evt.output_file, active.category, active.filename, true, panel?.el || null);
+      } else {
+        addIOCard(evt.command || evt.path || evt.query || "", evt.result || "", true, panel?.el || null);
+      }
+    } else {
+      const inputText = evt.command || evt.path || evt.query || "";
+      addIOCard(inputText, evt.result || "", true, panel?.el || null);
+    }
   } else if (evt.type === "final") {
     panel?.remove();
     setPanel(null);
