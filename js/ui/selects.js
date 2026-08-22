@@ -1,16 +1,19 @@
 /* =====================================================================
-   selects.js — mode/tier pill dot ranglari + combo select dropdown
-   (composer'dagi "General Super" tugmasi).
-   script.js'dan ko'chirildi: updateModeDot (492), updateTierDot (493),
-   updateComboActiveState (529), updateComboLabel (537), selectTier
-   (548), toggleSudo (555), updateSudoBanner (480), buildComboDropdown
-   (566), openComboDropdown (580), closeComboDropdown (587),
-   handleOutsideComboClick (591).
+   selects.js — mode/tier/provider pill dot ranglari + combo select
+   dropdown (composer'dagi "Auto Super" tugmasi).
 
-   MUHIM: bu fayl modul yuklanganda o'zini avtomatik ishga tushiradi —
-   asl script.js'dagi kabi, addEventListener chaqiruvlari va
-   buildComboDropdown()/updateComboLabel() darhol module top-level'da
-   bajariladi.
+   MODEL TANLASH — bitta FLAT ro'yxat, faqat BITTA qator har doim
+   tanlangan bo'ladi (checkmark bitta joyda). Har qator "Provider ·
+   Tier" juftligini bildiradi (masalan "Groq · Super" = Groq orqali
+   openai/gpt-oss-120b chaqiriladi). Bu ataylab flatten qilingan —
+   Tier va Provider'ni ikkita ALOHIDA tanlov sifatida ko'rsatish
+   chalkashtiradi (masalan OpenRouter'ning "Super" modeli Nemotron
+   120B, Groq'ning "Super" modeli esa gpt-oss-120b — battamom boshqa
+   model, lekin ikkalasi ham "Super" deb ko'rinardi). Flat ro'yxatda
+   har bir tanlov nima ekanligi bir qarashda aniq: label + haqiqiy
+   model nomi bitta qatorda.
+
+   MUHIM: bu fayl modul yuklanganda o'zini avtomatik ishga tushiradi.
    ===================================================================== */
 
 const modeSelect = document.getElementById("mode");
@@ -37,83 +40,80 @@ updateModeDot();
 updateTierDot();
 
 // ---------------------------------------------------------------------
-// COMBO SELECT — single button that replaces the old side-by-side
-// mode/tier pill-selects. The two <select> elements above stay in the
-// DOM (hidden) purely as the value store, so every other place in this
-// file that reads document.getElementById("mode"/"tier").value keeps
-// working untouched. Clicking the button opens a Claude-model-picker
-// style dropdown: one pill row per mode+tier combo, sized to its own
-// label instead of stretched full-width.
+// COMBO SELECT — single button + dropdown. DOM'dagi #tier va #provider
+// <select>lar hamon qiymat-saqlagich sifatida qoladi (boshqa fayllar
+// getElementById("tier"/"provider").value o'qishda davom etaveradi),
+// lekin UI'da endi IKKITA guruh emas — BITTA flat ro'yxat ko'rsatiladi.
 // ---------------------------------------------------------------------
 const comboWrap = document.getElementById("combo-wrap");
 const comboBtn = document.getElementById("combo-btn");
 const comboDropdown = document.getElementById("combo-dropdown");
 const comboLabel = document.getElementById("combo-label");
-
-// Mode (general/sudo) and tier (omni/super/nano) are ORTHOGONAL state —
-// one is a toggle, the other a 3-way pick. They used to be flattened into
-// a 2x3 = 6-item combo list (one row per mode+tier pair), which meant
-// duplicating every tier label under both "General" and "Sudo" groups.
-// Now tier renders once as a real 3-item list, and mode lives as a single
-// switch row underneath. Adding a 4th tier later is one array entry, not
-// two new rows.
-const TIER_OPTS = [
-  { value: "high", label: "Omni", model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" },
-  { value: "medium", label: "Super", model: "nvidia/nemotron-3-super-120b-a12b:free" },
-  { value: "low", label: "Nano", model: "nvidia/nemotron-3-nano-30b-a3b:free" },
-];
-// PROVIDER — qaysi API orqali chaqirilishini majburan tanlash. "auto"
-// (default) — backend'dagi eski fallback zanjiri (OpenRouter -> Groq ->
-// Gemini). Boshqasi tanlansa, backend FAQAT o'sha provayderni ishlatadi,
-// fallback qilmaydi (qarang: main.py'dagi call_openrouter provider
-// override mantiqi).
-const PROVIDER_OPTS = [
-  { value: "auto", label: "Auto", model: "OpenRouter \u2192 Groq \u2192 Gemini fallback" },
-  { value: "openrouter", label: "OpenRouter", model: "10-key rotation, fallback yo'q" },
-  { value: "groq", label: "Groq", model: "tezkor, rasm (vision) qo'llamaydi" },
-  { value: "gemini", label: "Gemini", model: "gemini-2.0-flash, rasmni qo'llaydi" },
-];
 const comboItemsWrap = document.getElementById("combo-items");
-const comboProviderItemsWrap = document.getElementById("combo-provider-items");
 const sudoToggleRow = document.getElementById("sudo-toggle-row");
 const sudoSwitch = document.getElementById("sudo-switch");
 
+// Tartib ataylab shunday: avval provider bo'yicha guruhlangan (Auto
+// birinchi — bu default va eng "xavfsiz" tanlov), har provider ichida
+// tier tartibi doim bir xil (Omni -> Super -> Nano), shunda foydalanuvchi
+// ro'yxatni yodlab qolgach ko'z bilan tez topadi, har safar qidirmaydi.
+const MODEL_OPTS = [
+  { tier: "high",   provider: "auto",       label: "Auto",       sub: "Omni",   model: "OpenRouter \u2192 Groq \u2192 Gemini fallback" },
+  { tier: "medium", provider: "auto",       label: "Auto",       sub: "Super",  model: "OpenRouter \u2192 Groq \u2192 Gemini fallback" },
+  { tier: "low",    provider: "auto",       label: "Auto",       sub: "Nano",   model: "OpenRouter \u2192 Groq \u2192 Gemini fallback" },
+
+  { tier: "high",   provider: "openrouter", label: "OpenRouter", sub: "Omni",   model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" },
+  { tier: "medium", provider: "openrouter", label: "OpenRouter", sub: "Super",  model: "nvidia/nemotron-3-super-120b-a12b:free" },
+  { tier: "low",    provider: "openrouter", label: "OpenRouter", sub: "Nano",   model: "nvidia/nemotron-3-nano-30b-a3b:free" },
+
+  { tier: "high",   provider: "groq",       label: "Groq",       sub: "Omni",   model: "openai/gpt-oss-120b" },
+  { tier: "medium", provider: "groq",       label: "Groq",       sub: "Super",  model: "openai/gpt-oss-120b" },
+  { tier: "low",    provider: "groq",       label: "Groq",       sub: "Nano",   model: "openai/gpt-oss-20b" },
+
+  { tier: "high",   provider: "gemini",     label: "Gemini",     sub: "Omni",   model: "gemini-2.0-flash" },
+  { tier: "medium", provider: "gemini",     label: "Gemini",     sub: "Super",  model: "gemini-2.0-flash" },
+  { tier: "low",    provider: "gemini",     label: "Gemini",     sub: "Nano",   model: "gemini-2.0-flash" },
+];
+
+function currentModelOpt() {
+  return MODEL_OPTS.find(o => o.tier === tierSelect.value && o.provider === providerSelect.value)
+      || MODEL_OPTS[1]; // fallback: Auto · Super
+}
+
 export function updateComboActiveState() {
   comboDropdown.querySelectorAll(".combo-item[data-tier]").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tier === tierSelect.value);
-  });
-  comboDropdown.querySelectorAll(".combo-item[data-provider]").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.provider === providerSelect.value);
+    btn.classList.toggle("active", btn.dataset.tier === tierSelect.value && btn.dataset.provider === providerSelect.value);
   });
   sudoSwitch.classList.toggle("on", modeSelect.value === "sudo");
   sudoToggleRow.classList.toggle("danger", modeSelect.value === "sudo");
 }
 
 export function updateComboLabel() {
-  const m = modeSelect.value === "sudo" ? "Extended" : "General";
-  const t = TIER_OPTS.find(x => x.value === tierSelect.value);
-  const p = PROVIDER_OPTS.find(x => x.value === providerSelect.value);
-  const providerSuffix = p && p.value !== "auto" ? ` \u00b7 ${p.label}` : "";
-  comboLabel.textContent = [m, t && t.label].filter(Boolean).join(" ") + providerSuffix;
+  const opt = currentModelOpt();
+  comboLabel.textContent = `${opt.label} ${opt.sub}`;
   updateComboActiveState();
 }
 
-// Tier pick, provider pick, and sudo toggle each update state + UI on
-// their own — no shared "selectCombo(...)" needed since all three are
-// orthogonal and don't change together. Tier/provider picks close the
-// dropdown (real choices); the toggle leaves it open (people flip it
-// and immediately reconsider).
-export function selectTier(tierValue) {
+// Model pick (provider+tier birga, bitta klik = bitta aniq tanlov) va
+// sudo toggle mustaqil holatlar. Model tanlash dropdown'ni yopadi (real
+// tanlov); toggle ochiq qoldiradi (odamlar bosib darrov fikrini
+// o'zgartirishi mumkin).
+export function selectModel(tierValue, providerValue) {
   tierSelect.value = tierValue;
+  providerSelect.value = providerValue;
   updateTierDot();
   updateComboLabel();
   closeComboDropdown();
 }
 
+// Orqaga moslik: eski kod selectTier(tierValue) chaqirishi mumkin —
+// bunda provider o'zgarmasdan, faqat tier almashadi.
+export function selectTier(tierValue) {
+  selectModel(tierValue, providerSelect.value);
+}
+
 export function selectProvider(providerValue) {
-  providerSelect.value = providerValue;
-  updateComboLabel();
-  closeComboDropdown();
+  selectModel(tierSelect.value, providerValue);
 }
 
 export function toggleSudo() {
@@ -129,27 +129,16 @@ sudoToggleRow.addEventListener("click", (e) => {
 
 export function buildComboDropdown() {
   comboItemsWrap.innerHTML = "";
-  TIER_OPTS.forEach(t => {
+  MODEL_OPTS.forEach(o => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "combo-item";
-    btn.dataset.tier = t.value;
-    btn.innerHTML = `<span class="combo-item-text"><span class="combo-item-label">${t.label}</span><span class="combo-item-model">${t.model}</span></span>`;
-    btn.addEventListener("click", () => selectTier(t.value));
+    btn.dataset.tier = o.tier;
+    btn.dataset.provider = o.provider;
+    btn.innerHTML = `<span class="combo-item-text"><span class="combo-item-label">${o.label} \u00b7 ${o.sub}</span><span class="combo-item-model">${o.model}</span></span>`;
+    btn.addEventListener("click", () => selectModel(o.tier, o.provider));
     comboItemsWrap.appendChild(btn);
   });
-
-  comboProviderItemsWrap.innerHTML = "";
-  PROVIDER_OPTS.forEach(p => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "combo-item";
-    btn.dataset.provider = p.value;
-    btn.innerHTML = `<span class="combo-item-text"><span class="combo-item-label">${p.label}</span><span class="combo-item-model">${p.model}</span></span>`;
-    btn.addEventListener("click", () => selectProvider(p.value));
-    comboProviderItemsWrap.appendChild(btn);
-  });
-
   updateComboActiveState();
 }
 

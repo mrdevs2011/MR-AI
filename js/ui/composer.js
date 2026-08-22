@@ -51,19 +51,16 @@ composer.innerHTML = `
             <option value="groq">Groq</option>
             <option value="gemini">Gemini</option>
           </select>
-          <button type="button" id="combo-btn" class="combo-btn" title="Mode, speed & provider">
+          <button type="button" id="combo-btn" class="combo-btn" title="Model">
             <span class="pill-dot" id="mode-dot"></span>
-            <span id="combo-label">General Super</span>
+            <span id="combo-label">Auto Super</span>
             <svg class="combo-caret" width="10" height="6" viewBox="0 0 10 6" fill="none">
               <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
           <div id="combo-dropdown" class="combo-dropdown hidden">
-            <div class="combo-group-label">General</div>
+            <div class="combo-group-label">Model</div>
             <div id="combo-items"></div>
-            <div class="combo-group-divider"></div>
-            <div class="combo-group-label">Provider</div>
-            <div id="combo-provider-items"></div>
             <div class="combo-group-divider"></div>
             <button type="button" id="sudo-toggle-row" class="combo-toggle-row">
               <span class="combo-item-dot" style="background:#ff6b6b"></span>
