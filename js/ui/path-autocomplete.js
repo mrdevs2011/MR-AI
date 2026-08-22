@@ -259,10 +259,13 @@ input.addEventListener("keydown", (e) => {
 
   if (e.key === "ArrowDown") {
     e.preventDefault();
+    console.log("[path-autocomplete] ArrowDown", { before: pathDropdownActiveIndex, itemsLen: pathDropdownItems.length });
     pathDropdownActiveIndex = Math.min(pathDropdownActiveIndex + 1, pathDropdownItems.length - 1);
+    console.log("[path-autocomplete] ArrowDown after", pathDropdownActiveIndex);
     renderPathDropdown();
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
+    console.log("[path-autocomplete] ArrowUp", { before: pathDropdownActiveIndex, itemsLen: pathDropdownItems.length });
     pathDropdownActiveIndex = Math.max(pathDropdownActiveIndex - 1, 0);
     renderPathDropdown();
   } else if (e.key === "ArrowLeft" && caretAtTokenEnd) {
