@@ -42,7 +42,7 @@ export function createThoughtPanel(sourceText) {
     <div class="max-w-full w-full rounded-2xl px-4 py-3">
       <div class="thought-log" id="thought-log"></div>
       <div class="thinking-row" id="thinking-row">
-        <video class="thinking-orb-video" src="circle2_transparent.webm" autoplay loop muted playsinline></video>
+        <video class="thinking-orb-video" src="assets/circle2_transparent.webm" autoplay loop muted playsinline></video>
         <span id="thinking-label">${initialLabel}</span>
         <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
       </div>
