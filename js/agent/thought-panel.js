@@ -50,7 +50,9 @@ const _PONDER_INTERVAL_MS = 1700;
 // oddiy, ikki rangli chiziqli SVG'lar). action nomi bo'yicha tanlanadi;
 // noma'lum action bo'lsa terminal ikonkasi (STEP_ICONS.command) default
 // bo'lib qoladi.
-const STEP_ICONS = {
+// EXPORT: chat-history.js reload paytida ham "bash" step'lar uchun aynan
+// shu ikonkani ishlatadi — vizual mos kelishi uchun.
+export const STEP_ICONS = {
   command: '<svg class="thought-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>',
   read_file: '<svg class="thought-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>',
   list_dir: '<svg class="thought-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
@@ -71,7 +73,11 @@ const _STEP_PHRASES = {
 };
 const _DEFAULT_TOGGLE_LABEL = { uz: "Fikrlash jarayoni", ru: "Процесс мышления", en: "Thinking process" };
 
-function _summarizeSteps(lang, counts) {
+// EXPORT: chat-history.js (reload/refresh paytida) ham xuddi shu label
+// mantig'idan foydalanishi uchun — ikkala joy (live finish() va reload
+// renderMessages()) bir xil "N ta buyruq bajardi" uslubidagi sarlavhani
+// chiqarsin, ikki xil kod bilan ikki xil natija chiqmasin.
+export function summarizeStepCounts(lang, counts) {
   const L = _STEP_PHRASES[lang] || _STEP_PHRASES.en;
   const order = ["command", "read_file", "list_dir", "web_search", "write_file"];
   const parts = order.filter(k => counts[k] > 0).map(k => L[k](counts[k]));
@@ -91,10 +97,11 @@ export function createThoughtPanel(sourceText) {
   wrapper.innerHTML = `
     <div class="max-w-full w-full rounded-2xl px-4 py-3">
       <div class="thought-log" id="thought-log"></div>
-      <div class="thinking-row" id="thinking-row">
+      <div class="thinking-row thinking-row-clickable" id="thinking-row" role="button" tabindex="0" aria-expanded="true">
         <video class="thinking-orb-video" src="assets/circle2_transparent.webm" autoplay loop muted playsinline></video>
         <span id="thinking-label">${initialLabel}</span>
         <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
+        <span class="thinking-row-chevron">▾</span>
       </div>
     </div>`;
   chat.appendChild(wrapper);
@@ -104,6 +111,30 @@ export function createThoughtPanel(sourceText) {
   const rowEl = wrapper.querySelector("#thinking-row");
   const labelEl = wrapper.querySelector("#thinking-label");
   let hasContent = false; // true as soon as anything lands in logEl — decides whether finish() leaves a collapsible block behind or removes the whole panel
+
+  // LIVE COLLAPSE — Claude uslubida: hali javob STREAM bo'layotgan
+  // paytda ham (finish() chaqirilmasdan turib) yuqoridagi thinking-row'ni
+  // (orb + label turgan qator) bossa, pastdagi butun thought-log —
+  // qancha uzun/canli yozilayotgan bo'lmasin — birdan yig'ilib/yashirinib
+  // qoladi. Bu finish()dan keyingi ".thought-log-toggle" bilan ALOHIDA
+  // mexanizm: u yerda panel allaqachon "muzlagan" (streaming tugagan),
+  // bu yerda esa hali fon rejimida yozilishda davom etadi — shuning
+  // uchun yashirish faqat VIZUAL (logEl'ni CSS bilan yig'adi), ichida
+  // appendThoughtDelta/addStep/addThought hamon ishlashda davom etadi,
+  // foydalanuvchi qayta ochsa hammasi joyida turadi.
+  let liveCollapsed = false;
+  function toggleLiveCollapse() {
+    liveCollapsed = !liveCollapsed;
+    logEl.classList.toggle("thought-log-live-hidden", liveCollapsed);
+    rowEl.setAttribute("aria-expanded", String(!liveCollapsed));
+  }
+  rowEl.addEventListener("click", toggleLiveCollapse);
+  rowEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleLiveCollapse();
+    }
+  });
 
   // STEP UI: har action turi bo'yicha necha marta bajarilganini sanaymiz —
   // finish()da "Ran 4 commands, viewed a file, edited a file" uslubidagi
@@ -286,11 +317,12 @@ export function createThoughtPanel(sourceText) {
         return;
       }
       rowEl.remove();
+      logEl.classList.remove("thought-log-live-hidden"); // live-collapse mexanizmi bilan almashtiramiz
       logEl.classList.add("thought-log-collapsed");
       const toggle = document.createElement("button");
       toggle.type = "button";
       toggle.className = "thought-log-toggle";
-      toggle.textContent = _summarizeSteps(lang, stepCounts);
+      toggle.textContent = summarizeStepCounts(lang, stepCounts);
       toggle.setAttribute("aria-expanded", "false");
       toggle.addEventListener("click", () => {
         const isOpen = logEl.classList.toggle("thought-log-open");

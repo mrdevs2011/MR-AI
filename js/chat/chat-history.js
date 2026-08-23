@@ -125,29 +125,119 @@ export async function renderMessages() {
   const isEmpty = !active || active.messages.length === 0;
   setEmptyState(isEmpty);
   if (isEmpty) return;
-  const { addIOCard } = await import('./io-card.js');
   const { addOutputCard } = await import('./output-card.js');
-  const { addMessage } = await import('./message-render.js');
-  active.messages.forEach(m => {
-    if (m.kind === "io") {
-      addIOCard(m.input, m.output, false, null, !!m.blocked);
-    } else if (m.kind === "output_file") {
-      addOutputCard(m.file, active.category, active.filename, false);
-    } else if (m.kind === "thought") {
-      // Live SSE paytidagi thought-panel.js addThought() bilan bir xil
-      // vizual uslub (.thought-reasoning, thinking-panel.css) — reload
-      // bo'lgandan keyin ham model'ning ichki fikrlash matni oddiy chat
-      // pufakchasi emas, alohida ko'rinishda qolishi uchun.
-      const { chat: chatEl } = getEls();
-      const wrapper = document.createElement("div");
-      wrapper.className = "flex justify-start w-full";
-      wrapper.innerHTML = `<div class="max-w-full w-full rounded-2xl px-4 py-1"><div class="thought-reasoning"><span></span></div></div>`;
-      wrapper.querySelector(".thought-reasoning span").textContent = m.text || "";
-      chatEl.appendChild(wrapper);
-    } else {
-      addMessage(m.text, m.kind, false);
+  const { addMessage, escapeHtml } = await import('./message-render.js');
+  const { highlightBash, formatIOOutput } = await import('./io-card.js');
+  const { summarizeStepCounts, STEP_ICONS } = await import('../agent/thought-panel.js');
+  const { _detectLangJs } = await import('../utils/lang-detect.js');
+  const { chat: chatEl, chatScroll } = getEls();
+
+  // XATO FIX (2026-08-23): avval "io"/"thought"/"output_file" har biri
+  // ALOHIDA, thinking panel'siz to'g'ridan-to'g'ri chat oqimiga
+  // chiqardi — refresh/reload'dan keyin bash/kod bloklari "thinking"
+  // ichidan chiqib, oddiy chat pufakchalaridek ko'rinardi. Live SSE
+  // paytida esa BARCHASI (thought-panel.js: addThought/addStep va
+  // event-handler.js orqali addOutputCard) BITTA panel logEl ICHIGA
+  // yig'iladi va finish()da yopiq/ochiladigan blokka aylanadi. Endi
+  // reload paytida ham xuddi shu tuzilma qo'lda qayta quriladi: ketma-
+  // ket kelgan "io"/"thought"/"output_file" xabarlar guruhlanib, bitta
+  // .thought-log-toggle + .thought-log.thought-log-collapsed blokka
+  // yig'iladi — live'dagi finish() natijasi bilan bir xil ko'rinish.
+  function renderThoughtGroup(group, sourceText) {
+    const lang = _detectLangJs(sourceText) || "uz";
+    const wrapper = document.createElement("div");
+    wrapper.className = "flex justify-start w-full";
+    const inner = document.createElement("div");
+    inner.className = "max-w-full w-full rounded-2xl px-4 py-3";
+
+    const logEl = document.createElement("div");
+    logEl.className = "thought-log thought-log-collapsed";
+
+    // Saqlangan "io" xabarlar aniq action turini (command/read_file/...)
+    // saqlamaydi — har doim generik "bash" step sifatida ko'rsatiladi,
+    // xuddi eski addIOCard() har doim "bash" sarlavhasini chiqargani
+    // kabi. Shuning uchun hisoblash ham hammasini "command" deb sanaydi.
+    const counts = { command: 0, read_file: 0, list_dir: 0, web_search: 0, write_file: 0 };
+
+    group.forEach(gm => {
+      if (gm.kind === "thought") {
+        const line = document.createElement("div");
+        line.className = "thought-reasoning";
+        line.innerHTML = `<span>${escapeHtml(gm.text || "")}</span>`;
+        logEl.appendChild(line);
+      } else if (gm.kind === "io") {
+        counts.command += 1;
+        const wrap = document.createElement("div");
+        wrap.className = "thought-step";
+
+        const header = document.createElement("button");
+        header.type = "button";
+        header.className = "thought-step-header";
+        const labelText = (gm.input || "").split("\n")[0] || "bash";
+        header.innerHTML = `${STEP_ICONS.command}<span class="thought-step-label">${escapeHtml(labelText)}</span><span class="thought-step-chevron">▸</span>`;
+        wrap.appendChild(header);
+
+        const body = document.createElement("div");
+        body.className = "thought-step-body io-card" + (gm.blocked ? " io-card-blocked" : "");
+        const out = (gm.output && gm.output.trim()) ? gm.output : "(no output)";
+        const isErr = gm.blocked || /\[Exit code: [1-9]/.test(out) || /^Execution error:/.test(out) || /^Command timed out/.test(out);
+        body.innerHTML = `
+          <div class="io-section">
+            <div class="io-header">bash${gm.blocked ? ` <span class="io-blocked-badge">BLOCKED</span>` : ""}</div>
+            <pre class="io-content">${highlightBash(gm.input || "")}</pre>
+          </div>
+          <div class="io-section">
+            <div class="io-header">Output</div>
+            <pre class="io-content${isErr ? " io-output-err" : ""}">${formatIOOutput(out)}</pre>
+          </div>`;
+        wrap.appendChild(body);
+        header.addEventListener("click", () => {
+          const open = wrap.classList.toggle("thought-step-open");
+          header.querySelector(".thought-step-chevron").textContent = open ? "▾" : "▸";
+        });
+        logEl.appendChild(wrap);
+      } else if (gm.kind === "output_file") {
+        // persist=false — bu xabar allaqachon backend'da saqlangan,
+        // qayta yozib yuborish shart emas, faqat ko'rsatamiz.
+        addOutputCard(gm.file, active.category, active.filename, false, null, logEl);
+      }
+    });
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "thought-log-toggle";
+    toggle.textContent = summarizeStepCounts(lang, counts);
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.addEventListener("click", () => {
+      const isOpen = logEl.classList.toggle("thought-log-open");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    inner.appendChild(toggle);
+    inner.appendChild(logEl);
+    wrapper.appendChild(inner);
+    chatEl.appendChild(wrapper);
+  }
+
+  const GROUPED_KINDS = new Set(["io", "thought", "output_file"]);
+  let lastUserText = "";
+  let idx = 0;
+  while (idx < active.messages.length) {
+    const m = active.messages[idx];
+    if (GROUPED_KINDS.has(m.kind)) {
+      const group = [];
+      while (idx < active.messages.length && GROUPED_KINDS.has(active.messages[idx].kind)) {
+        group.push(active.messages[idx]);
+        idx++;
+      }
+      renderThoughtGroup(group, lastUserText);
+      continue;
     }
-  });
+    if (m.kind === "user") lastUserText = m.text || "";
+    addMessage(m.text, m.kind, false);
+    idx++;
+  }
+  chatScroll.scrollTop = chatScroll.scrollHeight;
 }
 
 export async function switchChat(id) {

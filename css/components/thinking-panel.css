@@ -78,6 +78,35 @@
 .thinking-dots {
   display: none;
 }
+/* ---- LIVE COLLAPSE — thinking-row endi bosiladigan (Claude uslubi):
+   hali stream davom etayotgan paytda ham yuqori qatorni bossa, pastdagi
+   thought-log birdan yig'ilib qoladi. ---- */
+.thinking-row-clickable {
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  transition: opacity 0.15s ease;
+}
+.thinking-row-clickable:hover {
+  opacity: 0.85;
+}
+.thinking-row-chevron {
+  font-size: 10px;
+  opacity: 0.55;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+.thinking-row-clickable[aria-expanded="false"] .thinking-row-chevron {
+  transform: rotate(-90deg);
+}
+.thought-log-live-hidden {
+  overflow: hidden;
+  max-height: 0 !important;
+  opacity: 0;
+  margin-bottom: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease;
+}
 #thinking-label {
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 35%, var(--ink) 50%, var(--muted) 65%, var(--muted) 100%);
   background-size: 200% 100%;
