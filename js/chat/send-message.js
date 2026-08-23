@@ -23,8 +23,9 @@ import { addMessage } from './message-render.js';
 import { autoResizeInput } from '../utils/dom.js';
 import { getPendingImageDataUrl, clearPendingImage } from '../ui/attach.js';
 import { createThoughtPanel } from '../agent/thought-panel.js';
-import { saveActiveJob, pollJob } from '../agent/job-polling.js';
+import { saveActiveJob, pollJob, cancelCurrentJob } from '../agent/job-polling.js';
 import { resetOutputCardDedup } from './output-card.js';
+import { setComposerState } from './composer-state.js';
 
 const input = document.getElementById("message");
 const sendBtn = document.getElementById("send");
@@ -58,7 +59,6 @@ export async function sendMessage() {
   setEmptyState(false);
   input.value = "";
   autoResizeInput(input);
-  sendBtn.disabled = true;
 
   const panel = createThoughtPanel(message);
 
@@ -93,12 +93,22 @@ export async function sendMessage() {
     panel.remove();
     addMessage("Couldn't reach the backend.\nTry again in a moment.", "bot");
   } finally {
-    sendBtn.disabled = false;
     input.focus();
   }
 }
 
-sendBtn.addEventListener("click", sendMessage);
+sendBtn.addEventListener("click", () => {
+  // STATE MACHINE BRANCH: bitta tugma, ikki xatti-harakat. dataset.state
+  // — yagona haqiqat manbai (setComposerState() yozadi), shuning uchun
+  // bu yerda alohida "hozir job ketyaptimi" flag'i tekshirilmaydi —
+  // agar ikkalasi sinxronizatsiyadan chiqib qolsa, xatoni topish
+  // qiyinlashadi. Faqat shu dataset'ni o'qiymiz.
+  if (sendBtn.dataset.state === "generating") {
+    cancelCurrentJob();
+  } else {
+    sendMessage();
+  }
+});
 input.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -109,3 +119,9 @@ input.addEventListener("keydown", e => {
 // ---- composer textarea auto-grow (1 line -> up to ~200px, then scrolls) ----
 input.addEventListener("input", () => autoResizeInput(input));
 requestAnimationFrame(() => autoResizeInput(input));
+
+// Boshlang'ich holat — sahifa yuklanganda tugma "idle" (strelka).
+// resumeActiveJobIfAny() (job-polling.js, agar refresh'dan keyin
+// tugallanmagan job qolgan bo'lsa) buni keyinroq "generating"ga
+// o'zgartiradi — qarang: job-polling.js'dagi resumeActiveJobIfAny().
+setComposerState("idle");

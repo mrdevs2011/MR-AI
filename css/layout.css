@@ -227,6 +227,20 @@
 .send-btn:hover { background: var(--accent-hover); }
 .send-btn:disabled { opacity: .35; }
 
+/* STOP FEATURE: [data-state="generating"] — job backend'da davom
+   etayotgan payt. Rangni ataylab accent'dan (yorqin, "yubor" degan
+   ma'noni bildiradigan) neytralroq/to'qroq rangga o'zgartiramiz — shu
+   bilan foydalanuvchi bir qarashda "bu boshqa harakat, endi bosish stop
+   qiladi" deb angliaydi, faqat shakl (strelka→kvadrat) emas, rang ham
+   signal beradi. */
+.send-btn[data-state="generating"] {
+  background: var(--ink-secondary);
+}
+.send-btn[data-state="generating"]:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
+
 /* ---- chat panel header: border + sarlavha fade-in (STEP 5'da qo'shildi,
    roadmap'da aniq joy ko'rsatilmagan edi, header/chrome mantig'iga
    yaqinligi uchun shu yerga qo'ydim) ---- */

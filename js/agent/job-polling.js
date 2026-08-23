@@ -30,10 +30,27 @@ import { addMessage } from '../chat/message-render.js';
 import { createThoughtPanel } from './thought-panel.js';
 import { parseSseChunk } from './sse-parser.js';
 import { handleAgentEvent } from './event-handler.js';
+import { setComposerState } from '../chat/composer-state.js';
 
 const ACTIVE_JOB_KEY = "MRagent_active_job"; // { job_id, category, filename }
 let currentPollTimer = null;
 let currentPollAfter = 0;
+
+// STOP FEATURE: hozir pollJob() bilan boshqarilayotgan job_id —
+// cancelCurrentJob() "qaysi job'ni bekor qilaman"ni shundan biladi.
+// pollJob() har chaqirilganda yangilanadi, tugaganda (yoki cancel
+// qilinganda) stopPolling() ichida null'ga qaytariladi.
+let currentJobId = null;
+
+// tickNow — pollJob() ichidagi tick() funksiyasiga tashqaridan
+// (pastdagi cancelCurrentJob()dan) qo'l yetkazish uchun. pollJob() har
+// chaqirilganda qayta yoziladi, shu bilan doim "hozirgi faol" tick'ga
+// ishora qiladi. Barcha boshqa modul-darajasidagi state (currentPollTimer,
+// currentJobId) bilan bir qatorda, funksiyalardan OLDIN e'lon qilinadi —
+// pastda "ishlatilgandan keyin e'lon qilingan" ko'rinishdagi chalkash
+// kod yozmaslik uchun (garchi let hoisting texnik jihatdan xavfsiz
+// bo'lsa ham, o'qiladigan kod ustunroq).
+let tickNow = null;
 
 export function saveActiveJob(jobId, category, filename) {
   localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ job_id: jobId, category, filename }));
@@ -59,13 +76,35 @@ export function loadActiveJob() {
 // qayta chizilib, ekranda ikki marta paydo bo'lmaydi.
 export async function pollJob(jobId, panel, originalMessage) {
   currentPollAfter = 0;
+  currentJobId = jobId;
   let sawAnyEvent = false;
+
+  // STOP FEATURE: pollJob() — job_id yaratilgandan (sendMessage() ichida)
+  // to yakunlangunga (stopPolling()) qadar bo'lgan BUTUN oraliqning
+  // yagona egasi. Shuning uchun composer holatini ("generating") ham
+  // AYNAN shu yerda, funksiya boshida qo'yamiz — sendMessage() o'zi
+  // bunga tegmaydi. Bu bitta muhim foyda beradi: pollJob() ikkinchi
+  // joydan ham chaqiriladi — resumeActiveJobIfAny() (pastda), sahifa
+  // refresh qilingandan keyin tugallanmagan job'ni davom ettirish uchun.
+  // Agar "generating" holatini faqat sendMessage() qo'ysa, refresh'dan
+  // keyin tugma "idle" (strelka) bo'lib qolib, foydalanuvchi hali
+  // backend'da davom etayotgan ishni STOP qila olmay qolardi.
+  setComposerState("generating");
 
   function stopPolling() {
     if (currentPollTimer) {
       clearTimeout(currentPollTimer);
       currentPollTimer = null;
     }
+    // Bu pollJob() chaqiruvi tugadi (done/error/cancelled — farqi yo'q)
+    // — endi hech kim bu job_id'ni "hozir davom etyapti" deb
+    // hisoblamasligi kerak, aks holda stop tugmasi allaqachon
+    // tugagan eski job'ga POST /cancel yuborib, foydasiz 404 oladi.
+    if (currentJobId === jobId) currentJobId = null;
+    // Composer holatini ham shu yerda qaytaramiz — pollJob()ning TO'RTTA
+    // chiqish yo'li (401/404/!res.ok/done) hammasi stopPolling() orqali
+    // o'tadi, shuning uchun bitta joyda yozib, hammasini qamraymiz.
+    setComposerState("idle");
   }
 
   return new Promise((resolve) => {
@@ -147,8 +186,46 @@ export async function pollJob(jobId, panel, originalMessage) {
       currentPollTimer = setTimeout(tick, 1200);
     }
 
+    tickNow = tick;
     tick();
   });
+}
+
+// STOP FEATURE: send-message.js'dagi stop tugmasi shu funksiyani
+// chaqiradi. Ikki narsa qiladi:
+// 1. Backend'ga POST /job/<id>/cancel yuboradi — bu darhol JOBS[id]
+//    ichiga kind="cancelled" final event yozadi va statusni "done"
+//    qiladi (backend tomoni, main.py'da allaqachon tayyor turibdi).
+// 2. Navbatdagi setTimeout(tick, ...)ni kutib o'tirmasdan, DARHOL
+//    keyingi tick()ni majburlab chaqiradi (navbatdagi 1.2s kutishni
+//    bypass qiladi) — shu bilan yuqoridagi (1)-band yozgan
+//    "cancelled" javobni foydalanuvchi bir zumda ko'radi, backend
+//    "final" deb hisoblagan payt bilan UI "final" ko'rsatgan payt
+//    orasida sezilarli tafovut bo'lmaydi.
+// Agar hech qanday job hozir davom etmayotgan bo'lsa (currentJobId
+// null — masalan tugma ikki marta ketma-ket bosilib qolsa), jim
+// qaytadi, xatoga chiqmaydi.
+export async function cancelCurrentJob() {
+  const jobId = currentJobId;
+  if (!jobId) return;
+
+  try {
+    await fetch(`${API_BASE}/job/${encodeURIComponent(jobId)}/cancel`, {
+      method: "POST",
+      headers: authHeaders({}),
+    });
+  } catch (err) {
+    // Tarmoq xatosi bo'lsa ham davom etamiz — pastdagi darhol-tick
+    // baribir foydali: agar cancel so'rovi aslida serverga yetgan
+    // bo'lsayu, faqat javob yo'lda yo'qolgan bo'lsa, keyingi poll
+    // barib bir xil "cancelled" holatni topadi.
+  }
+
+  if (currentPollTimer) {
+    clearTimeout(currentPollTimer);
+    currentPollTimer = null;
+    tickNow?.();
+  }
 }
 
 // Sahifa yuklanganda: agar oldingi session'dan tugallanmagan job qolgan
