@@ -26,6 +26,7 @@ function getEls() {
     chatHistoryEl: document.getElementById("chat-history"),
     chatTitleEl: document.getElementById("chat-title"),
     chat: document.getElementById("chat-inner"),
+    chatScroll: document.getElementById("chat"),
     emptyState: document.getElementById("empty-state"),
     chatFooter: document.getElementById("chat-footer"),
     composerSlotEmpty: document.getElementById("composer-slot-empty"),
