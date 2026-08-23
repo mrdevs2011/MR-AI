@@ -35,9 +35,18 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 let inactivityWatcherId = null;
 
 // Har bir himoyalangan so'rovga qo'shiladigan header'lar.
+// "ngrok-skip-browser-warning" — ngrok free-tier tunnel har bir brauzerdan
+// kelgan so'rovga (Accept: text/html bo'lsa) avval o'zining ogohlantirish
+// interstitial sahifasini qaytaradi, unda CORS header umuman yo'q —
+// shuning uchun brauzerda "CORS policy blocked" xatosi chiqadi, curl'da
+// esa yo'q (curl brauzer emas). Bu header shu interstitialni bypass qiladi.
 export function authHeaders(extra) {
   return Object.assign(
-    { "X-Login-Pass": LOGIN_PASS, "X-Session-Id": SESSION_ID },
+    {
+      "X-Login-Pass": LOGIN_PASS,
+      "X-Session-Id": SESSION_ID,
+      "ngrok-skip-browser-warning": "true",
+    },
     extra || {}
   );
 }
@@ -242,7 +251,7 @@ export async function doLogout(message) {
   if (API_BASE && sidToInvalidate) {
     fetch(`${API_BASE}/logout`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
       body: JSON.stringify({ session_id: sidToInvalidate }),
     }).catch(() => {});
   }

@@ -180,7 +180,7 @@ export function showTunnelRetry() {
 export async function requestOtp(pass) {
   const res = await fetch(`${API_BASE}/send-otp`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
     body: JSON.stringify({ pass })
   });
   const data = await res.json().catch(() => ({}));
@@ -191,7 +191,7 @@ export async function requestOtp(pass) {
 export async function verifyLogin(pass, otp) {
   const res = await fetch(`${API_BASE}/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
     body: JSON.stringify({ pass, otp })
   });
   const data = await res.json().catch(() => ({}));
