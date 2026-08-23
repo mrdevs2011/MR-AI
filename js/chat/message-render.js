@@ -63,13 +63,20 @@ export function wireCopyButton(btn, text) {
 export function addMessage(text, kind = "bot", persist = true) {
   const { chat, chatScroll } = getEls();
   const div = document.createElement("div");
-  const isUser = kind === "user";
+  // "user-queued" — job hali "generating" holatida bo'lganda yuborilgan
+  // xabar uchun: oddiy user pufakchasi bilan bir xil joylashuv (o'ngda),
+  // lekin kulrang/xira ko'rinishda (.bubble-queued modifier klassi).
+  // Job tugagach, activateQueuedMessage() shu klassni olib tashlaydi —
+  // xuddi shu DOM elementi (yangisi yaratilmaydi) normal ko'rinishga
+  // o'tadi. Qarang: send-message.js dispatchMessage().
+  const isQueued = kind === "user-queued";
+  const isUser = kind === "user" || isQueued;
   const isPending = kind === "pending";
   const isError = kind === "error";
   div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
   if (isUser) {
     div.innerHTML = `
-      <div class="max-w-[75%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user">
+      <div class="max-w-[75%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user${isQueued ? " bubble-queued" : ""}">
         <pre class="whitespace-pre-wrap font-sans">${escapeHtml(text)}</pre>
       </div>`;
   } else if (isPending) {
@@ -114,6 +121,37 @@ export function addMessage(text, kind = "bot", persist = true) {
     }
   }
   return div;
+}
+
+// activateQueuedMessage: addMessage(text, "user-queued", false) bilan
+// chizilgan kulrang pufakchani, job navbatdan chiqib ishlanish
+// boshlanganda, NORMAL user pufakchasiga aylantiradi — yangi element
+// yaratmasdan, faqat .bubble-queued klassini olib tashlab (shu bilan
+// bir zumda emas, .bubble-activated orqali yumshoq o'tish bilan).
+// U vaqtgacha persist=false bo'lgani uchun (navbatdagi payt chatga
+// saqlanmagan edi), shu yerda — AYNAN backend'ga yuborilayotgan payt —
+// active.messages'ga qo'shamiz, xuddi oddiy addMessage(text,"user")
+// qilgandek.
+export function activateQueuedMessage(div, text) {
+  const bubble = div?.querySelector(".bubble-queued");
+  if (bubble) {
+    bubble.classList.remove("bubble-queued");
+    bubble.classList.add("bubble-activated");
+    setTimeout(() => bubble.classList.remove("bubble-activated"), 400);
+  }
+
+  const active = getActiveChat();
+  if (active) {
+    active.messages.push({ text, kind: "user" });
+    if (active.title === "New chat") {
+      active.title = text.slice(0, 40);
+      import('./chat-history.js').then(({ renderChatHistory, updateChatTitle }) => {
+        renderChatHistory();
+        updateChatTitle();
+      });
+    }
+    saveChats();
+  }
 }
 
 // OpenRouter (bepul model) band bo'lib chaqiruv butunlay

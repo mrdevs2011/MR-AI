@@ -7,10 +7,21 @@
    ===================================================================== */
 
 /* ---- chat bubble'lar ---- */
-.bubble-user { background: #2C2B29; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+.bubble-user { background: #2C2B29; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity .25s ease, background-color .25s ease, color .25s ease, box-shadow .25s ease; }
 .bubble-bot { color: var(--ink); }
 .bubble-pending { background: var(--pending-bg); border: 1px solid var(--pending-border); }
 .bubble-error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); }
+
+/* ---- navbatdagi (queued) xabar: AI hali oldingi javobni tugatmagan
+   paytda yuborilgan xabar — kulrang/xira, job bo'shagach normal
+   bubble-user'ga aylanadi (activateQueuedMessage(), message-render.js) ---- */
+.bubble-queued {
+  background: #232221;
+  color: var(--muted, #8a8a85);
+  box-shadow: none;
+  opacity: 0.6;
+}
+.bubble-activated { opacity: 1; }
 
 /* ---- bot javoblari uchun render qilingan markdown ---- */
 .prose-bot { line-height: 1.65; color: var(--ink); }

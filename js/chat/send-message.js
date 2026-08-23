@@ -19,7 +19,7 @@ import { authHeaders, markActive } from '../auth/session.js';
 import { API_BASE } from '../state/store.js';
 import { getActiveChat } from './chat-storage.js';
 import { setEmptyState } from './chat-history.js';
-import { addMessage } from './message-render.js';
+import { addMessage, activateQueuedMessage } from './message-render.js';
 import { autoResizeInput } from '../utils/dom.js';
 import { getPendingImageDataUrl, clearPendingImage } from '../ui/attach.js';
 import { createThoughtPanel } from '../agent/thought-panel.js';
@@ -30,35 +30,40 @@ import { setComposerState } from './composer-state.js';
 const input = document.getElementById("message");
 const sendBtn = document.getElementById("send");
 
-export async function sendMessage() {
-  if (!API_BASE) return;
-  const message = input.value.trim();
-  if (!message) return;
+// MESSAGE QUEUE: AI hali oldingi job'ni ("generating") tugatmagan
+// paytda foydalanuvchi yana biror narsa yozib yuborsa, uni darhol
+// backend'ga otib yubormaymiz (ikkita job bir vaqtda tirbandlik
+// qilmasin), lekin foydalanuvchini ham kutdirib qo'ymaymiz — xabar
+// KULRANG (queued) holatda chatga darhol chiqadi, navbatga (bu
+// modul-darajasidagi array) qo'shiladi. dispatchMessage() joriy
+// job tugagach (pollJob resolve bo'lgach) o'zining finally blokida
+// processQueueNext()ni chaqiradi — shu yerda navbatdagi xabar
+// aktivlashadi (kulrang -> normal) va aynan shu funksiya orqali
+// haqiqatan ham backend'ga yuboriladi. Bitta array bo'lgani uchun
+// ketma-ket kelgan bir nechta xabar ham tartib bilan, birma-bir
+// ishlanadi.
+const messageQueue = [];
 
-  // Yangi so'rov = yangi turn: output-card dedup xotirasini tozalab
-  // qo'yamiz, aks holda bu turndagi "index.html" o'tgan turndagi
-  // "index.html" kartochkasi bilan bir xil deb hisoblanib, ustidan
-  // yozilib ketadi.
+function isGenerating() {
+  return sendBtn.dataset.state === "generating";
+}
+
+// dispatchMessage — HAQIQIY yuborish: fetch /chat, panel, pollJob.
+// Ikki joydan chaqiriladi: (1) sendMessage() to'g'ridan-to'g'ri, agent
+// bo'sh bo'lsa; (2) processQueueNext(), navbatdagi xabar uchun.
+// queuedBubble berilsa (holat #2), yangi user pufakchasi chizmaydi —
+// o'rniga o'sha kulrang pufakchani joyida normal holatga o'tkazadi.
+async function dispatchMessage(message, imageToSend, settings, queuedBubble) {
   resetOutputCardDedup();
 
-  const active = getActiveChat();
-  const category = (active && active.category) || "general";
-  const filename = (active && active.filename) || "chat";
-  const tier = document.getElementById("tier").value || "high";
-  const mode = document.getElementById("mode").value || "general";
-  const provider = document.getElementById("provider").value || "auto";
+  const { category, filename, tier, mode, provider } = settings;
 
-  // If an image is staged (see attach handler below), it rides along
-  // with this one message so the model can look at it, then gets
-  // cleared — same one-shot-per-turn behavior as typing a question
-  // about a picture you just showed someone.
-  const imageToSend = getPendingImageDataUrl();
-  clearPendingImage();
-
-  addMessage(message, "user");
+  if (queuedBubble) {
+    activateQueuedMessage(queuedBubble, message);
+  } else {
+    addMessage(message, "user");
+  }
   setEmptyState(false);
-  input.value = "";
-  autoResizeInput(input);
 
   const panel = createThoughtPanel(message);
 
@@ -94,7 +99,57 @@ export async function sendMessage() {
     addMessage("Couldn't reach the backend.\nTry again in a moment.", "bot");
   } finally {
     input.focus();
+    // Joriy job (shu jumladan mana shu dispatchMessage() o'zi
+    // boshlagani) endi tugadi — composer "idle"ga qaytdi (pollJob
+    // stopPolling()'i buni allaqachon qo'ygan). Navbatda kutib turgan
+    // xabar bo'lsa, shuni endi ishga tushiramiz.
+    processQueueNext();
   }
+}
+
+function processQueueNext() {
+  if (isGenerating()) return; // xavfsizlik uchun — hali band bo'lsa, tegmaymiz
+  const next = messageQueue.shift();
+  if (!next) return;
+  dispatchMessage(next.message, next.imageToSend, next.settings, next.bubble);
+}
+
+export async function sendMessage() {
+  if (!API_BASE) return;
+  const message = input.value.trim();
+  if (!message) return;
+
+  const active = getActiveChat();
+  const settings = {
+    category: (active && active.category) || "general",
+    filename: (active && active.filename) || "chat",
+    tier: document.getElementById("tier").value || "high",
+    mode: document.getElementById("mode").value || "general",
+    provider: document.getElementById("provider").value || "auto",
+  };
+
+  // If an image is staged (see attach handler below), it rides along
+  // with this one message so the model can look at it, then gets
+  // cleared — same one-shot-per-turn behavior as typing a question
+  // about a picture you just showed someone.
+  const imageToSend = getPendingImageDataUrl();
+  clearPendingImage();
+
+  input.value = "";
+  autoResizeInput(input);
+
+  if (isGenerating()) {
+    // AI hozir band — xabarni kulrang holda chatga chiqaramiz va
+    // navbatga qo'yamiz. persist=false: hali backend'ga yuborilmagan,
+    // shuning uchun chat tarixiga ham hali yozilmaydi (activateQueuedMessage
+    // buni navbat ishga tushganda o'zi qiladi).
+    const bubble = addMessage(message, "user-queued", false);
+    setEmptyState(false);
+    messageQueue.push({ message, imageToSend, settings, bubble });
+    return;
+  }
+
+  await dispatchMessage(message, imageToSend, settings, null);
 }
 
 sendBtn.addEventListener("click", () => {
