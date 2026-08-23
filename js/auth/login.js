@@ -285,6 +285,9 @@ loginForm.addEventListener("submit", async (e) => {
     } else if (error === "email_not_configured_or_failed") {
       loginError.textContent = "Couldn't send the email — try again in a moment.";
       loginError.classList.remove("hidden");
+    } else if (error === "rate_limited") {
+      loginError.textContent = "Juda ko'p urinish. Biroz kutib qayta urining.";
+      loginError.classList.remove("hidden");
     } else {
       loginError.textContent = "Couldn't send OTP. Try again.";
       loginError.classList.remove("hidden");
