@@ -161,6 +161,16 @@
 }
 .composer-toolbar-right .send-btn { margin-left: 10px; }
 
+/* ---- #empty-state: welcome sarlavha + composer joylashgan markaziy blok.
+   Skrinshotlarda (390/571/1440px) yon bo'shliq ham #welcome kabi TEKIS
+   o'sadi — tor ekranda deyarli chekkaga yaqin, keng ekranda anча ko'proq
+   nafas joyi. index.html'dagi px-4 (16px qattiq) shu bilan override
+   qilinadi; bitta joyda bitta manba — HTML emas, shu yerda boshqariladi. */
+#empty-state {
+  padding-left: clamp(1rem, 0.5rem + 2vw, 2.5rem);
+  padding-right: clamp(1rem, 0.5rem + 2vw, 2.5rem);
+}
+
 /* ---- composer: chegaralangan quti ---- */
 .composer-box {
   border: 1px solid var(--border);

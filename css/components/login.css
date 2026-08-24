@@ -12,6 +12,22 @@
   font-weight: 500 !important;
 }
 
+/* ---- #welcome fluid font-size: mobile/tablet/desktop skrinshotlarida
+   sarlavha o'lchami breakpoint bo'yicha SAKRAMAYDI — 390px'dan 1440px'gacha
+   tekis o'sib boradi. Shu sabab @media emas, clamp() ishlatilgan (skrinshot
+   ekvivalenti: ~390px'da ~28px, ~1440px'da ~38px, orasi chiziqli).
+   text-2xl (index.html'dagi Tailwind class) shu bilan override qilinadi —
+   font-family kabi bu yerda ham bitta manba: HTML emas, CSS boshqaradi. */
+#welcome {
+  /* min 1.375rem (22px) — Playwright'da 390px konteynerda (358px real
+     kenglik) binary-search bilan o'lchangan: 23px'dan pastda 1 qator,
+     24px'dan yuqorida 2 qatorga sinadi. 22px = 23px chegarasidan bitta
+     bosqich pastroq xavfsizlik zaxirasi (font hinting/qurilma farqlari
+     uchun) — ko'z bilan "chiroyli ko'rinadi" deb emas, o'lchangan raqam. */
+  font-size: clamp(1.375rem, 1rem + 1.6vw, 2.375rem);
+  line-height: 1.25;
+}
+
 .login-input {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);

@@ -10,6 +10,27 @@
   transition: background-color .12s ease;
 }
 
+/* ---- top nav (New / Bash): Claude.ai'dagi "New/Projects/Artifacts/..."
+   qatoriga tipografik jihatdan mos — matn text-sm(14px)dan bir oz
+   kattaroq va og'irroq, icon bilan orasi biroz kengroq. Faqat mavjud
+   ikkita tugma (New, Bash) shu stilga o'tadi — yangi bo'lim qo'shilmadi. ---- */
+.sidebar-nav-item {
+  font-size: 14.5px;
+  font-weight: 450;
+  gap: 11px;
+}
+.sidebar-nav-item svg { color: var(--muted); }
+
+/* ---- "Chats" bo'lim sarlavhasi: Claude.ai'dagi "Chats and tasks"
+   bilan bir xil tipografik og'irlik (biroz kattaroq matn, ko'proq
+   letter-spacing) — matn mazmuni ("Chats") o'zgarmadi. ---- */
+.sidebar-section-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
 /* ---- sidebar: chat qidiruv qatori (Claude'dagi "Search chats") ---- */
 .sidebar-search-wrap {
   display: flex;
@@ -53,16 +74,34 @@
 .chat-item-title {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   background: transparent;
   border: none;
   color: var(--ink-secondary);
   padding: 8px 6px 8px 12px;
   font-size: 13.5px;
+  cursor: pointer;
+}
+/* ---- Claude.ai uslubidagi kichik "○" bullet — har bir chat qatorining
+   sarlavhasi oldida. Sof vizual, hech qanday state/click'ga bog'liq
+   emas. currentColor ishlatilgani uchun active/hover holatida matn
+   bilan bir xil rangga o'tadi (pastdagi color qoidasi orqali). ---- */
+.chat-item-bullet {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.75;
+}
+.chat-item-title-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
 }
 .chat-item-row.active .chat-item-title,
 .chat-item-row:hover .chat-item-title { color: var(--ink); }
@@ -86,3 +125,29 @@
 }
 .chat-item-delete:hover { background: var(--danger-bg); color: var(--danger); }
 .chat-item-delete:disabled { opacity: .4; pointer-events: none; }
+
+/* ---- pastki profil qatori: avatar+ism/status + sign-out. Struktura
+   Claude.ai'dagi avatar+"MR · Free"+action-icons qatoriga mos (flex,
+   justify-between, bir xil vertikal padding) — mazmun ("connected"
+   holati, "sign out" matni) o'zgarmadi, chunki bular haqiqiy funksional
+   ma'lumot (tunnel-status, logout), Claude'dagi "Free" tier-belgisi
+   kabi dekorativ emas. ---- */
+.sidebar-footer-row {
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+}
+.sidebar-footer-action {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background-color .12s ease, color .12s ease;
+}
+.sidebar-footer-action:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+}

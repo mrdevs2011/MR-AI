@@ -84,9 +84,20 @@ export function renderChatHistory() {
     const titleBtn = document.createElement("button");
     titleBtn.type = "button";
     titleBtn.className = "chat-item-title";
-    titleBtn.textContent = c.title || "New chat";
     titleBtn.title = c.title || "New chat";
     titleBtn.addEventListener("click", () => switchChat(c.id));
+    // Claude.ai uslubidagi kichik bullet — sof vizual belgi, hech qanday
+    // state/click logikasiga bog'liq emas. textContent o'rniga innerHTML
+    // + alohida span ishlatildi, chunki chat sarlavhasi endi ikkita
+    // vizual qismdan (bullet + matn) iborat.
+    const bulletSpan = document.createElement("span");
+    bulletSpan.className = "chat-item-bullet";
+    bulletSpan.setAttribute("aria-hidden", "true");
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "chat-item-title-text";
+    titleSpan.textContent = c.title || "New chat";
+    titleBtn.appendChild(bulletSpan);
+    titleBtn.appendChild(titleSpan);
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
