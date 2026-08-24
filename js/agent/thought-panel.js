@@ -24,6 +24,27 @@ function getEls() {
   };
 }
 
+// SMART AUTOSCROLL FIX: avval har bir addStep/addThought/appendThoughtDelta
+// SHARTSIZ chatScroll.scrollTop = chatScroll.scrollHeight chaqirardi. Bu
+// stream davomida (har ~50-200ms bir marta) ishga tushadi — agar
+// foydalanuvchi shu payt panelni ochib, yuqoriroqdagi biror step'ni o'qishga
+// scroll qilgan bo'lsa, bir necha o'n millisoniyadan keyin kelgan navbatdagi
+// delta uni DARHOL pastga qaytarib yuborardi ("header bosilganda eng
+// pastiga tushib ketyapti" — aslida sabab bosish emas, undan keyin darhol
+// kelgan streaming event edi). TUZATISH: har chaqiruvda avval foydalanuvchi
+// ALLAQACHON pastda (yoki pastga yaqin) turganmi tekshiramiz — shunday
+// bo'lsagina avtomatik pastga suramiz; aks holda joyida qoldiramiz, xuddi
+// Claude/ChatGPT kabi zamonaviy chat UI'lar qanday ishlasa shunday.
+const _AUTOSCROLL_THRESHOLD_PX = 80;
+
+function _isNearBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= _AUTOSCROLL_THRESHOLD_PX;
+}
+
+function _autoscrollIfNearBottom(el, wasNearBottom) {
+  if (wasNearBottom) el.scrollTop = el.scrollHeight;
+}
+
 // Mirrors backend detect_lang()/action_label() just enough for the
 // placeholder shown before the FIRST real SSE "thinking" event arrives
 // (which overwrites it immediately via setLabel — this only covers the
@@ -94,18 +115,26 @@ export function createThoughtPanel(sourceText) {
   const initialLabel = lang ? _SENDING_LABEL[lang] : "...";
   const wrapper = document.createElement("div");
   wrapper.className = "flex justify-start w-full";
+  // BUG FIX (2026-08-24, achiq haqiqat): bu ikkita <div> avval TESKARI
+  // tartibda edi (.thought-log birinchi, .thinking-row keyin) — komment
+  // pastda "yuqoridagi thinking-row'ni bossa..." deb yozilgan bo'lsa ham,
+  // haqiqiy markup uni PASTGA qo'yardi. Natija: live stream paytida har
+  // yangi step logEl'ga qo'shilgani sari, header (orb+label) tobora
+  // pastga surilib ketardi (rasmda ko'ringan — "O'ylanmoqda" eng pastda,
+  // 6-7 ta step ustida). Endi .thinking-row HAMISHA birinchi/tepada —
+  // header statik joyida qoladi, thought-log esa uning OSTIDA o'sadi.
   wrapper.innerHTML = `
     <div class="max-w-full w-full rounded-2xl px-4 py-3">
-      <div class="thought-log" id="thought-log"></div>
       <div class="thinking-row thinking-row-clickable" id="thinking-row" role="button" tabindex="0" aria-expanded="true">
         <video class="thinking-orb-video" src="assets/circle2_transparent.webm" autoplay loop muted playsinline></video>
         <span id="thinking-label">${initialLabel}</span>
         <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
         <span class="thinking-row-chevron">▾</span>
       </div>
+      <div class="thought-log" id="thought-log"></div>
     </div>`;
   chat.appendChild(wrapper);
-  chatScroll.scrollTop = chatScroll.scrollHeight;
+  chatScroll.scrollTop = chatScroll.scrollHeight; // panelning o'zi yangi, hali hech narsa o'qib turilmagan — bu birinchi paydo bo'lish, doim pastga suramiz
 
   const logEl = wrapper.querySelector("#thought-log");
   const rowEl = wrapper.querySelector("#thinking-row");
@@ -186,12 +215,13 @@ export function createThoughtPanel(sourceText) {
       };
       pick();
       ponderIntervalId = setInterval(pick, _PONDER_INTERVAL_MS);
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+      _autoscrollIfNearBottom(chatScroll, _isNearBottom(chatScroll));
     },
     setLabel(text) {
+      const wasNearBottom = _isNearBottom(chatScroll);
       stopPondering();
       labelEl.textContent = text;
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+      _autoscrollIfNearBottom(chatScroll, wasNearBottom);
     },
     // STEP UI: eski commitLine() shunchaki bitta matn qatorini yozardi,
     // haqiqiy bash input/output esa BUTUNLAY BOSHQA joyda — chat oqimida,
@@ -204,6 +234,7 @@ export function createThoughtPanel(sourceText) {
     // ochiladigan blok o'rniga inline diff badge ko'rsatiladi ("main.py
     // +12 -3") — backend _line_diff_stats() orqali hisoblab beradi.
     addStep(evt) {
+      const wasNearBottom = _isNearBottom(chatScroll);
       stopPondering();
       const action = evt.action || "command";
       if (stepCounts[action] !== undefined) stepCounts[action] += 1;
@@ -255,30 +286,29 @@ export function createThoughtPanel(sourceText) {
       }
 
       logEl.appendChild(wrap);
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+      _autoscrollIfNearBottom(chatScroll, wasNearBottom);
       return wrap;
     },
     addThought(text) {
       // Model'ning ichki fikrlash matni (backend "model_thinking" SSE
-      // event'i) — bu "step_result" emas (hech qanday action bajarilmadi),
-      // shuning uchun commitLine()dagi checkmark uslubi mos emas.
-      // Vizual jihatdan italic/muted, oddiy action qatorlaridan alohida
-      // ko'rinishi kerak — "thought-line" emas, alohida "thought-reasoning"
-      // klassi bilan.
+      // event'i) — bu "step_result" emas, shuning uchun alohida
+      // "thought-reasoning" klassi bilan, italic/muted ko'rinishda.
       if (!text) return;
+      const wasNearBottom = _isNearBottom(chatScroll);
       stopPondering();
       const line = document.createElement("div");
       line.className = "thought-reasoning";
       line.innerHTML = `<span>${escapeHtml(text)}</span>`;
       logEl.appendChild(line);
       hasContent = true;
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+      _autoscrollIfNearBottom(chatScroll, wasNearBottom);
     },
     appendThoughtDelta(delta, step) {
       // Claude uslubidagi canli terish: har bo'lak kelgan zahoti mavjud
       // qatorga qo'shiladi (textContent += — innerHTML emas, shu bilan
       // XSS xavfsiz va tez, escapeHtml() har harfda chaqirilmaydi).
       if (!delta) return;
+      const wasNearBottom = _isNearBottom(chatScroll);
       stopPondering();
       if (liveStep !== step || !liveSpanEl) {
         // Yangi agent qadami boshlandi (yoki bu — shu panelning birinchi
@@ -292,7 +322,7 @@ export function createThoughtPanel(sourceText) {
         hasContent = true;
       }
       liveSpanEl.textContent += delta;
-      chatScroll.scrollTop = chatScroll.scrollHeight;
+      _autoscrollIfNearBottom(chatScroll, wasNearBottom);
     },
     remove() {
       stopPondering();

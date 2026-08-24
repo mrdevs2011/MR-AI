@@ -65,7 +65,7 @@ export function backendMessagesToUi(messages, outputs) {
     if (m.role === "pending" || m.role === "error") {
       return { text: m.content, kind: "bot" };
     }
-    if (m.role === "THINKING") {
+    if (m.role === "thinking") {
       // XATO FIX: bu branch yo'q edi — "THINKING" roli generic else'ga
       // tushib, kind: "bot" bilan oddiy assistant xabari sifatida
       // ko'rsatilardi (refresh/reload'dan keyin). Live SSE paytida esa
