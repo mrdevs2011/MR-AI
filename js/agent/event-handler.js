@@ -15,6 +15,7 @@ import {
   addMessage, addMessageTyped, addConfirmButton, addDangerConfirmCard,
   addRetryButton,
 } from '../chat/message-render.js';
+import { speak } from '../audio/tts.js';
 
 // handleAgentEvent: bitta SSE event'ni qanday chizishni hal qiladi —
 // avvalgi consumeAgentStream ichidagi mantiqning o'zi, faqat endi
@@ -97,7 +98,13 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
         addRetryButton(originalMessage);
       }
     } else {
-      addMessageTyped(evt.response || "No response");
+      const responseText = evt.response || "No response";
+      addMessageTyped(responseText);
+      // Faqat oddiy muvaffaqiyatli javoblarda gapiradi — error/blocked/
+      // pending_confirmation holatlari yuqorida alohida ushlanadi, bu
+      // yerga umuman kelmaydi, shuning uchun qo'shimcha tekshiruv shart
+      // emas.
+      speak(responseText);
     }
   }
 }
