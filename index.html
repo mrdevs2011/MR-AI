@@ -197,6 +197,17 @@
     </div>
   </div>
 
+  <!-- ===== VAQTINCHALIK DEBUG KONSOL (ERUDA) =====
+       Mobil qurilmada F12 yo'q, shuning uchun on-screen console kerak.
+       Bug topilgach BU BLOK O'CHIRILADI — production'da doim qolmaydi
+       (tashqi CDN'ga bog'liqlik + ekranda ortiqcha tugma, foydalanuvchiga
+       kerak emas). ["mrai-debug"="0"] localStorage bilan o'chirib qo'yish
+       ham mumkin, lekin hozircha shartsiz yoqilgan — tezroq topish uchun.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
+  <!-- ===== DEBUG KONSOL TUGADI ===== -->
+
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
