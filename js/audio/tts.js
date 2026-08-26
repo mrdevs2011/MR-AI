@@ -37,7 +37,11 @@ export function stopSpeaking() {
   }
 }
 
-export async function speak(text) {
+// onEnd (ixtiyoriy) — chaqiruvchi tomon (masalan, msg-actions'dagi
+// read-btn) audio TABIIY tugaganda ikonkani qaytarish uchun beradi.
+// Eski chaqiruvchilar (event-handler.js) buni bermaydi — orqaga
+// mos (backward compatible), hech nima buzilmaydi.
+export async function speak(text, onEnd) {
   if (!voiceEnabled) return;
   const clean = stripForSpeech(text);
   if (!clean) return;
@@ -52,14 +56,22 @@ export async function speak(text) {
     });
     if (!res.ok) {
       console.warn("TTS so'rovi muvaffaqiyatsiz:", res.status);
+      onEnd?.();
       return;
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     currentAudio = new Audio(url);
-    currentAudio.play().catch((e) => console.warn("Audio play bloklandi:", e));
-    currentAudio.onended = () => URL.revokeObjectURL(url);
+    currentAudio.play().catch((e) => {
+      console.warn("Audio play bloklandi:", e);
+      onEnd?.();
+    });
+    currentAudio.onended = () => {
+      URL.revokeObjectURL(url);
+      onEnd?.();
+    };
   } catch (err) {
     console.warn("TTS xatosi:", err);
+    onEnd?.();
   }
 }
