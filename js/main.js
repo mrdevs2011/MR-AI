@@ -42,6 +42,7 @@ import { loadChats } from './chat/chat-storage.js';
 import { ensureActiveChat } from './chat/chat-storage.js';
 import { tryAutoLogin } from './auth/session.js';
 import { loadTunnelUrl } from './auth/login.js';
+import { startWakeWordListener } from './voice/wakeword.js';
 
 // Cross-module ko'priklar — Step 7-9'dagi fayllar bularni
 // window.X?.() orqali "hali yo'q" deb optional-chain qilib chaqirgan
@@ -81,6 +82,11 @@ async function showApp() {
   await loadChats();
   await ensureActiveChat();
   input.focus();
+
+  // "Hey Agent" wake-word listener — auth muvaffaqiyatli bo'lgandagina
+  // (ya'ni shu showApp() chaqirilganda) mikrofon tinglashni boshlaydi.
+  // Logout bo'lganda auth/session.js doLogout() ichida to'xtatiladi.
+  startWakeWordListener();
 
   // Sahifa (qayta) ochilganda — agar oldingi urinishda javob kutib
   // turgan job qolgan bo'lsa (refresh, tab yopilishi, boshqa

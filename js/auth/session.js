@@ -30,6 +30,7 @@
    ===================================================================== */
 
 import { API_BASE, SESSION_ID, LOGIN_PASS, setSessionId, setLoginPass } from '../state/store.js';
+import { stopWakeWordListener } from '../voice/wakeword.js';
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 let inactivityWatcherId = null;
@@ -242,6 +243,11 @@ export async function doLogout(message) {
   if (statusText) statusText.textContent = "Measuring local data…";
 
   stopInactivityWatcher();
+  // "Hey Agent" wake-word mikrofonini o'chiramiz — auth false bo'lgach
+  // tinglash davom etmasligi SHART (voice/wakeword.js to'g'ridan-to'g'ri
+  // import qilingan, chunki u session.js'ga bog'liq emas — circular
+  // import xavfi yo'q, shuning uchun window bridge shart emas edi).
+  stopWakeWordListener();
   // ui/terminal.js Step 10'gacha mavjud emas — window orqali xavfsiz
   // optional chain (yuqoridagi fayl izohiga qarang).
   window.teardownTerminal?.();
