@@ -1,26 +1,39 @@
 /* =====================================================================
-   voice/wakeword.js — "Hey Agent" wake-word listener. Brauzerning ichki
+   voice/wakeword.js — ko'p-so'zli wake-word listener ("bratan",
+   "bratishka", "hey agent", "agent", "mragent"). Brauzerning ichki
    Web Speech API'si (webkitSpeechRecognition) orqali uzluksiz tinglaydi,
-   transkriptda "hey agent" frazasini topsa, wakeword-audio.js dagi
+   transkriptda shu so'zlardan birini topsa, wakeword-audio.js dagi
    playAckSound() ni chaqiradi.
 
-   QACHON start/stop qilinishi kerak:
-   - startWakeWordListener() — auth true bo'lgach (main.js showApp()
-     ichida) chaqiriladi.
-   - stopWakeWordListener() — logout bo'lganda (auth/session.js
-     doLogout() ichida) chaqiriladi. Mikrofon auth false holatda
-     ASLO tinglamasligi kerak.
-
-   MUHIM (achiq haqiqat — bu offline EMAS): webkitSpeechRecognition
-   ovozni brauzer vendor serveriga (Chrome bo'lsa — Google) yuborib,
-   o'sha yerda transkripsiya qilinadi va natija qaytariladi. Ya'ni har bir
-   gapiring narsa tarmoq orqali uchinchi tomonga ketadi. Bu hozircha eng
-   tez/oddiy yechim, lekin 100% maxfiy emasligini bilib qo'y.
+   MUHIM (achiq haqiqat — bu sen so'ragan narsaning real narxi):
+   1) TIL MUAMMOSI: so'zlar aralash — "bratan"/"bratishka" o'zbekcha-
+      ruscha, "agent"/"mragent"/"hey agent" inglizcha. Web Speech API
+      BITTA tilni tinglaydi (rec.lang), ikkalasini bir vaqtda "native"
+      aniq tanimaydi. en-US tanlandi (aksariyat trigger so'zlar
+      inglizcha bo'lgani uchun) — demak "bratan"/"bratishka" ba'zan
+      noto'g'ri transkript bo'lib, umuman aniqlanmasligi mumkin. Agar
+      shu ikkisi tez-tez ishlamasa — bu kutilgan holat, uz-UZ'ga
+      qaytarish variant, lekin o'shanda "agent" so'zlari yomonlashadi.
+      Debug uchun har bir transkript console.debug bilan chiqadi — F12
+      Console'ni ochib, aslida nima "eshitilgan"ini ko'rib, so'zlarni
+      shunga moslab sozlash mumkin.
+   2) FEEDBACK-LOOP XAVFI: "agent" — juda umumiy so'z, ustiga ilova
+      nomi ham "MRagent". Agar TTS (audio/tts.js) javob berayotganda
+      shu so'zni aytsa va mikrofon uni "eshitib qolsa" (dinamikdan
+      chiqqan tovush qayta mikrofonga tushsa), wake-word o'zi-o'ziga
+      trigger bo'lib ketishi mumkin — cheksiz loop emas (bitta ack
+      chaladi, keyin jim), lekin kutilmagan joyda chaqirib qolishi
+      mumkin. Agar bu muammo bo'lsa, "agent" ni yolg'iz so'z sifatida
+      regexdan olib tashlash kerak bo'ladi (faqat "hey agent"/"mragent"
+      qoldirilsa xavf kamayadi).
+   3) OFFLINE EMAS: webkitSpeechRecognition ovozni brauzer vendor
+      serveriga (Chrome bo'lsa — Google) yuborib, o'sha yerda
+      transkripsiya qiladi. 100% maxfiy emas.
    ===================================================================== */
 
 import { playAckSound } from "./wakeword-audio.js";
 
-const WAKE_WORD_RE = /\bhey,?\s+agent\b/i;
+const WAKE_WORD_RE = /\b(bratan|bratishka|hey,?\s+agent|mragent|agent)\b/i;
 
 let recognition = null;
 let active = false; // true bo'lsa, onend kelganda avtomatik qayta boshlaymiz
@@ -47,6 +60,7 @@ function createRecognition() {
       const result = event.results[i];
       if (!result.isFinal) continue;
       const transcript = result[0]?.transcript?.toLowerCase() ?? "";
+      console.debug("Wake-word transkript:", transcript); // tuning uchun — kerak bo'lmasa o'chirib tashla
       if (WAKE_WORD_RE.test(transcript)) {
         playAckSound();
       }
