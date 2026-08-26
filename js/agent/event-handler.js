@@ -16,6 +16,7 @@ import {
   addRetryButton,
 } from '../chat/message-render.js';
 import { speak } from '../audio/tts.js';
+import { speakEdge } from '../audio/edge-tts.js';
 
 // handleAgentEvent: bitta SSE event'ni qanday chizishni hal qiladi —
 // avvalgi consumeAgentStream ichidagi mantiqning o'zi, faqat endi
@@ -104,7 +105,18 @@ export function handleAgentEvent(evt, panel, originalMessage, setPanel) {
       // pending_confirmation holatlari yuqorida alohida ushlanadi, bu
       // yerga umuman kelmaydi, shuning uchun qo'shimcha tekshiruv shart
       // emas.
-      speak(responseText);
+      //
+      // TTS TANLOVI (achiq haqiqat): birinchi navbatda norasmiy
+      // Microsoft Edge "Sardor" ovozini sinaymiz (bepul, backend'ga
+      // umuman ehtiyoj yo'q). Bu norasmiy endpoint bo'lgani uchun
+      // istalgan payt ishlamay qolishi mumkin — shu holatda avtomatik
+      // audio/tts.js dagi ElevenLabs speak()ga (backend orqali)
+      // qaytamiz, foydalanuvchi hech qanday sozlamasiz doim ovozli
+      // javob oladi.
+      speakEdge(responseText).catch((err) => {
+        console.warn("Edge TTS (Sardor) ishlamadi, ElevenLabs'ga qaytildi:", err);
+        speak(responseText);
+      });
     }
   }
 }
