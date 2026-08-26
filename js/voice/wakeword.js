@@ -119,9 +119,19 @@ function createRecognition(kind) {
         const transcript = result[0]?.transcript?.toLowerCase() ?? "";
         console.debug("Wake-word transkript:", transcript); // tuning uchun
         if (WAKE_WORD_RE.test(transcript)) {
-          playAckSound();
-          startRecognizer("dictation");
-          return; // shu tsikldan chiqamiz — recognition allaqachon almashtirildi
+          // Avval wake recognizer'ni DARHOL to'xtatamiz — ack ovoz
+          // karnaydan chiqayotganda mikrofon hech narsani tinglamasin
+          // (feedback-loop xavfi, yuqoridagi izohga qarang). Faqat ack
+          // ovoz TABIIY tugagach (playAckSound() Promise'i resolve
+          // bo'lgach) dictation recognizer'ni yoqamiz.
+          mode = "ack"; // vaqtinchalik — hech qanday recognizer ishlamaydi
+          try {
+            rec.stop();
+          } catch (_) {}
+          playAckSound().then(() => {
+            if (active) startRecognizer("dictation");
+          });
+          return; // shu tsikldan chiqamiz — recognition allaqachon to'xtatildi
         }
       }
     };
@@ -158,13 +168,21 @@ function createRecognition(kind) {
   };
 
   rec.onend = () => {
-    // MUHIM BUG FIX (achiq haqiqat): rec.start() shu yerda DARHOL
-    // chaqirilsa, Android Chrome'da recognition obyekti hali to'liq
-    // "yopilmagan" holatda bo'lishi mumkin — bu InvalidStateError beradi.
-    // Kichik kechikish (250ms) bu race condition'ni oldini oladi.
-    if (active) {
+    // BUG FIX (achiq haqiqat, oldingi versiyada shu yerda edi): agar shu
+    // `rec` instance endi global `recognition`'ga teng bo'lmasa — demak
+    // u ESKIRGAN (startRecognizer() boshqa rejimga o'tib ketgan, masalan
+    // wake -> dictation), va uni QAYTA ISHGA TUSHIRMASLIK kerak.
+    // Avvalgi versiyada `rec.start()` shartsiz chaqirilardi — bu ESKI
+    // recognizer'ni "zombi" holida tiriltirib, yangi (masalan dictation)
+    // recognizer bilan BIR VAQTDA ishlab turishiga sabab bo'lardi. Ikkalasi
+    // ham mikrofonni tinglagani uchun, ack ovoz karnaydan chiqqanda eski
+    // (zombi) wake recognizer o'sha ovozdan "agent" so'ziga o'xshash narsa
+    // eshitib, o'z-o'zidan yana playAckSound()ni chaqirardi — bu esa hali
+    // tugamagan audio'ni pause+restart qilib, "hel-lo-s-s-si-s-r" kabi
+    // bo'lib-bo'lib chiqadigan ovoz effektiga sabab bo'lgan.
+    if (active && rec === recognition && mode === kind) {
       setTimeout(() => {
-        if (!active) return;
+        if (!active || rec !== recognition || mode !== kind) return;
         try {
           rec.start();
         } catch (err) {

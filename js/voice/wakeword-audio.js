@@ -21,17 +21,37 @@ let currentAckAudio = null;
  * tez aytilsa), oldingisini to'xtatib, yangisini boshidan boshlaydi —
  * overlap (bir necha ovoz bir vaqtda ustma-ust chalinishi) bo'lmasin deb.
  */
-export async function playAckSound() {
-  try {
-    if (currentAckAudio) {
-      currentAckAudio.pause();
-      currentAckAudio.currentTime = 0;
+/**
+ * "Ha janob, eshityapman" ack ovozini chaladi. Promise audio TABIIY
+ * tugaganda (yoki xato bo'lsa, darhol) resolve bo'ladi — chaqiruvchi
+ * tomon (wakeword.js) shu Promise'ni kutib, keyin dictation
+ * recognizer'ni yoqadi. Buning sababi: agar mikrofon ack ovoz hali
+ * chiqayotganda tinglashni boshlasa, o'z karnayidan chiqqan tovushni
+ * "buyruq" deb eshitib qolishi mumkin (feedback loop).
+ * Agar oldingi ijro hali tugamagan bo'lsa (masalan "bratan" ketma-ket
+ * tez aytilsa), oldingisini to'xtatib, yangisini boshidan boshlaydi —
+ * overlap (bir necha ovoz bir vaqtda ustma-ust chalinishi) bo'lmasin deb.
+ */
+export function playAckSound() {
+  return new Promise((resolve) => {
+    try {
+      if (currentAckAudio) {
+        currentAckAudio.pause();
+        currentAckAudio.currentTime = 0;
+      }
+      currentAckAudio = new Audio("/assets/audio/ack-ha-janob.mp3");
+      currentAckAudio.onended = () => resolve();
+      currentAckAudio.onerror = () => resolve();
+      currentAckAudio.play().catch((err) => {
+        // Fayl topilmasa yoki brauzer autoplay'ni bloklasa — ilovani
+        // buzmaymiz, faqat ogohlantiramiz va darhol resolve qilamiz
+        // (dictation recognizer'ni abadiy kutib turmasin).
+        console.warn("Wake-word ack ovozini chalib bo'lmadi:", err);
+        resolve();
+      });
+    } catch (err) {
+      console.warn("Wake-word ack ovozini chalib bo'lmadi:", err);
+      resolve();
     }
-    currentAckAudio = new Audio("/assets/audio/ack-ha-janob.mp3");
-    await currentAckAudio.play();
-  } catch (err) {
-    // Fayl topilmasa (hali yozib qo'yilmagan bo'lsa) yoki brauzer
-    // autoplay'ni bloklasa — ilovani buzmaymiz, faqat ogohlantiramiz.
-    console.warn("Wake-word ack ovozini chalib bo'lmadi:", err);
-  }
+  });
 }
