@@ -24,6 +24,8 @@
    ===================================================================== */
 
 import { getActiveChat, saveChats } from './chat-storage.js';
+import { speakEdge, stopEdgeSpeaking } from '../audio/edge-tts.js';
+import { speak, stopSpeaking } from '../audio/tts.js';
 
 function getEls() {
   return {
@@ -40,8 +42,61 @@ const COPY_BTN_HTML = `
 const COPY_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const CHECK_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+// Ovoz (speaker) ikonkasi — bosilganda shu xabarni ElevenLabs/Edge TTS
+// orqali o'qib beradi. Ikkinchi marta bosilsa yoki gapirish tugasa,
+// STOP_ICON'ga qaytadi (achiq holat — nima bo'layotgani ko'rinib turadi).
+const READ_BTN_HTML = `
+  <button type="button" class="msg-action-btn read-btn" title="Read aloud">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+  </button>`;
+const READ_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+const STOP_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+
 export function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Bir vaqtda faqat BITTA xabar gapirsin — yangi read-btn bosilganda
+// avvalgisi (agar boshqa xabarda hali gapirayotgan bo'lsa) to'xtaydi
+// va o'z ikonkasini qaytaradi.
+let activeReadBtn = null;
+
+function resetReadBtn(btn) {
+  if (!btn) return;
+  btn.innerHTML = READ_ICON;
+  btn.classList.remove("is-speaking");
+  if (activeReadBtn === btn) activeReadBtn = null;
+}
+
+export function wireReadButton(btn, text) {
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    // Hozir shu tugma gapiryapti — bossa, to'xtaydi (play/stop toggle).
+    if (btn.classList.contains("is-speaking")) {
+      stopEdgeSpeaking();
+      stopSpeaking();
+      resetReadBtn(btn);
+      return;
+    }
+
+    // Boshqa xabar gapirayotgan bo'lsa — uni to'xtatib, shu xabarga o'tamiz.
+    if (activeReadBtn && activeReadBtn !== btn) {
+      stopEdgeSpeaking();
+      stopSpeaking();
+      resetReadBtn(activeReadBtn);
+    }
+
+    activeReadBtn = btn;
+    btn.innerHTML = STOP_ICON;
+    btn.classList.add("is-speaking");
+
+    // Xuddi asosiy javob oqimidagi kabi: avval bepul Edge "Sardor"
+    // ovozini sinaymiz, ishlamasa ElevenLabs'ga (backend) qaytamiz.
+    speakEdge(text, () => resetReadBtn(btn)).catch((err) => {
+      console.warn("Edge TTS (Sardor) ishlamadi, ElevenLabs'ga qaytildi:", err);
+      speak(text, () => resetReadBtn(btn));
+    });
+  });
 }
 
 export function wireCopyButton(btn, text) {
@@ -96,7 +151,7 @@ export function addMessage(text, kind = "bot", persist = true) {
     div.innerHTML = `
       <div class="max-w-full w-full">
         <div class="text-[15px] bubble-bot prose-bot">${html}</div>
-        <div class="msg-actions">${COPY_BTN_HTML}</div>
+        <div class="msg-actions">${COPY_BTN_HTML}${READ_BTN_HTML}</div>
       </div>`;
   }
   chat.appendChild(div);
@@ -104,6 +159,7 @@ export function addMessage(text, kind = "bot", persist = true) {
 
   if (!isUser && !isPending && !isError) {
     wireCopyButton(div.querySelector(".copy-btn"), text);
+    wireReadButton(div.querySelector(".read-btn"), text);
   }
 
   if (persist) {
@@ -269,9 +325,10 @@ export function addMessageTyped(text) {
   function finish() {
     const actions = document.createElement("div");
     actions.className = "msg-actions";
-    actions.innerHTML = COPY_BTN_HTML;
+    actions.innerHTML = COPY_BTN_HTML + READ_BTN_HTML;
     container.appendChild(actions);
     wireCopyButton(actions.querySelector(".copy-btn"), text);
+    wireReadButton(actions.querySelector(".read-btn"), text);
 
     const active = getActiveChat();
     if (active) {
