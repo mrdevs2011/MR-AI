@@ -68,6 +68,9 @@ function createRecognition() {
   };
 
   rec.onerror = (event) => {
+    // Android Chrome'da "no-speech" 5-10 soniya jimlikdan keyin tez-tez
+    // chiqadi — bu normal, onend keyin avtomatik qayta ishga tushadi.
+    // Log qoldiryapmiz shunchaki, muammoni ko'rish uchun.
     console.warn("Wake-word recognition xatosi:", event.error);
     if (event.error === "not-allowed") {
       // Mikrofonga ruxsat berilmagan — qayta-qayta urinib, konsolni
@@ -78,14 +81,28 @@ function createRecognition() {
 
   rec.onend = () => {
     // Brauzer recognition'ni vaqti-vaqti bilan o'zi to'xtatib qo'yadi
-    // (masalan uzoq jimlikdan keyin) — agar hali "active" bo'lsak,
-    // buni kompensatsiya qilib qayta ishga tushiramiz.
+    // (masalan uzoq jimlikdan keyin, yoki Android Chrome'da "no-speech"
+    // xatosidan keyin — bu mobil brauzerlarda ayniqsa tez-tez bo'ladi).
+    // Agar hali "active" bo'lsak, buni kompensatsiya qilib qayta ishga
+    // tushiramiz.
+    //
+    // MUHIM BUG FIX (achiq haqiqat): oldingi versiyada rec.start() shu
+    // yerda DARHOL chaqirilardi. Android Chrome'da recognition obyekti
+    // hali to'liq "yopilmagan" holatda bo'ladi (native tomonda), shuning
+    // uchun darhol start() chaqirilsa "InvalidStateError" chiqadi — bu
+    // xato try/catch bilan JIM yutilardi, demak listener butunlay
+    // to'xtab qolardi, hech qanday console chiqishi ham bo'lmasdi (aynan
+    // sen ko'rgan holat: hech narsa bo'lmayapti). Kichik kechikish (250ms)
+    // bilan bu race condition oldini oladi.
     if (active) {
-      try {
-        rec.start();
-      } catch (_) {
-        // "already started" kabi holatlarni jim yutamiz
-      }
+      setTimeout(() => {
+        if (!active) return; // shu 250ms ichida stopWakeWordListener() chaqirilgan bo'lishi mumkin
+        try {
+          rec.start();
+        } catch (err) {
+          console.warn("Wake-word qayta ishga tushmadi (onend restart):", err);
+        }
+      }, 250);
     }
   };
 
