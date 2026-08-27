@@ -26,6 +26,7 @@ import { createThoughtPanel } from '../agent/thought-panel.js';
 import { saveActiveJob, pollJob, cancelCurrentJob } from '../agent/job-polling.js';
 import { resetOutputCardDedup } from './output-card.js';
 import { setComposerState } from './composer-state.js';
+import { getChatMode } from './chat-mode.js';
 
 const input = document.getElementById("message");
 const sendBtn = document.getElementById("send");
@@ -66,13 +67,27 @@ async function dispatchMessage(message, imageToSend, settings, queuedBubble) {
   setEmptyState(false);
 
   const panel = createThoughtPanel(message);
+  const isCowork = settings.chatMode === "cowork";
 
   try {
-    const res = await fetch(`${API_BASE}/chat`, {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ message, category, filename, tier, mode, provider, image: imageToSend || undefined })
-    });
+    // COWORK: xuddi shu composer, faqat "Cowork" pill tanlangan bo'lsa —
+    // /chat o'rniga /cowork/start'ga boradi. Bu vazifa interaktiv
+    // confirm'ni kutmasdan (safe_write avtonomiyasi bilan) fon Thread'da
+    // ishlaydi, lekin javob SHAKLI (thinking/step_result/final SSE
+    // event'lari) /chat bilan bir xil — shuning uchun pastdagi pollJob()
+    // va event-handler.js O'ZGARISHSIZ ishlaydi, xuddi oddiy xabar kabi
+    // shu chatning o'zida jonli ko'rinadi.
+    const res = isCowork
+      ? await fetch(`${API_BASE}/cowork/start`, {
+          method: "POST",
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ prompt: message, category: "cowork", autonomy: "safe_write", tier, mode, provider }),
+        })
+      : await fetch(`${API_BASE}/chat`, {
+          method: "POST",
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ message, category, filename, tier, mode, provider, image: imageToSend || undefined })
+        });
 
     if (res.status === 401) {
       panel.remove();
@@ -91,8 +106,11 @@ async function dispatchMessage(message, imageToSend, settings, queuedBubble) {
     // job_id'ni localStorage'ga yozib qo'yamiz — shu bilan refresh
     // bossang ham, sahifani qayta ochsang ham, resumeActiveJobIfAny()
     // aynan shu ish qayerda qolgan bo'lsa, o'sha yerdan davom
-    // ettirishni biladi, chunki ishning o'zi backend'da tirik.
-    saveActiveJob(data.job_id, category, filename);
+    // ettirishni biladi, chunki ishning o'zi backend'da tirik. Cowork
+    // uchun backend QAYTARGAN category/filename'ni saqlaymiz (o'zining
+    // alohida cowork_xxx log fayli bor — hozir ochiq turgan chat bilan
+    // bir xil emas).
+    saveActiveJob(data.job_id, isCowork ? data.category : category, isCowork ? data.filename : filename);
     await pollJob(data.job_id, panel, message);
   } catch (err) {
     panel.remove();
@@ -126,6 +144,7 @@ export async function sendMessage() {
     tier: document.getElementById("tier").value || "high",
     mode: document.getElementById("mode").value || "general",
     provider: document.getElementById("provider").value || "auto",
+    chatMode: getChatMode(),
   };
 
   // If an image is staged (see attach handler below), it rides along

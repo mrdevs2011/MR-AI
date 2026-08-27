@@ -213,6 +213,43 @@
   align-items: center;
   gap: 8px;
 }
+.composer-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* CHAT/COWORK TOGGLE — composer ichidagi pill-guruh. "chat" ustunlik
+   qiladi (tanish, xavfsiz odatiy holat), "cowork" tanlansa qizg'ish
+   accent bilan ajralib turadi — foydalanuvchi bu xabar oddiy chat emas,
+   avtonom fon vazifasi ekanini yuboришdan oldin ko'radi. */
+.chat-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-hover);
+  border-radius: 8px;
+  padding: 2px;
+}
+.chat-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.chat-mode-btn:hover { color: var(--ink-secondary); }
+.chat-mode-btn.active {
+  background: var(--bg-elevated, #3a3a3a);
+  color: var(--ink);
+}
+.chat-mode-btn[data-chat-mode="cowork"].active {
+  background: var(--accent);
+  color: #FFFFFF;
+}
 .composer-icon-btn {
   width: 30px; height: 30px;
   border-radius: 50%;

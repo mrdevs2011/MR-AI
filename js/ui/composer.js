@@ -30,10 +30,16 @@ composer.innerHTML = `
     <textarea id="message" rows="1" placeholder="Write a message..."
            class="composer-textarea" autocomplete="off"></textarea>
     <div class="composer-toolbar">
-      <button id="attach-btn" type="button" title="Attach a file"
-              class="composer-icon-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
-      </button>
+      <div class="composer-toolbar-left">
+        <button id="attach-btn" type="button" title="Attach a file"
+                class="composer-icon-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+        </button>
+        <div class="chat-mode-toggle" id="chat-mode-toggle" role="tablist">
+          <button type="button" id="chat-mode-chat-btn" class="chat-mode-btn active" data-chat-mode="chat" role="tab" aria-selected="true">Chat</button>
+          <button type="button" id="chat-mode-cowork-btn" class="chat-mode-btn" data-chat-mode="cowork" role="tab" aria-selected="false">Cowork</button>
+        </div>
+      </div>
       <div class="composer-toolbar-right">
         <div class="combo-select-wrap" id="combo-wrap">
           <select id="mode" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
