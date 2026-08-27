@@ -81,14 +81,11 @@
 }
 .msg-action-btn:hover { background: var(--bg-hover); color: var(--ink-secondary); }
 .msg-action-btn.copy-btn.just-copied { color: var(--success); }
-.msg-action-btn.read-btn.is-speaking {
-  color: var(--accent);
-  background: var(--accent-soft);
-  animation: read-btn-pulse 1.1s ease-in-out infinite;
-}
-@keyframes read-btn-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .55; }
+.msg-action-btn.read-btn:disabled { cursor: default; opacity: .7; }
+.read-btn-spin { animation: read-btn-spin-rotate .8s linear infinite; }
+@keyframes read-btn-spin-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 @media (max-width: 767px) {
   .msg-actions { opacity: 1; }

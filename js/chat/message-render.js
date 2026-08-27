@@ -42,61 +42,21 @@ const COPY_BTN_HTML = `
 const COPY_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const CHECK_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-// Ovoz (speaker) ikonkasi — bosilganda shu xabarni ElevenLabs/Edge TTS
-// orqali o'qib beradi. Ikkinchi marta bosilsa yoki gapirish tugasa,
-// STOP_ICON'ga qaytadi (achiq holat — nima bo'layotgani ko'rinib turadi).
+// READ-ALOUD tugmasi — javob pastida volume ikonka, bosilsa
+// speakEdge() (Sardor) chaqiradi, muvaffaqiyatsiz bo'lsa ElevenLabs
+// speak()ga tushadi (event-handler.js dagi auto-read bilan bir xil
+// fallback mantig'i). Uch holat ikonkasi: idle (volume), loading
+// (aylanuvchi nuqta), playing (volume + to'lqin, bosilsa to'xtaydi).
 const READ_BTN_HTML = `
   <button type="button" class="msg-action-btn read-btn" title="Read aloud">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7" stroke-linecap="round"/></svg>
   </button>`;
-const READ_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
-const STOP_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+const READ_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7" stroke-linecap="round"/></svg>`;
+const READ_LOADING_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" class="read-btn-spin"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="12 40" stroke-linecap="round"/></svg>`;
+const READ_STOP_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
 
 export function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// Bir vaqtda faqat BITTA xabar gapirsin — yangi read-btn bosilganda
-// avvalgisi (agar boshqa xabarda hali gapirayotgan bo'lsa) to'xtaydi
-// va o'z ikonkasini qaytaradi.
-let activeReadBtn = null;
-
-function resetReadBtn(btn) {
-  if (!btn) return;
-  btn.innerHTML = READ_ICON;
-  btn.classList.remove("is-speaking");
-  if (activeReadBtn === btn) activeReadBtn = null;
-}
-
-export function wireReadButton(btn, text) {
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    // Hozir shu tugma gapiryapti — bossa, to'xtaydi (play/stop toggle).
-    if (btn.classList.contains("is-speaking")) {
-      stopEdgeSpeaking();
-      stopSpeaking();
-      resetReadBtn(btn);
-      return;
-    }
-
-    // Boshqa xabar gapirayotgan bo'lsa — uni to'xtatib, shu xabarga o'tamiz.
-    if (activeReadBtn && activeReadBtn !== btn) {
-      stopEdgeSpeaking();
-      stopSpeaking();
-      resetReadBtn(activeReadBtn);
-    }
-
-    activeReadBtn = btn;
-    btn.innerHTML = STOP_ICON;
-    btn.classList.add("is-speaking");
-
-    // Xuddi asosiy javob oqimidagi kabi: avval bepul Edge "Sardor"
-    // ovozini sinaymiz, ishlamasa ElevenLabs'ga (backend) qaytamiz.
-    speakEdge(text, () => resetReadBtn(btn)).catch((err) => {
-      console.warn("Edge TTS (Sardor) ishlamadi, ElevenLabs'ga qaytildi:", err);
-      speak(text, () => resetReadBtn(btn));
-    });
-  });
 }
 
 export function wireCopyButton(btn, text) {
@@ -112,6 +72,49 @@ export function wireCopyButton(btn, text) {
         btn.closest(".msg-actions")?.classList.remove("copied");
       }, 1200);
     }).catch(() => {});
+  });
+}
+
+// wireReadButton: har bir bot javobi pastidagi volume ikonkasini
+// bosilganda o'qib berish. 3 holat: idle (volume) -> loading (aylanuvchi
+// nuqta, so'rov/ulanish paytida) -> playing (stop kvadrat, bosilsa
+// darhol to'xtaydi). Sardor (Edge TTS) birinchi urinadi, ishlamasa
+// ElevenLabs'ga tushadi — xuddi avtomatik o'qish (event-handler.js)
+// bilan bir xil fallback mantig'i, faqat bu yerda QO'LDA chaqiriladi.
+export function wireReadButton(btn, text) {
+  if (!btn) return;
+  let playing = false;
+
+  btn.addEventListener("click", async () => {
+    if (playing) {
+      stopEdgeSpeaking();
+      stopSpeaking();
+      btn.innerHTML = READ_ICON;
+      playing = false;
+      return;
+    }
+
+    btn.innerHTML = READ_LOADING_ICON;
+    btn.disabled = true;
+    playing = true;
+
+    try {
+      await speakEdge(text);
+    } catch (err) {
+      console.warn("Edge TTS (Sardor) ishlamadi, ElevenLabs'ga qaytildi:", err);
+      btn.disabled = false;
+      if (!playing) return; // shu oraliqda foydalanuvchi Stop bosgan bo'lishi mumkin
+      btn.innerHTML = READ_STOP_ICON;
+      try {
+        await speak(text);
+      } catch (_) {
+        // speak() o'zi console.warn qiladi, bu yerda qo'shimcha shart emas
+      }
+    }
+
+    btn.disabled = false;
+    playing = false;
+    btn.innerHTML = READ_ICON;
   });
 }
 

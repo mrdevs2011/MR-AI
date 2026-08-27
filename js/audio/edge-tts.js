@@ -64,9 +64,7 @@ function extractAudioBytes(arrayBuffer) {
  * bo'lsa reject qiladi — chaqiruvchi tomon shu holatda boshqa TTS'ga
  * (ElevenLabs) o'tishi kerak.
  */
-// onEnd (ixtiyoriy) — audio TABIIY tugaganda chaqiruvchiga xabar
-// beradi (masalan, msg-actions read-btn ikonkasini qaytarish uchun).
-export function speakEdge(text, onEnd) {
+export function speakEdge(text) {
   return new Promise((resolve, reject) => {
     const clean = (text || "").trim();
     if (!clean) {
@@ -182,15 +180,12 @@ export function speakEdge(text, onEnd) {
         currentAudio = new Audio(url);
         currentAudio.onended = () => {
           URL.revokeObjectURL(url);
-          onEnd?.();
+          resolve();
         };
-        currentAudio
-          .play()
-          .then(resolve)
-          .catch((err) => {
-            URL.revokeObjectURL(url);
-            reject(err);
-          });
+        currentAudio.play().catch((err) => {
+          URL.revokeObjectURL(url);
+          reject(err);
+        });
       } catch (err) {
         reject(err);
       }
