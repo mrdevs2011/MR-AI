@@ -143,7 +143,14 @@
         // YO'Q — chunki /public/chats/<room_id> ataylab auth so'ramaydi
         // (main.py/get_public_chat). Shu bilan bu sahifa haqiqatan ham
         // login qilmasdan ishlaydi.
-        const res = await fetch(`${apiBase}/public/chats/${roomId}`);
+        // ngrok-skip-browser-warning: auth/session.js'dagi authHeaders()
+        // bilan bir xil sabab (interstitial HTML'da CORS header yo'q) —
+        // lekin bu sahifa authHeaders()'ni chaqirmaydi (X-Login-Pass/
+        // X-Session-Id kerak emas, yuqoridagi izohga qarang), shuning
+        // uchun ngrok header'ni mustaqil, alohida qo'shamiz.
+        const res = await fetch(`${apiBase}/public/chats/${roomId}`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' },
+        });
         if (!res.ok) {
           let reason = 'not_found';
           try { reason = (await res.json()).error || reason; } catch {}
