@@ -54,8 +54,12 @@ body,
   background: var(--bg) !important;
 }
 #sidebar:not(.pinned) { background: var(--bg-sidebar) !important; }
-#sidebar.pinned { background: #111111 !important; }
-#sidebar.hover-preview:not(.pinned) { background: #20201f !important; }
+/* STEP 11: bular avval #111111 / #20201f qattiq yozilgan edi — o'zi
+   yaratilgan --bg-sidebar-pinned o'zgaruvchisiga bog'lanmagan holda.
+   Endi tokenga bog'ladim, aks holda yangi palette bilan uyg'unlashmay,
+   pinned sidebar bg'dan HAM to'qroq bo'lib qolardi — mantiqqa zid. */
+#sidebar.pinned { background: var(--bg-sidebar-pinned) !important; }
+#sidebar.hover-preview:not(.pinned) { background: var(--bg-hover) !important; }
 
 /* avatar doiralari: inline style="background:#ececec" — terracotta qildik */
 [style*="background:#ececec"] { background: var(--accent) !important; }

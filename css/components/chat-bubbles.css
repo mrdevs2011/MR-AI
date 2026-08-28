@@ -7,7 +7,11 @@
    ===================================================================== */
 
 /* ---- chat bubble'lar ---- */
-.bubble-user { background: #2C2B29; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity .25s ease, background-color .25s ease, color .25s ease, box-shadow .25s ease; }
+/* STEP 11: #2C2B29 eski bg'dan (#151515) qattiq offset bilan hisoblangan
+   edi (var()ga bog'lanmagan) — yangi bg (#1e1e1e) bilan bir xil qoldirilsa,
+   kontrast yo'qolib, user bubble deyarli fon bilan qorishib ketardi. Xuddi
+   shu nisbiy farq (+23,+22,+20) yangi bg'ga qo'shildi. */
+.bubble-user { background: #353432; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity .25s ease, background-color .25s ease, color .25s ease, box-shadow .25s ease; }
 .bubble-bot { color: var(--ink); }
 .bubble-pending { background: var(--pending-bg); border: 1px solid var(--pending-border); }
 .bubble-error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); }
@@ -16,15 +20,20 @@
    paytda yuborilgan xabar — kulrang/xira, job bo'shagach normal
    bubble-user'ga aylanadi (activateQueuedMessage(), message-render.js) ---- */
 .bubble-queued {
-  background: #232221;
+  background: #2c2b2a; /* STEP 11: xuddi shu sabab bilan bg-offset saqlab, yangi bazaga ko'chirildi */
   color: var(--muted, #8a8a85);
   box-shadow: none;
   opacity: 0.6;
 }
 .bubble-activated { opacity: 1; }
 
-/* ---- bot javoblari uchun render qilingan markdown ---- */
-.prose-bot { line-height: 1.65; color: var(--ink); }
+/* ---- bot javoblari uchun render qilingan markdown ----
+   STEP 11: butun bot matni endi serif (Newsreader) — avval faqat
+   h1-h3 shunday edi, gemini-code demo'da esa .message.assistant .bubble
+   to'liq Newsreader'da edi. Shu bois font-family shu yerga, umumiy
+   .prose-bot qoidasiga ko'chirildi (h1-h3'dagi eski takror olib
+   tashlandi — endi ota qoidadan meros bo'lib keladi). */
+.prose-bot { font-family: var(--font-serif); line-height: 1.65; color: var(--ink); }
 .prose-bot p { margin: 0 0 0.7em 0; }
 .prose-bot p:last-child { margin-bottom: 0; }
 .prose-bot strong { font-weight: 600; color: var(--ink); }
@@ -34,22 +43,28 @@
 .prose-bot ol { list-style: decimal; }
 .prose-bot li { margin: 0.15em 0; }
 .prose-bot h1, .prose-bot h2, .prose-bot h3 {
-  font-family: var(--font-serif);
   font-weight: 600; color: var(--ink); margin: 0.8em 0 0.4em 0;
 }
 .prose-bot h1 { font-size: 1.25em; }
 .prose-bot h2 { font-size: 1.15em; }
 .prose-bot h3 { font-size: 1.05em; }
+/* inline kod chip — gemini-code demo spec: xira oq fon + apelsin matn,
+   var(--bg-code)/var(--ink) o'rniga, chunki demo shu ikkitasini
+   qat'iy belgilagan (accent'dan farqli, alohida "kod-apelsin" rangi) */
 .prose-bot code {
-  background: var(--bg-code); color: var(--ink);
-  padding: 0.15em 0.4em; border-radius: 5px;
-  font-family: var(--font-mono); font-size: 0.88em;
+  background: rgba(255, 255, 255, 0.08); color: #ff9e80;
+  padding: 2px 6px; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 0.9rem;
 }
 .prose-bot pre {
   background: var(--bg-code); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px 14px; overflow-x: auto; margin: 0.5em 0;
 }
-.prose-bot pre code { background: none; padding: 0; font-size: 0.85em; }
+/* blok kod (pre > code) apelsin bo'lmasin — faqat INLINE code orange,
+   bu demo spec'da ham shunday: .code-block ichidagi matn #dcdcdc, faqat
+   standalone <code> chip'lar apelsin edi. Fix qilinmasa, pre ichidagi
+   butun kod bloki orange bo'lib qolar edi (yuqoridagi rangdan meros) */
+.prose-bot pre code { background: none; padding: 0; font-size: 0.85em; color: #dcdcdc; }
 .prose-bot blockquote {
   border-left: 3px solid var(--accent); padding-left: 12px; color: var(--ink-secondary); margin: 0.5em 0;
 }

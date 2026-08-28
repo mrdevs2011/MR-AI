@@ -174,7 +174,7 @@
 /* ---- composer: chegaralangan quti ---- */
 .composer-box {
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 16px; /* STEP 11: gemini-code demo spec — 16px, eski 20px edi */
   background: var(--bg-elevated);
   padding: 12px 12px 8px 16px;
   transition: border-color .15s ease, box-shadow .15s ease;
