@@ -111,7 +111,7 @@ function renderRow(entry, category, filename) {
 
 async function openPanel() {
   const chat = getActiveChat();
-  if (!chat || !chat.category || !chat.filename || chat.filename === "session") {
+  if (!chat || !chat.category || !chat.filename || !chat.messages || chat.messages.length === 0) {
     return; // bo'sh chatda ko'rsatadigan hech narsa yo'q
   }
 

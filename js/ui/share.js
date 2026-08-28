@@ -130,7 +130,7 @@ function openExpiryMenu() {
 
 async function createAndCopyLink(expiresIn, expiresLabel) {
   const chat = getActiveChat();
-  if (!chat || !chat.category || !chat.filename || chat.filename === "session") {
+  if (!chat || !chat.category || !chat.filename || !chat.messages || chat.messages.length === 0) {
     showToast("Avval kamida bitta xabar yubor — bo'sh chatni share qilib bo'lmaydi.", true);
     return;
   }
