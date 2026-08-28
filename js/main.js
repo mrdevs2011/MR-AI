@@ -35,6 +35,7 @@ import './ui/terminal.js';
 import './ui/attach.js';
 import './ui/share.js';
 import './ui/files.js';
+import './ui/replay.js';
 
 import { sendMessage } from './chat/send-message.js';
 import { closeSidebarOnMobile } from './ui/sidebar.js';
