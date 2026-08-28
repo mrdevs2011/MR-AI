@@ -17,6 +17,30 @@ import { _detectLangJs } from '../utils/lang-detect.js';
 import { escapeHtml } from '../chat/message-render.js';
 import { highlightBash, formatIOOutput } from '../chat/io-card.js';
 
+// COMPUTER-USE FAZA 1.3: screenshot thumbnail — output-card.js'dagi
+// downloadFile() bilan bir xil sabab: bu loyihada auth cookie emas,
+// custom header (X-Login-Pass/X-Session-Id) orqali ishlaydi, shuning
+// uchun oddiy <img src="..."> ISHLAMAYDI (headersiz so'rov 401
+// qaytaradi). fetch()+authHeaders()+blob+Object URL kerak.
+async function _loadScreenshotThumbnail(imgEl, screenshotFile) {
+  try {
+    const { API_BASE } = await import('../state/store.js');
+    const { authHeaders } = await import('../auth/session.js');
+    const url = `${API_BASE}/screenshot/${encodeURIComponent(screenshotFile)}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error("screenshot fetch failed: " + res.status);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    imgEl.src = objectUrl;
+    imgEl.classList.remove("thought-screenshot-loading");
+    imgEl.addEventListener("click", () => window.open(objectUrl, "_blank"));
+  } catch (e) {
+    imgEl.classList.remove("thought-screenshot-loading");
+    imgEl.classList.add("thought-screenshot-error");
+    imgEl.alt = "Screenshot yuklanmadi";
+  }
+}
+
 function getEls() {
   return {
     chat: document.getElementById("chat-inner"),
@@ -283,6 +307,18 @@ export function createThoughtPanel(sourceText) {
           const open = wrap.classList.toggle("thought-step-open");
           header.querySelector(".thought-step-chevron").textContent = open ? "▾" : "▸";
         });
+
+        // COMPUTER-USE FAZA 1.3: action=="screenshot" bo'lsa, matn output'dan
+        // TASHQARI, haqiqiy rasm thumbnail sifatida ham ko'rsatiladi —
+        // shu bilan foydalanuvchi model nima ko'rayotganini o'zi ham ko'radi,
+        // ko'r holda tasdiqlashga majbur bo'lmaydi.
+        if (action === "screenshot" && evt.screenshot_file) {
+          const img = document.createElement("img");
+          img.className = "thought-screenshot thought-screenshot-loading";
+          img.alt = "Screenshot";
+          body.appendChild(img);
+          _loadScreenshotThumbnail(img, evt.screenshot_file);
+        }
       }
 
       logEl.appendChild(wrap);
