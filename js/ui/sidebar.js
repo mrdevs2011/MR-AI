@@ -233,3 +233,63 @@ window.addEventListener("resize", () => {
 export function closeSidebarOnMobile() {
   if (isMobileLayout()) setSidebarPinned(false);
 }
+
+// ---- KUTILMAGAN NARSA #3: yashirin easter egg. Pastdagi footer logo
+// (#footer-logo) 5 marta, 2.5 soniya ichida bosilsa — logo bir marta
+// sokin aylanadi va yonida bir zumga kichik yozuv chiqib, o'zi so'nadi.
+// Baqiriq/konfetti emas: umumiy ilova ohangiga ("shoshmasdan, silliq,
+// juda hazil emas") mos, faqat izlaganlar topadigan darajada past
+// ovozli kichik syurpriz. ----
+const _EASTER_EGG_CLICKS_NEEDED = 5;
+const _EASTER_EGG_WINDOW_MS = 2500;
+const _EASTER_EGG_MESSAGES = [
+  "You found this.",
+  "Curious, huh?",
+  "Nothing else here — just this.",
+];
+(function armFooterLogoEasterEgg() {
+  const wrap = document.getElementById("footer-logo-wrap");
+  const logo = document.getElementById("footer-logo");
+  if (!wrap || !logo) return;
+
+  let clickCount = 0;
+  let windowTimer = null;
+  let lastMsgIdx = -1;
+
+  function resetWindow() {
+    clickCount = 0;
+    if (windowTimer) { clearTimeout(windowTimer); windowTimer = null; }
+  }
+
+  logo.addEventListener("click", (e) => {
+    e.stopPropagation(); // sidebar-item'ning o'z click handleri (agar bo'lsa) bilan aralashmasin
+    clickCount += 1;
+    if (windowTimer) clearTimeout(windowTimer);
+    windowTimer = setTimeout(resetWindow, _EASTER_EGG_WINDOW_MS);
+
+    if (clickCount < _EASTER_EGG_CLICKS_NEEDED) return;
+    resetWindow();
+
+    // Bir marta sokin aylanish — takroriy bosishlarda ham xavfsiz
+    // (klass olib tashlanib, reflow orqali qayta qo'shiladi).
+    logo.classList.remove("logo-easter-spin");
+    void logo.offsetWidth; // reflow — animatsiyani qayta boshlash uchun
+    logo.classList.add("logo-easter-spin");
+
+    let idx = Math.floor(Math.random() * _EASTER_EGG_MESSAGES.length);
+    if (_EASTER_EGG_MESSAGES.length > 1 && idx === lastMsgIdx) {
+      idx = (idx + 1) % _EASTER_EGG_MESSAGES.length;
+    }
+    lastMsgIdx = idx;
+
+    const note = document.createElement("span");
+    note.className = "footer-logo-note";
+    note.textContent = _EASTER_EGG_MESSAGES[idx];
+    wrap.appendChild(note);
+    requestAnimationFrame(() => note.classList.add("visible"));
+    setTimeout(() => {
+      note.classList.remove("visible");
+      setTimeout(() => note.remove(), 320); // opacity transition tugashini kutamiz
+    }, 1800);
+  });
+})();

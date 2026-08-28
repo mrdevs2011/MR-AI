@@ -64,11 +64,90 @@ const input = document.getElementById("message");
 
 // ---- empty-state greeting, time-of-day aware like Claude's own
 // "Good morning/afternoon/evening" welcome. ----
+// KUTILMAGAN NARSA: Claude.ai xuddi shu narsani qiladi — vaqt shunchaki
+// 3 ta katta bo'lakka (tong/kun/kech) emas, ancha mayinroq bo'laklarga
+// bo'linadi (tun, tongotar, ertalab, peshin, tushdan keyin, kechqurun,
+// kech tun), va har biri o'ziga xos, "Good X" qolipidan tashqari
+// jumlalar oladi ("Hello, night owl.", "Midday check-in." kabi). Ustiga
+// hafta oxiri (shanba/yakshanba) bo'lsa, alohida umumiy jumlalar ham
+// aralashtiriladi. Baribir hammasi sokin ohangda — hazil-mutoyiba emas,
+// faqat vaqtga mos, kutilmagan iliqlik.
+const _GREETINGS = {
+  // 00:00–04:59 — chuqur tun.
+  nightOwl: [
+    "Hello, night owl.",
+    "Burning the midnight oil?",
+    "Still up? What are we working on?",
+    "Late night session — what's on your mind?",
+    "The quiet hours. What can I help with?",
+  ],
+  // 05:00–06:59 — tongotar, juda erta turganlar.
+  earlyBird: [
+    "You're up early.",
+    "Early start today. What's first?",
+    "Good morning — bright and early.",
+    "Up before the sun. What's on your mind?",
+  ],
+  // 07:00–10:59 — odatiy ish/o'qish boshlanadigan tong.
+  morning: [
+    "Good morning. What are we building today?",
+    "Good morning. Where should we start?",
+    "Morning. What's on the agenda?",
+    "Morning. Ready when you are.",
+  ],
+  // 11:00–12:59 — peshin atrofi, tongdan tushga o'tish oralig'i.
+  midday: [
+    "Good midday. What's on the agenda?",
+    "Midday check-in — what are we working on?",
+    "Halfway through the day. What's next?",
+  ],
+  // 13:00–17:59 — tushdan keyin, ish kunining asosiy qismi.
+  afternoon: [
+    "Good afternoon. What are we building today?",
+    "Good afternoon. What's next?",
+    "Afternoon. What are we working on?",
+    "Afternoon. Let's get into it.",
+  ],
+  // 18:00–21:59 — kechqurun, ish kuni tugash atrofi.
+  evening: [
+    "Good evening. What are we building today?",
+    "Good evening. Still going? What's next?",
+    "Evening. What can I help with?",
+    "Evening. Wrapping up, or just getting started?",
+  ],
+  // 22:00–23:59 — kech, lekin "night owl"chalik chuqur emas.
+  lateEvening: [
+    "Working late tonight?",
+    "Good evening — burning a little extra time?",
+    "Still at it. What's on your mind?",
+  ],
+};
+// Hafta oxiri (shanba/yakshanba) uchun umumiy, vaqtdan mustaqil
+// jumlalar — vaqtga bog'liq ro'yxatga ARALASHTIRILADI (almashtirilmaydi),
+// shuning uchun ish kuni his-tuyg'usi yo'qolmaydi, faqat imkoniyat
+// kengayadi.
+const _WEEKEND_GREETINGS = [
+  "Happy weekend. What are we working on?",
+  "Weekend project time?",
+  "No rush today — what's on your mind?",
+];
+function _greetingPart(h) {
+  if (h < 5) return "nightOwl";
+  if (h < 7) return "earlyBird";
+  if (h < 11) return "morning";
+  if (h < 13) return "midday";
+  if (h < 18) return "afternoon";
+  if (h < 22) return "evening";
+  return "lateEvening";
+}
 function setGreeting() {
   if (!welcomeEl) return;
-  const h = new Date().getHours();
-  const part = h < 5 ? "evening" : h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
-  welcomeEl.textContent = `Good ${part}. What are we building today?`;
+  const now = new Date();
+  const day = now.getDay(); // 0 = yakshanba, 6 = shanba
+  const isWeekend = day === 0 || day === 6;
+  const part = _greetingPart(now.getHours());
+  const pool = isWeekend ? _GREETINGS[part].concat(_WEEKEND_GREETINGS) : _GREETINGS[part];
+  welcomeEl.textContent = pool[Math.floor(Math.random() * pool.length)];
 }
 
 async function showApp() {

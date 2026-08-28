@@ -131,7 +131,11 @@ export function addMessage(text, kind = "bot", persist = true) {
   const isUser = kind === "user" || isQueued;
   const isPending = kind === "pending";
   const isError = kind === "error";
-  div.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
+  // msg-enter: yangi xabar shoshilmasdan, silliq "cho'kib" paydo bo'lsin
+  // (chat-bubbles.css, thinking-row bilan bir xil egri chiziq) — navbatga
+  // qo'yilgan (queued) xabarga tegmaymiz, chunki u allaqachon xira holatda
+  // ko'rinadi va o'z animatsiyasi (bubble-activated) bilan almashadi.
+  div.className = `flex ${isUser ? "justify-end" : "justify-start"}${isQueued ? "" : " msg-enter"}`;
   if (isUser) {
     div.innerHTML = `
       <div class="max-w-[75%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed bubble-user${isQueued ? " bubble-queued" : ""}">
@@ -218,7 +222,7 @@ export function activateQueuedMessage(div, text) {
 export function addRetryButton(originalMessage) {
   const { chat, chatScroll, input } = getEls();
   const div = document.createElement("div");
-  div.className = "flex justify-start";
+  div.className = "flex justify-start msg-enter";
   div.innerHTML = `
     <button class="bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[13px] px-4 py-2 rounded-full transition">
       Qayta urinib ko'rish
@@ -238,7 +242,7 @@ export function addRetryButton(originalMessage) {
 export function addConfirmButton(commandId) {
   const { chat, chatScroll } = getEls();
   const div = document.createElement("div");
-  div.className = "flex justify-start";
+  div.className = "flex justify-start msg-enter";
   div.innerHTML = `
     <button class="bg-amber-600 hover:bg-amber-500 text-[13px] px-4 py-2 rounded-full transition" data-cmdid="${commandId}">
       Confirm and run
@@ -259,7 +263,7 @@ export function addConfirmButton(commandId) {
 export function addDangerConfirmCard(commandId, commandText) {
   const { chat, chatScroll } = getEls();
   const div = document.createElement("div");
-  div.className = "flex justify-start";
+  div.className = "flex justify-start msg-enter";
   div.innerHTML = `
     <div class="max-w-full w-full rounded-2xl px-4 py-3 space-y-2" style="background:#3a1414; border:1px solid #5c1f1f;">
       <div class="text-[13px] font-semibold" style="color:#ff6b6b;">
@@ -315,7 +319,7 @@ export function addDangerConfirmCard(commandId, commandText) {
 export function addMessageTyped(text) {
   const { chat, chatScroll } = getEls();
   const div = document.createElement("div");
-  div.className = "flex justify-start";
+  div.className = "flex justify-start msg-enter";
   const container = document.createElement("div");
   container.className = "max-w-full w-full";
   const inner = document.createElement("div");
@@ -355,7 +359,11 @@ export function addMessageTyped(text) {
 
   return new Promise(resolve => {
     let i = 0;
-    const msPerChar = 28;
+    // Oldin 28ms/harf edi — biroz shoshilinch tuyulardi. 34ms/harf
+    // Claude'dagidek "shoshmasdan, lekin osilib qolmaydigan" tezlikka
+    // yaqinroq (uzun javoblarda his qilinarli sekinroq, qisqa javoblarda
+    // deyarli farqsiz).
+    const msPerChar = 34;
     let lastTime = null;
 
     function tick(now) {

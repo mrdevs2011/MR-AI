@@ -6,6 +6,20 @@
    Ko'chirildi: style.css dan (STEP 3), o'zgartirilmadi.
    ===================================================================== */
 
+/* ---- xabar paydo bo'lishi: Claude'dagidek shoshilmasdan, silliq
+   "cho'kib" joylashadi — thinking-row'dagi thinkingRowSettle bilan bir
+   xil egri chiziq (cubic-bezier(0.16, 1, 0.3, 1)), shu bilan butun
+   ilova bo'ylab bitta "premium sekinlik" tuyg'usi bo'ladi. addMessage()
+   va addMessageTyped() (message-render.js) tashqi flex konteynerga shu
+   klassni qo'shadi. */
+.msg-enter {
+  animation: messageSettle 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes messageSettle {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 /* ---- chat bubble'lar ---- */
 /* STEP 11: #2C2B29 eski bg'dan (#151515) qattiq offset bilan hisoblangan
    edi (var()ga bog'lanmagan) — yangi bg (#1e1e1e) bilan bir xil qoldirilsa,

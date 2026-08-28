@@ -116,7 +116,14 @@
   /* Sekinroq, silliqroq shimmer — oldingi 1.8s "yugurib o'tadigan"
      tezlikdan ko'ra sokinroq, sifatli tuyg'u beradi. */
   animation: thinkingShimmer 2.6s ease-in-out infinite;
+  /* "Pondering" so'zi almashganda (startPondering/setLabel) matn
+     birdan sakramasin — .label-fade klassi (JS orqali) opacity'ni
+     qisqa vaqtga pasaytiradi, shu transition esa kirish/chiqishni
+     yumshatadi. */
+  display: inline-block;
+  transition: opacity 0.25s ease;
 }
+#thinking-label.label-fade { opacity: 0; }
 @keyframes thinkingShimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

@@ -20,6 +20,48 @@
   gap: 11px;
 }
 .sidebar-nav-item svg { color: var(--muted); }
+/* "New" tugmasi ustida "+" ikonka biroz aylanadi — Claude'dagi kabi
+   kichik, sokin delight: shov-shuvsiz, faqat sezilar-sezilmas, bosishga
+   undaydigan mayin signal. Faqat #new-chat-btn'ga (boshqa nav item'larga
+   emas), chunki "+" belgisi aylanganda ma'no beradi ("x" ga o'xshaydi),
+   boshqa ikonkalarda (masalan terminal) aylanish g'alati ko'rinardi. */
+#new-chat-btn svg {
+  transition: transform .35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#new-chat-btn:hover svg {
+  transform: rotate(90deg);
+}
+
+/* ---- yashirin "easter egg": pastdagi logo tez-tez (5 marta, 2.5s
+   ichida) bosilsa, bir marta sokin aylanadi va tagida bir zumga kichik
+   yozuv chiqadi (sidebar.js, _armFooterLogoEasterEgg). Baqiriq/animatsiya
+   emas — bitta yumshoq aylanish + past ohangdagi matn, umumiy "shoshmasdan,
+   silliq" uslubga mos. ---- */
+#footer-logo.logo-easter-spin {
+  animation: logoEasterSpin 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+}
+@keyframes logoEasterSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.footer-logo-note {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg-elevated, #2a2a2a);
+  border: 1px solid var(--border, #3a3a3a);
+  padding: 3px 8px;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 5;
+}
+.footer-logo-note.visible { opacity: 1; }
 
 /* ---- "Chats" bo'lim sarlavhasi: Claude.ai'dagi "Chats and tasks"
    bilan bir xil tipografik og'irlik (biroz kattaroq matn, ko'proq

@@ -65,6 +65,21 @@ function _isNearBottom(el) {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= _AUTOSCROLL_THRESHOLD_PX;
 }
 
+// _crossfadeLabel: #thinking-label matnini birdan almashtirmasdan,
+// avval yumshoq so'ndiradi (.label-fade, thinking-panel.css'dagi
+// opacity transition), matnni shu "ko'rinmas" onda yangilaydi, so'ng
+// yana yumshoq paydo qiladi — natijada "Fikr yuritilmoqda" ->
+// "Chamalanmoqda" kabi so'z almashinuvlari sakramasdan, silliq
+// o'tadi (setLabel() ham xuddi shu yo'l bilan, masalan "Sending
+// request" -> haqiqiy birinchi step label'iga o'tganda).
+function _crossfadeLabel(labelEl, text) {
+  labelEl.classList.add("label-fade");
+  setTimeout(() => {
+    labelEl.textContent = text;
+    labelEl.classList.remove("label-fade");
+  }, 220);
+}
+
 function _autoscrollIfNearBottom(el, wasNearBottom) {
   if (wasNearBottom) el.scrollTop = el.scrollHeight;
 }
@@ -84,12 +99,20 @@ const _SENDING_LABEL = { uz: "So'rov yuborilmoqda", ru: "Отправка зап
 // bo'sh oraliqda — hech qanday real ma'lumotga bog'liq bo'lmagan,
 // SOF vizual signal: "tizim ishlayapti, osilib qolmagan". Shu sabab
 // backend'dan kelmaydi, mutlaqo frontend-only va random.
+// OHANG: atayin "hazil"/o'yinqaroq so'zlardan (masalan "Miya
+// ishlatilmoqda", "Noodling", "Percolating") qochilgan — Claude'ning
+// o'zi ham thinking indikatorida hazil qilmaydi, sokin va neytral
+// turadi. Shu bois bu ro'yxat ham jiddiy, lekin quruq bo'lmagan
+// so'zlardan iborat.
 const _PONDER_WORDS = {
-  uz: ["Mulohaza qilinmoqda", "Fikr yuritilmoqda", "Chamalanmoqda", "O'ylanmoqda", "Miya ishlatilmoqda", "Tahlil qilinmoqda", "Reja tuzilmoqda"],
-  ru: ["Обдумывается", "Размышляет", "Взвешивает", "Прикидывает", "Соображает", "Анализирует", "Формулирует ответ"],
-  en: ["Pondering", "Picturing", "Mulling", "Contemplating", "Noodling", "Percolating", "Ruminating", "Puzzling"],
+  uz: ["Mulohaza qilinmoqda", "Fikr yuritilmoqda", "Chamalanmoqda", "O'ylanmoqda", "Tahlil qilinmoqda", "Reja tuzilmoqda", "Ko'rib chiqilmoqda"],
+  ru: ["Обдумывается", "Размышляет", "Взвешивает", "Прикидывает", "Анализирует", "Формулирует ответ", "Рассматривает"],
+  en: ["Thinking", "Considering", "Working through it", "Weighing options", "Reasoning", "Reflecting", "Looking closer"],
 };
-const _PONDER_INTERVAL_MS = 1700;
+// Oldin 1700ms edi — Claude'dagidek shoshilmasdan, sekinroq almashsin
+// deb 2300ms'ga cho'zildi (juda tez almashish "asabiy"/urgent tuyg'u
+// beradi, biz esa xotirjam, silliq taassurot istaymiz).
+const _PONDER_INTERVAL_MS = 2300;
 
 // STEP UI — Claude Code uslubidagi step ikonkalari (lucide-uslubidagi
 // oddiy, ikki rangli chiziqli SVG'lar). action nomi bo'yicha tanlanadi;
@@ -231,11 +254,21 @@ export function createThoughtPanel(sourceText) {
     startPondering() {
       stopPondering();
       const words = _PONDER_WORDS[lang] || _PONDER_WORDS.uz;
+      // Birinchi so'z darhol, hech qanday fade bo'lmasdan chiqadi (panel
+      // hozirgina paydo bo'lyapti, "kirish" allaqachon thinkingRowSettle
+      // orqali sodir bo'lgan). Keyingi almashinuvlar esa _crossfadeLabel
+      // orqali — shoshilmasdan, eskisi so'nib, yangisi paydo bo'ladi.
+      let first = true;
       const pick = () => {
         let idx = Math.floor(Math.random() * words.length);
         if (words.length > 1 && idx === lastPonderIdx) idx = (idx + 1) % words.length;
         lastPonderIdx = idx;
-        labelEl.textContent = words[idx];
+        if (first) {
+          labelEl.textContent = words[idx];
+          first = false;
+        } else {
+          _crossfadeLabel(labelEl, words[idx]);
+        }
       };
       pick();
       ponderIntervalId = setInterval(pick, _PONDER_INTERVAL_MS);
@@ -244,7 +277,7 @@ export function createThoughtPanel(sourceText) {
     setLabel(text) {
       const wasNearBottom = _isNearBottom(chatScroll);
       stopPondering();
-      labelEl.textContent = text;
+      _crossfadeLabel(labelEl, text);
       _autoscrollIfNearBottom(chatScroll, wasNearBottom);
     },
     // STEP UI: eski commitLine() shunchaki bitta matn qatorini yozardi,
