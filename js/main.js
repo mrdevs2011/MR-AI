@@ -33,6 +33,8 @@ import './ui/selects.js';
 import './ui/sidebar.js';
 import './ui/terminal.js';
 import './ui/attach.js';
+import './ui/share.js';
+import './ui/files.js';
 
 import { sendMessage } from './chat/send-message.js';
 import { closeSidebarOnMobile } from './ui/sidebar.js';

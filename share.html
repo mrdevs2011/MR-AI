@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shared chat — MRagent</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+  <!-- firebase-app/firestore MUHIM SABAB bilan turibdi: backend (mragent)
+       doimiy domenda emas, cloudflared/ngrok tunnel orqali ishlaydi va
+       manzili har restart'da o'zgaradi — index.html qanday qilib
+       config/tunnel Firestore hujjatidan joriy API_BASE'ni topsa, bu
+       sahifa ham xuddi shunday topishi SHART, aks holda public link
+       hech qayerga fetch qila olmaydi. xterm.js va full auth/session
+       modullar esa YO'Q — bu sahifa terminal yoki login bilan ishlamaydi,
+       faqat bitta chatni READ-ONLY o'qiydi. -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="css/main.css" />
+  <style>
+    /* Public sahifaga xos, minimal qo'shimchalar */
+    .share-header {
+      height: 56px; display: flex; align-items: center; gap: 10px;
+      padding: 0 16px; border-bottom: 1px solid var(--border, #2a2a2a);
+      flex-shrink: 0;
+    }
+    .share-badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 999px;
+      background: #2a2a2a; color: #9a9a9a; border: 1px solid #3a3a3a;
+    }
+    .share-state {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 10px; color: #8e8e8e; font-size: 14px;
+      padding: 40px 20px; text-align: center;
+    }
+  </style>
+</head>
+<body class="text-[#ececec] h-screen flex flex-col" style="background:var(--bg);">
+
+  <header class="share-header">
+    <div class="w-6 h-6 rounded-full overflow-hidden shrink-0" style="background:#ececec;">
+      <img src="assets/MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+    </div>
+    <span class="text-[14px] font-medium">MRagent</span>
+    <span class="share-badge">Public • read-only</span>
+  </header>
+
+  <main id="share-chat" class="flex-1 overflow-y-auto w-full">
+    <div id="share-chat-inner" class="px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></div>
+  </main>
+
+  <script type="module">
+    import { backendMessagesToUi } from './js/chat/chat-storage.js';
+    import { db } from './js/config/firebase.js';
+
+    const inner = document.getElementById('share-chat-inner');
+
+    // login.js/loadTunnelUrl() bilan bir xil manba (Firestore
+    // config/tunnel), lekin login-ekran DOM elementlariga (login.js
+    // shularga bevosita yozadi) bog'liq emas — bu sahifada ular yo'q,
+    // shuning uchun o'zining mustaqil, DOM'siz nusxasi.
+    async function getApiBase() {
+      const docPromise = db.collection('config').doc('tunnel').get({ source: 'server' });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 15000)
+      );
+      const doc = await Promise.race([docPromise, timeoutPromise]);
+      if (doc.exists && doc.data().url) {
+        return doc.data().url.replace(/\/$/, '');
+      }
+      throw new Error('tunnel topilmadi');
+    }
+
+    function showState(text) {
+      inner.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'share-state';
+      div.textContent = text;
+      inner.appendChild(div);
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    // MUHIM: bu funksiya faqat KO'RSATISH uchun — hech qanday input
+    // qayta yozib yubormaydi, terminalga yoki /chat, /confirm kabi
+    // action endpoint'larga umuman murojaat qilinmaydi. To'liq
+    // read-only render.
+    function renderMessages(messages) {
+      inner.innerHTML = '';
+      if (!messages.length) {
+        showState('Bu chatda hali xabar yo\u02bbq.');
+        return;
+      }
+      for (const m of messages) {
+        if (m.kind === 'io' || m.kind === 'thought' || m.kind === 'output_file') {
+          // Public ko'rinishda terminal buyruqlari/ichki fikr jarayoni
+          // ko'rsatilmaydi — faqat foydalanuvchi va AI matnli xabarlari.
+          continue;
+        }
+        const row = document.createElement('div');
+        row.className = 'flex ' + (m.kind === 'user' ? 'justify-end' : 'justify-start');
+
+        const bubble = document.createElement('div');
+        bubble.className = m.kind === 'user'
+          ? 'bubble-user rounded-2xl px-4 py-2.5 max-w-[85%]'
+          : 'bubble-bot max-w-[85%]';
+
+        if (m.kind === 'user') {
+          bubble.textContent = m.text || '';
+        } else {
+          const prose = document.createElement('div');
+          prose.className = 'prose-bot';
+          try {
+            prose.innerHTML = window.marked ? marked.parse(m.text || '') : escapeHtml(m.text);
+          } catch {
+            prose.textContent = m.text || '';
+          }
+          bubble.appendChild(prose);
+        }
+        row.appendChild(bubble);
+        inner.appendChild(row);
+      }
+    }
+
+    async function load() {
+      const params = new URLSearchParams(window.location.search);
+      const roomId = params.get('room');
+      if (!roomId || !/^[0-9a-f]{64}$/.test(roomId)) {
+        showState('Noto\u02bbg\u02bbri havola.');
+        return;
+      }
+      showState('Yuklanmoqda...');
+      try {
+        const apiBase = await getApiBase();
+        // MUHIM: bu yerda X-Login-Pass / X-Session-Id header'lari
+        // YO'Q — chunki /public/chats/<room_id> ataylab auth so'ramaydi
+        // (main.py/get_public_chat). Shu bilan bu sahifa haqiqatan ham
+        // login qilmasdan ishlaydi.
+        const res = await fetch(`${apiBase}/public/chats/${roomId}`);
+        if (!res.ok) {
+          let reason = 'not_found';
+          try { reason = (await res.json()).error || reason; } catch {}
+          if (res.status === 404 && reason === 'expired') {
+            showState('Bu linkning muddati tugagan. Egasidan yangisini so\u02bbra.');
+          } else if (res.status === 404) {
+            showState('Bu link topilmadi yoki bekor qilingan.');
+          } else {
+            showState('Chatni yuklab bo\u02bblmadi.');
+          }
+          return;
+        }
+        const data = await res.json();
+        const ui = backendMessagesToUi(data.messages, data.outputs);
+        renderMessages(ui);
+      } catch (e) {
+        console.error('Public chat load xato:', e);
+        showState('Chatni yuklab bo\u02bblmadi. Internetni tekshir.');
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
