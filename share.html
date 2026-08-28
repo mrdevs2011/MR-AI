@@ -9,16 +9,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
-  <!-- firebase-app/firestore MUHIM SABAB bilan turibdi: backend (mragent)
-       doimiy domenda emas, cloudflared/ngrok tunnel orqali ishlaydi va
-       manzili har restart'da o'zgaradi — index.html qanday qilib
-       config/tunnel Firestore hujjatidan joriy API_BASE'ni topsa, bu
-       sahifa ham xuddi shunday topishi SHART, aks holda public link
-       hech qayerga fetch qila olmaydi. xterm.js va full auth/session
-       modullar esa YO'Q — bu sahifa terminal yoki login bilan ishlamaydi,
-       faqat bitta chatni READ-ONLY o'qiydi. -->
-  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+  <!-- FIRESTORE OLIB TASHLANDI: backend endi ngrok'ning RESERVED/STATIC
+       domenida ishlaydi (state/store.js'dagi TUNNEL_URL), URL restart'da
+       o'zgarmaydi — shuning uchun bu sahifa ham joriy API_BASE'ni endi
+       Firestore'dan emas, to'g'ridan-to'g'ri store.js'dan oladi. -->
   <link rel="stylesheet" href="css/main.css" />
   <style>
     /* Public sahifaga xos, minimal qo'shimchalar */
@@ -54,25 +48,9 @@
 
   <script type="module">
     import { backendMessagesToUi } from './js/chat/chat-storage.js';
-    import { db } from './js/config/firebase.js';
+    import { TUNNEL_URL } from './js/state/store.js';
 
     const inner = document.getElementById('share-chat-inner');
-
-    // login.js/loadTunnelUrl() bilan bir xil manba (Firestore
-    // config/tunnel), lekin login-ekran DOM elementlariga (login.js
-    // shularga bevosita yozadi) bog'liq emas — bu sahifada ular yo'q,
-    // shuning uchun o'zining mustaqil, DOM'siz nusxasi.
-    async function getApiBase() {
-      const docPromise = db.collection('config').doc('tunnel').get({ source: 'server' });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 15000)
-      );
-      const doc = await Promise.race([docPromise, timeoutPromise]);
-      if (doc.exists && doc.data().url) {
-        return doc.data().url.replace(/\/$/, '');
-      }
-      throw new Error('tunnel topilmadi');
-    }
 
     function showState(text) {
       inner.innerHTML = '';
@@ -138,7 +116,7 @@
       }
       showState('Yuklanmoqda...');
       try {
-        const apiBase = await getApiBase();
+        const apiBase = TUNNEL_URL;
         // MUHIM: bu yerda X-Login-Pass / X-Session-Id header'lari
         // YO'Q — chunki /public/chats/<room_id> ataylab auth so'ramaydi
         // (main.py/get_public_chat). Shu bilan bu sahifa haqiqatan ham

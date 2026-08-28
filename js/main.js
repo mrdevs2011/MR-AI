@@ -43,7 +43,6 @@ import { confirmCommand, resumeActiveJobIfAny } from './agent/job-polling.js';
 import { loadChats } from './chat/chat-storage.js';
 import { ensureActiveChat } from './chat/chat-storage.js';
 import { tryAutoLogin } from './auth/session.js';
-import { loadTunnelUrl } from './auth/login.js';
 import { startWakeWordListener } from './voice/wakeword.js';
 
 // Cross-module ko'priklar — Step 7-9'dagi fayllar bularni
@@ -187,12 +186,11 @@ newChatBtn.addEventListener("click", async () => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Tunnel URL HECH QACHON keshlanmaydi — har boot'da to'g'ridan-to'g'ri
-  // Firestore'dan o'qiladi. Cloudflared quick tunnel har restart'da
-  // yangi random subdomen beradi, shuning uchun eski keshdagi URL bilan
-  // urinish har doim DNS xatosiga olib kelishi mumkin (ERR_NAME_NOT_RESOLVED).
-  // Parol/token bundan mustasno — ular sessiyalar orasida o'zgarmaydi,
-  // shuning uchun localStorage'da qolaveradi (auto-login tezligi uchun).
-  await loadTunnelUrl();
+  // FIRESTORE OLIB TASHLANDI: ilgari bu yerda har boot'da Firestore'dan
+  // joriy tunnel URL o'qilardi (cloudflared quick tunnel restart'da
+  // random subdomen berardi). Backend endi ngrok'ning RESERVED/STATIC
+  // domenida ishlaydi (state/store.js'dagi TUNNEL_URL) — URL hech qachon
+  // o'zgarmaydi, shuning uchun boot vaqtida uni "yuklash" bosqichi
+  // butunlay keraksiz bo'lib qoldi.
   await tryAutoLogin();
 });

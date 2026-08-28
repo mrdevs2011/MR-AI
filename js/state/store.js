@@ -30,9 +30,19 @@
    Shu yerga qo'shildi, chunki qoida aniq: "boshqa hech qaysi modul
    o'z ichida global state saqlamasin, hammasi shu yerdan import
    qilsin" — LOGIN_PASS ham shu qoidaga bo'ysunadi.
+
+   FIRESTORE OLIB TASHLANDI: ilgari API_BASE Firestore'dagi
+   config/tunnel hujjatidan boot vaqtida o'qilardi, chunki tunnel
+   (cloudflared quick tunnel) har restart'da yangi random URL berardi.
+   Endi backend ngrok'ning RESERVED/STATIC domenida ishlaydi
+   (start.sh'dagi NGROK_DOMAIN) — bu domen hech qachon o'zgarmaydi,
+   shuning uchun sync mexanizmi umuman keraksiz edi. API_BASE endi
+   shu yerda to'g'ridan-to'g'ri hardcode qilingan.
    ===================================================================== */
 
-export let API_BASE = null;
+export const TUNNEL_URL = "https://satisfy-endurance-mooned.ngrok-free.dev";
+
+export let API_BASE = TUNNEL_URL;
 export let SESSION_ID = "";
 export let activeChatId = null;
 export let LOGIN_PASS = "";

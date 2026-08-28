@@ -40,7 +40,6 @@ const loginOtpWrap = document.getElementById("login-otp-wrap");
 const loginOtpTimer = document.getElementById("login-otp-timer");
 const loginError = document.getElementById("login-error");
 const loginBtn = document.getElementById("login-btn");
-const loginTunnelStatus = document.getElementById("login-tunnel-status");
 const logoutBtn = document.getElementById("logout-btn");
 
 // Ikki bosqichli login: avval faqat parol ko'rinadi. Continue
@@ -118,59 +117,12 @@ export async function handleAuthFailure(res) {
   doLogout(message);
 }
 
-export async function loadTunnelUrl() {
-  const { db } = await import('../config/firebase.js');
-  loginTunnelStatus.textContent = "connecting...";
-  try {
-    // Firestore'ning o'z "offline" deb qaror qilishi ichki SDK
-    // darajasida juda uzoq davom etishi mumkin (ayniqsa ad-blocker
-    // ulanishni qayta-qayta bloklab, retry-loop hosil qilsa — 30-60+
-    // soniyagacha). Foydalanuvchini shuncha kutdirish o'rniga, o'zimiz
-    // 6 soniyadan keyin to'xtatamiz va aniq xabar + retry beramiz.
-    // { source: "server" } — Firestore'ga mahalliy keshni (IndexedDB/
-    // memory cache) chetlab o'tib, HAR SAFAR to'g'ridan-to'g'ri
-    // serverdan o'qishni majburlaydi. Buni qo'shmasak, cloudflared
-    // tunnel har restart'da yangi URL chiqarganda, brauzer ba'zida
-    // eski (keshlangan) manzilni qaytarib yuborardi va "Failed to
-    // fetch" xatosi shundan kelib chiqardi.
-    const docPromise = db.collection("config").doc("tunnel").get({ source: "server" });
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), 15000)
-    );
-    const doc = await Promise.race([docPromise, timeoutPromise]);
-
-    if (doc.exists && doc.data().url) {
-      const { setApiBase } = await import('../state/store.js');
-      setApiBase(doc.data().url.replace(/\/$/, ""));
-      loginTunnelStatus.textContent = "";
-    } else {
-      loginTunnelStatus.textContent = "couldn't connect — try again";
-      showTunnelRetry();
-    }
-  } catch (e) {
-    const isTimeout = e && e.message === "timeout";
-    loginTunnelStatus.textContent = isTimeout
-      ? "connection is slow/blocked — check your ad-blocker, then retry"
-      : "Firestore error — check your connection";
-    console.error(e);
-    showTunnelRetry();
-  }
-}
-
-export function showTunnelRetry() {
-  let btn = document.getElementById("tunnel-retry-btn");
-  if (btn) return; // allaqachon ko'rsatilgan
-  btn = document.createElement("button");
-  btn.id = "tunnel-retry-btn";
-  btn.type = "button";
-  btn.textContent = "Retry";
-  btn.className = "w-full text-[13px] text-[#ececec] bg-[#2f2f2f] hover:bg-[#3a3a3a] rounded-xl py-2 mt-2 transition";
-  btn.addEventListener("click", () => {
-    btn.remove();
-    loadTunnelUrl();
-  });
-  loginTunnelStatus.insertAdjacentElement("afterend", btn);
-}
+// FIRESTORE OLIB TASHLANDI: API_BASE endi state/store.js'da static
+// ngrok domeniga hardcode qilingan (backend reserved domain ishlatadi,
+// URL restart'da o'zgarmaydi) — shuning uchun boot vaqtida uni
+// qayerdandir "yuklab olish" shart emas. loadTunnelUrl()/showTunnelRetry()
+// va login-tunnel-status DOM elementi butunlay olib tashlandi; main.js
+// endi bu funksiyalarni chaqirmaydi.
 
 // Ikki bosqichli login. 1-bosqich: faqat PASS yuboriladi -> backend
 // /send-otp orqali parolni tekshiradi va to'g'ri bo'lsa emailga
