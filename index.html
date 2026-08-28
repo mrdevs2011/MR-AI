@@ -129,8 +129,10 @@
 
     <!-- =================== MAIN CHAT =================== -->
     <div id="chat-panel" class="flex-1 flex flex-col min-w-0 relative" style="background:var(--bg);">
-      <!-- Header: single menu icon (opens/closes the sidebar on any screen
-           size) + the active chat's title, matching the mockup. -->
+      <!-- Header: menu icon + active chat's title (endi dropdown chevron
+           bilan) + o'ng tomonda file/Share tugmalari — Claude.ai'dagi
+           header'ga vizual moslik uchun (screenshot solishtiruvi asosida
+           qo'shildi: asl versiyada bular yo'q edi, faqat menu+title bor edi). -->
       <header id="chat-header" class="shrink-0 h-14 flex items-center gap-1 px-2">
         <button id="header-menu-btn" title="Chats"
                 class="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
@@ -139,7 +141,25 @@
             <line x1="9" y1="4" x2="9" y2="20"/>
           </svg>
         </button>
-        <span id="chat-title" class="text-[15px] font-medium text-[#ececec] truncate px-1">MRagent</span>
+        <button id="chat-title-btn" class="flex items-center gap-1 px-1 py-1 rounded-lg hover:bg-[#2a2a2a] min-w-0" style="max-width:60%;">
+          <span id="chat-title" class="text-[15px] font-medium text-[#ececec] truncate">MRagent</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-[#8e8e8e]">
+            <polyline points="6 9 12 15 18 9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="flex-1"></div>
+        <button id="header-file-btn" title="Files"
+                class="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-linejoin="round"/>
+            <path d="M14 2v6h6" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="header-share-btn"
+                class="shrink-0 text-[13px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a2a] text-[#ececec] border"
+                style="border-color:#3a3a3a;">
+          Share
+        </button>
       </header>
       <main id="chat" class="flex-1 overflow-y-auto w-full"><div id="chat-inner" class="px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></div></main>
 

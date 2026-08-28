@@ -17,7 +17,15 @@
 const sidebarEl = document.getElementById("sidebar");
 const headerMenuBtn = document.getElementById("header-menu-btn");
 const sidebarBackdrop = document.getElementById("sidebar-backdrop");
-const headerTitleEl = document.getElementById("chat-title");
+// MUHIM: sidebar pinned bo'lganda header-menu-btn shu elementning CHAP
+// tomonidan joy talab qiladi (pastda positionHeaderMenuBtn() marginLeft
+// beradi) — shuning uchun endi "chat-title" span emas, uni o'rab turgan
+// "chat-title-btn" tugmasi olinadi (chevron header'ga qo'shilgach, span
+// endi shu tugma ICHIDA joylashgan; agar faqat span'ga margin berilsa,
+// tugmaning o'zi joyida qolib, chevron hamon fixed icon ostida qolib
+// ketardi). Eski versiya bilan orqaga moslik uchun tugma topilmasa
+// span'ning o'ziga tushadi.
+const headerTitleEl = document.getElementById("chat-title-btn") || document.getElementById("chat-title");
 
 export function isMobileLayout() { return window.innerWidth < 768; }
 // Sichqoncha/trackpad bilan hover qila oladigan qurilmami, yoki
