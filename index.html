@@ -1,261 +1,2729 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uz">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MRagent</title>
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
-  <link rel="apple-touch-icon" href="assets/splash.svg" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-  <link rel="stylesheet" href="css/main.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OVOZLI SUHBAT</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%233B82F6'/%3E%3Crect x='9' y='4' width='6' height='9' rx='3' fill='%23FFFFFF'/%3E%3Cpath d='M6 10v1a6 6 0 0 0 12 0v-1' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cline x1='12' y1='17' x2='12' y2='20' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='9' y1='20' x2='15' y2='20' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%233B82F6'/%3E%3Crect x='9' y='4' width='6' height='9' rx='3' fill='%23FFFFFF'/%3E%3Cpath d='M6 10v1a6 6 0 0 0 12 0v-1' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cline x1='12' y1='17' x2='12' y2='20' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='9' y1='20' x2='15' y2='20' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#3b82f6">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --bg: #eef3f8; --bg2: #ffffff; --line: #e2e8f0;
+    --input-bg: #ffffff;
+    --amber: #3b82f6; --amber-dim: #dbeafe;
+    --green: #16a34a; --green-dim: #dcfce7; --red: #ef4444;
+    --text: #0f172a; --text-dim: #64748b;
+    --navy: #0f2744;
+    --danger-bg: #fef2f2;
+    --meter-bg: linear-gradient(180deg, rgba(59,130,246,0.04) 0%, rgba(22,163,74,0.03) 100%);
+    --shadow: 0 1px 2px rgba(15,23,42,0.04), 0 18px 40px -24px rgba(15,39,68,0.18);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --radius: 16px; --radius-sm: 12px; --radius-lg: 20px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: #0b1220; --bg2: #111827; --line: #1f2a3d;
+      --input-bg: #0f172a;
+      --amber: #60a5fa; --amber-dim: rgba(96,165,250,0.18);
+      --green: #4ade80; --green-dim: rgba(74,222,128,0.16); --red: #f87171;
+      --text: #e5eefb; --text-dim: #94a3b8;
+      --navy: #1e293b;
+      --danger-bg: rgba(248,113,113,0.12);
+      --meter-bg: linear-gradient(180deg, rgba(96,165,250,0.08) 0%, rgba(74,222,128,0.05) 100%);
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 18px 40px -20px rgba(0,0,0,0.55);
+      color-scheme: dark;
+    }
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; min-height:100vh;
+    background: var(--bg);
+    color:var(--text); font-family:var(--font);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+    transition: background .25s ease, color .25s ease;
+  }
+  .rig{
+    width:100%; max-width:440px;
+    background:var(--bg2);
+    border:1px solid var(--line); border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);
+    padding:22px; position:relative; overflow:visible;
+    transition: background .25s ease, border-color .25s ease, box-shadow .25s ease;
+  }
+  .toast{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+    background:var(--navy); color:#fff; font-size:13px; font-weight:600;
+    padding:10px 18px; border-radius:999px; opacity:0; pointer-events:none;
+    transition:opacity .28s ease, transform .28s ease; z-index:9999;
+    box-shadow:0 8px 24px rgba(0,0,0,0.25); max-width:90vw; text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (prefers-color-scheme: dark){
+    .toast{ background:#e2e8f0; color:#0f172a; }
+  }
+  .head{ display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:16px; gap:12px; }
+  .head h1{ font-size:17px; margin:0; color:var(--text); font-weight:700; letter-spacing:0; }
+  .head .tag{ font-size:12px; color:var(--text-dim); margin-top:4px; letter-spacing:0; }
+  .rec-dot{ display:none; }
+  .app-logo{
+    transition: filter .2s ease, transform .2s ease;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+  label{ font-size:13px; color:var(--text); font-weight:600; letter-spacing:0; display:block; margin-bottom:6px; }
+  .code-row{ display:flex; gap:8px; margin-bottom:14px; }
+  input#roomJoin, input#roomCreate{
+    flex:1; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--font); font-size:18px; letter-spacing:3px; text-align:center;
+    padding:12px 8px; border-radius:12px; outline:none; text-transform:uppercase;
+    transition: border-color .15s, box-shadow .15s, background .25s;
+  }
+  input#roomJoin:focus, input#roomCreate:focus{ border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-dim); }
+  input#passwordJoin, input#passwordCreate, input#roomNameCreate, input#maxParticipantsCreate{
+    flex:1; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--font); font-size:14px; letter-spacing:0; text-align:left;
+    padding:12px 10px; border-radius:12px; outline:none;
+    transition: border-color .15s, box-shadow .15s, background .25s;
+  }
+  input#passwordJoin:focus, input#passwordCreate:focus, input#roomNameCreate:focus, input#maxParticipantsCreate:focus{ border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-dim); }
+  input#maxParticipantsCreate{ width:100%; }
+
+  .tabs{ display:flex; gap:6px; margin-bottom:18px; background:transparent; border:none; padding:0; }
+  .tab-btn, .ptab-btn{
+    flex:1; background:var(--input-bg); border:1px solid var(--line); color:var(--text-dim); font-family:var(--font);
+    font-size:13px; letter-spacing:0; font-weight:600; padding:10px 4px; border-radius:12px; cursor:pointer; transition:all .15s;
+  }
+  .tab-btn.active, .ptab-btn.active{ background:var(--amber); color:#fff; border-color:var(--amber); box-shadow:none; }
+  .tab-panel, .ptab-panel{ display:none; }
+  .tab-panel.active, .ptab-panel.active{ display:block; }
+
+  .vis-row{ display:flex; gap:8px; margin-bottom:14px; }
+  .vis-btn{
+    flex:1; background:var(--input-bg); border:1px solid var(--line); color:var(--text-dim);
+    font-family:var(--font); font-size:12px; letter-spacing:0; font-weight:600; padding:12px 6px; border-radius:var(--radius); cursor:pointer; transition:all .15s;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .vis-btn .vsub{ font-size:11px; letter-spacing:0; opacity:.85; font-weight:400; }
+  .vis-btn.active{ border-color:var(--amber); color:var(--amber); background:var(--amber-dim); }
+
+  .rooms-search-wrap{
+    position:sticky; top:0; z-index:5; background:var(--bg2);
+    padding-bottom:10px; margin-bottom:4px;
+  }
+  #roomSearch{
+    width:100%; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--font); font-size:14px; padding:12px 12px;
+    border-radius:12px; outline:none;
+    transition: border-color .15s, box-shadow .15s, background .25s;
+  }
+  #roomSearch:focus{ border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-dim); }
+  #roomSearch::placeholder{ color:var(--text-dim); }
+  .room-card.hidden-search{ display:none; }
+  .rooms-bigtabs{ display:flex; gap:8px; margin-bottom:14px; }
+  .rooms-bigtab{
+    flex:1; background:var(--input-bg); border:1px solid var(--line); color:var(--text-dim);
+    font-family:var(--font); font-size:14px; font-weight:700; padding:11px 8px;
+    border-radius:12px; cursor:pointer; transition:all .15s;
+  }
+  .rooms-bigtab.active{ background:var(--amber); color:#fff; border-color:var(--amber); }
+  .rbig-panel{ display:none; }
+  .rbig-panel.active{ display:block; }
+  .room-menu-wrap{ position:relative; flex-shrink:0; }
+  .room-more-btn{
+    width:32px; height:32px; border:none; background:transparent; color:var(--text-dim);
+    border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .room-more-btn:hover{ background:var(--amber-dim); color:var(--text); }
+  .room-menu{
+    display:none; position:fixed; z-index:9999;
+    min-width:160px; background:var(--bg2); border:1px solid var(--line); border-radius:12px;
+    box-shadow:var(--shadow); overflow:visible;
+  }
+  .room-menu.open{ display:block; }
+  .room-menu button{
+    width:100%; text-align:left; background:none; border:none; padding:10px 12px;
+    font-family:var(--font); font-size:13px; font-weight:600; color:var(--text); cursor:pointer;
+  }
+  .room-menu button:hover{ background:var(--amber-dim); }
+  .room-menu button.room-del-btn{ color:var(--red); }
+  .room-menu button.room-del-btn:hover{ background:var(--danger-bg); }
+  .subtabs{ display:flex; gap:16px; border-bottom:1px solid var(--line); margin-bottom:12px; }
+  .subtab-btn, .psub-btn{
+    background:none; border:none; color:var(--text-dim); font-family:var(--font);
+    font-size:13px; letter-spacing:0; font-weight:600; padding:8px 2px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .subtab-btn.active, .psub-btn.active{ color:var(--amber); border-bottom-color:var(--amber); }
+  .subtab-panel, .psub-panel{ display:none; }
+  .subtab-panel.active, .psub-panel.active{ display:block; }
+
+  .head-right{ display:flex; align-items:center; flex-shrink:0; }
+  .profile-icon-btn{
+    width:38px; height:38px; border-radius:50%; background:var(--input-bg); border:1px solid var(--line);
+    color:var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:transform .15s, box-shadow .15s, border-color .15s, color .15s, background .15s;
+    padding:0; overflow:hidden; position:relative; flex-shrink:0;
+  }
+  .profile-icon-btn:hover{
+    border-color:var(--amber); color:var(--amber);
+    box-shadow:0 4px 12px -4px rgba(15,39,68,0.25);
+    transform:translateY(-1px);
+  }
+  .profile-icon-btn:active{ transform:translateY(0); }
+  .profile-icon-btn:focus-visible{
+    outline:none; border-color:var(--amber);
+    box-shadow:0 0 0 3px var(--amber-dim);
+  }
+  .profile-icon-btn svg{ width:18px; height:18px; display:block; }
+  .profile-icon-btn.has-letter svg{ display:none; }
+  .profile-icon-letter{
+    display:none; width:100%; height:100%;
+    align-items:center; justify-content:center;
+    font-family:var(--font); font-weight:700; font-size:14px; color:#fff;
+    letter-spacing:0;
+  }
+  .profile-icon-btn.has-letter .profile-icon-letter{ display:flex; }
+  .profile-icon-btn.has-photo{
+    background-size:cover !important; background-position:center !important;
+    border-color:transparent;
+  }
+  .profile-icon-btn.has-photo svg,
+  .profile-icon-btn.has-photo .profile-icon-letter{ display:none !important; }
+
+  .guest-id-row{ display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px dashed var(--line); margin-top:4px; }
+  .guest-id-row .gid-label{ font-size:12px; color:var(--text-dim); letter-spacing:0; }
+  .guest-id-row .gid-val{ font-size:12px; color:var(--amber); letter-spacing:0; font-weight:600; }
+  .form-input{
+    width:100%; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--font); font-size:13px; letter-spacing:0; padding:12px 10px;
+    border-radius:12px; outline:none; margin-bottom:12px;
+    transition: border-color .15s, box-shadow .15s, background .25s;
+  }
+  .form-input:focus{ border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-dim); }
+  .form-input::placeholder{ color:var(--text-dim); }
+
+  .profile-avatar-upload{ position:relative; cursor:pointer; flex-shrink:0; }
+  .profile-avatar-upload .profile-avatar{ background-size:cover; background-position:center; }
+  .avatar-edit-badge{
+    position:absolute; bottom:-3px; right:-3px; width:18px; height:18px; border-radius:50%;
+    background:var(--amber); color:#ffffff; display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--bg2); z-index:2; cursor:pointer;
+  }
+  .avatar-edit-badge svg{ width:10px; height:10px; }
+  .avatar-lightbox{
+    display:none; position:fixed; inset:0; z-index:9999;
+    background:rgba(0,0,0,0.78); backdrop-filter:blur(6px);
+    align-items:center; justify-content:center; padding:24px;
+    animation: lbFadeIn .18s ease;
+  }
+  .avatar-lightbox.open{ display:flex; }
+  @keyframes lbFadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  .avatar-lightbox-img{
+    width:min(280px, 72vw); height:min(280px, 72vw);
+    border-radius:50%; object-fit:cover;
+    box-shadow:0 12px 48px rgba(0,0,0,0.45), 0 0 0 4px rgba(255,255,255,0.12);
+    background:var(--bg2); animation: lbZoom .22s ease;
+  }
+  @keyframes lbZoom{ from{ transform:scale(0.85); opacity:0.6; } to{ transform:scale(1); opacity:1; } }
+  .avatar-lightbox-close{
+    position:absolute; top:18px; right:18px; width:40px; height:40px; border-radius:50%;
+    border:none; background:rgba(255,255,255,0.12); color:#fff; font-size:22px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+  }
+  .avatar-lightbox-close:hover{ background:rgba(255,255,255,0.22); }
+  .signout-btn{
+    width:100%; padding:14px; background:none; border:1px solid var(--red); color:var(--red);
+    font-family:var(--font); font-weight:600; font-size:13px; letter-spacing:0; border-radius:var(--radius);
+    cursor:pointer; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:8px; transition:all .15s;
+  }
+  .signout-btn:hover{ background:rgba(239,68,68,0.08); }
+  .signout-btn .btn-icon{ width:14px; height:14px; }
+  .google-signin-btn{
+    width:100%; padding:14px; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--font); font-weight:600; font-size:13px; letter-spacing:0; border-radius:var(--radius);
+    cursor:pointer; margin-bottom:16px; display:flex; align-items:center; justify-content:center; gap:10px; transition:all .15s;
+  }
+  .google-signin-btn:hover{ box-shadow:0 0 0 2px var(--amber-dim); }
+  .google-signin-btn .btn-icon{ width:16px; height:16px; }
+
+  .room-list{ display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; margin-bottom:6px; }
+  .room-list::-webkit-scrollbar{ width:4px; }
+  .room-list::-webkit-scrollbar-thumb{ background:var(--line); border-radius:2px; }
+  .room-card{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line);
+    border-radius:var(--radius); background:var(--input-bg); cursor:pointer; transition:all .15s;
+  }
+  .room-card:hover{ border-color:var(--amber); background:var(--amber-dim); }
+  .room-card .rc-code{ font-size:15px; letter-spacing:1px; color:var(--text); font-weight:700; }
+  .room-card .rc-meta{ flex:1; min-width:0; }
+  .room-card .rc-name-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .room-card .rc-name{ font-size:12px; color:var(--text); letter-spacing:0; }
+  .room-card .rc-status-badge{
+    font-size:10px; font-weight:700; letter-spacing:.3px; padding:1px 6px; border-radius:20px;
+    background:var(--line); color:var(--text-dim); flex-shrink:0;
+  }
+  .room-card .rc-status-badge.active{ background:var(--green-dim); color:var(--green); }
+  .room-card .rc-count{ font-size:11px; color:var(--text-dim); letter-spacing:0; margin-top:2px; }
+  .room-card .rc-lock{ color:var(--text-dim); flex-shrink:0; }
+  .room-card .rc-copy-link{
+    flex-shrink:0; width:32px; height:32px; border-radius:10px;
+    border:1px solid var(--line); background:var(--input-bg); color:var(--text-dim);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition: all .15s; padding:0;
+  }
+  .room-card .rc-copy-link:hover{ border-color:var(--amber); color:var(--amber); background:var(--amber-dim); }
+  .room-card .rc-copy-link svg{ width:15px; height:15px; }
+  .room-card .rc-more-toggle{
+    background:none; border:none; color:var(--amber); font-family:var(--font);
+    font-size:11px; font-weight:600; letter-spacing:0; padding:4px 0 0; cursor:pointer;
+  }
+  .room-card .rc-details{ margin-top:4px; padding-top:4px; border-top:1px dashed var(--line); display:none; }
+  .room-card .rc-details.open{ display:block; }
+  .room-card .rc-detail-row{ font-size:11px; color:var(--text-dim); letter-spacing:0; margin-top:2px; }
+  .room-card .rc-detail-row b{ color:var(--text); font-weight:600; }
+  .empty-list{ text-align:center; font-size:12px; color:var(--text-dim); letter-spacing:0; padding:24px 8px; }
+
+  /* —— Call / Voice Chat overlay —— */
+  #callScreen{
+    display:none; flex-direction:column; min-height:420px;
+  }
+  #callScreen.active-call{ display:flex !important; }
+  .vc-header{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--line);
+  }
+  .vc-header-left{ min-width:0; }
+  .vc-title{ font-size:16px; font-weight:700; color:var(--text); letter-spacing:0; }
+  .vc-subtitle{ font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .vc-header-actions{ display:flex; gap:6px; }
+  .vc-icon-btn{
+    width:36px; height:36px; border-radius:50%; border:1px solid var(--line);
+    background:var(--input-bg); color:var(--text-dim); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .vc-icon-btn:hover{ color:var(--amber); border-color:var(--amber); }
+  .vc-icon-btn svg{ width:18px; height:18px; }
+
+  .participants{
+    display:flex; flex-direction:column; gap:0;
+    flex:1; min-height:120px; max-height:280px; overflow-y:auto;
+    margin-bottom:8px; padding:4px 0;
+  }
+  .participants::-webkit-scrollbar{ width:4px; }
+  .participants::-webkit-scrollbar-thumb{ background:var(--line); border-radius:2px; }
+  .prow{
+    display:flex; align-items:center; gap:12px;
+    padding:10px 8px; border-radius:12px; transition:background .15s;
+  }
+  .prow:hover{ background:rgba(255,255,255,0.03); }
+  .avatar{
+    width:42px; height:42px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font); font-weight:600; font-size:15px; color:#fff;
+    background-size:cover; background-position:center;
+  }
+  .pinfo{ flex:1; min-width:0; }
+  .pname{
+    font-family: var(--font); font-size:14px; font-weight:600;
+    color:var(--text); letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .pname.me-label::after{ content:' (Siz)'; color:var(--text-dim); font-weight:400; }
+  .pstate{ font-family: var(--font); font-size:12px; margin-top:2px; letter-spacing:0; }
+  .pstate.listening{ color:#5b9fd4; }
+  .pstate.speaking{ color:var(--green); font-weight:600; }
+  .pstate.invited{ color:var(--text-dim); }
+  .picon{ flex-shrink:0; opacity:0.85; }
+  .picon svg{ display:block; width:20px; height:20px; }
+
+  .vc-status{ text-align:center; font-size:12px; color:var(--text-dim); min-height:18px; margin:4px 0 8px; }
+  .vc-status.err{ color:var(--red); }
+
+  .vc-controls{
+    display:flex; align-items:center; justify-content:center; gap:28px;
+    padding:16px 8px 8px; margin-top:auto;
+  }
+  .vc-side-btn{
+    width:48px; height:48px; border-radius:50%; border:none;
+    background:#2a3140; color:#c5cad3; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:0; transition: transform .12s, background .15s;
+  }
+  .vc-side-btn:hover{ background:#343b4d; }
+  .vc-side-btn.active{ background:var(--amber); color:#fff; }
+  .vc-side-btn.leave{ background:#e74c3c; color:#fff; }
+  .vc-side-btn.leave:hover{ background:#c0392b; }
+  .vc-side-btn svg{ width:22px; height:22px; }
+  .vc-side-label{
+    font-size:10px; color:var(--text-dim); text-align:center; margin-top:6px; font-weight:500;
+  }
+  .vc-side-wrap{ display:flex; flex-direction:column; align-items:center; }
+
+  .vc-mic-btn{
+    width:84px; height:84px; border-radius:50%; border:none; cursor:pointer;
+    background: linear-gradient(145deg, #3dd68c, #1a9f6a);
+    color:#fff; display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 8px 28px rgba(29, 185, 120, 0.35);
+    transition: transform .12s, box-shadow .15s, background .2s;
+  }
+  .vc-mic-btn:hover{ transform:scale(1.04); }
+  .vc-mic-btn:active{ transform:scale(0.97); }
+  .vc-mic-btn.muted{
+    background: linear-gradient(145deg, #5a6270, #3d4450);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .vc-mic-btn.forced{
+    background: linear-gradient(145deg, #e74c3c, #c0392b);
+    box-shadow: 0 8px 24px rgba(231, 76, 60, 0.3);
+  }
+  .vc-mic-btn svg{ width:36px; height:36px; }
+  .vc-mic-hint{
+    text-align:center; font-size:12px; color:var(--text-dim); margin-top:10px; margin-bottom:4px;
+  }
+
+  .meter{ display:none !important; }
+  .meter canvas{ display:none; }
+  .status{ text-align:center; font-size:13px; letter-spacing:0; color:var(--text-dim); min-height:16px; margin-bottom:16px; }
+  .btn-main{
+    width:100%; padding:14px; background:var(--amber);
+    border:1px solid var(--amber); color:#fff; font-family:var(--font);
+    font-weight:600; font-size:14px; letter-spacing:0; border-radius:12px; cursor:pointer; transition:all .15s;
+  }
+  .btn-main:hover{ filter:brightness(1.05); box-shadow:0 8px 18px -10px rgba(59,130,246,.7); }
+  .btn-main:active{ transform:scale(0.98); }
+  .btn-main.on{ background:var(--input-bg); border-color:var(--red); color:var(--red); }
+  .btn-main.on:hover{ box-shadow:0 6px 18px -8px var(--red); filter:none; }
+  .btn-main.on.confirming{ box-shadow:0 0 0 2px var(--red); }
+  .btn-main:disabled{ opacity:.5; cursor:wait; filter:none; box-shadow:none; }
+  .foot{ display:flex; justify-content:space-between; align-items:center; margin-top:16px; font-size:12px; color:var(--text-dim); letter-spacing:0; }
+  .mute-btn{ background:var(--input-bg); border:1px solid var(--line); color:var(--text-dim); font-family:var(--font); font-size:12px; letter-spacing:0; padding:8px 12px; border-radius:var(--radius-sm); cursor:pointer; transition:all .15s; }
+  .mute-btn.active{ color:var(--amber); border-color:var(--amber); background:var(--amber-dim); }
+  .howto{ margin-top:14px; padding-top:14px; border-top:1px solid var(--line); font-size:13px; line-height:1.6; color:var(--text-dim); }
+  .howto b{ color:var(--text); }
+  .err{ color:var(--red); }
+  .back-btn{ background:var(--input-bg); border:1px solid var(--line); color:var(--amber); font-family:var(--font); font-size:13px; letter-spacing:0; font-weight:600; padding:8px 12px; border-radius:var(--radius-sm); cursor:pointer; margin-bottom:14px; transition:all .15s; }
+  .back-btn:hover{ border-color:var(--amber); color:var(--amber); background:var(--amber-dim); }
+  .profile-box{ border:1px solid var(--line); border-radius:var(--radius); padding:12px; margin-bottom:16px; background:var(--input-bg); }
+  .profile-row{ display:flex; align-items:center; gap:10px; }
+  .profile-avatar{
+    width:36px; height:36px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font); font-weight:600; font-size:14px; color:#fff;
+  }
+  .profile-row input#profileName{
+    flex:1; background:var(--input-bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--font); font-size:13px; letter-spacing:0;
+    padding:10px; border-radius:12px; outline:none;
+    transition: border-color .15s, box-shadow .15s, background .25s;
+  }
+  .profile-row input#profileName:focus{ border-color:var(--amber); box-shadow:0 0 0 3px var(--amber-dim); }
+  .profile-label{ font-size:13px; color:var(--text); font-weight:600; letter-spacing:0; margin-bottom:8px; display:block; }
+
+  .mic-retry-btn{
+    width:100%; margin-top:8px; padding:10px; background:var(--input-bg); border:1px solid var(--line);
+    color:var(--amber); font-family:var(--font); font-size:13px; letter-spacing:0; font-weight:600;
+    border-radius:var(--radius-sm); cursor:pointer; display:none; transition:all .15s;
+  }
+  .mic-retry-btn.show{ display:block; }
+  .created-code-box{
+    display:none; align-items:center; justify-content:space-between; gap:8px;
+    border:1px solid var(--navy); background:var(--navy); border-radius:var(--radius);
+    padding:10px 12px; margin-bottom:14px;
+  }
+  .created-code-box.show{ display:flex; }
+  .created-code-box .cc-code{ font-size:18px; letter-spacing:2px; color:#e2e8f0; font-weight:700; }
+  .copy-btn{
+    background:var(--input-bg); border:1px solid transparent; color:var(--amber); font-family:var(--font);
+    font-size:13px; letter-spacing:0; font-weight:600; padding:8px 10px; border-radius:var(--radius-sm); cursor:pointer; flex-shrink:0;
+    transition: all .15s;
+  }
+  .copy-btn.copied{ color:var(--green); border-color:var(--green); }
+  .btn-main.loading{ opacity:.7; cursor:wait; }
+
+  .btn-icon{ width:14px; height:14px; flex-shrink:0; display:inline-block; vertical-align:-2px; }
+  .mic-retry-btn, .copy-btn, .back-btn, .mute-btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  .vis-btn .vis-label{ display:flex; align-items:center; justify-content:center; gap:6px; }
+  .rc-lock svg{ width:16px; height:16px; display:block; }
+  .btn-main .btn-icon{ width:16px; height:16px; }
+
+  @media (min-width: 700px){
+    .rig{ max-width:480px; padding:28px; }
+  }
+  @media (max-width: 380px){
+    body{ padding:12px; }
+    .rig{ padding:16px; border-radius:var(--radius); }
+    input#roomJoin, input#roomCreate{ font-size:16px; letter-spacing:2px; }
+    .head h1{ font-size:15px; }
+    .btn-main{ padding:14px; font-size:13px; }
+  }
+</style>
 </head>
-<body class="text-[#ececec] h-screen flex flex-col" style="background:var(--bg);">
+<body>
 
-  <!-- =================== BOOT (checking auth) =================== -->
-  <div id="boot-screen" class="h-screen w-screen flex items-center justify-center" style="background:var(--bg);">
-    <div class="flex flex-col items-center gap-3">
-      <div class="w-6 h-6 rounded-full border-2 border-[#4d4d4d] border-t-[#ececec] animate-spin"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="rig">
+  <div class="head">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <svg class="app-logo" id="appLogo" viewBox="0 0 24 24" width="38" height="38" xmlns="http://www.w3.org/2000/svg">
+        <rect width="24" height="24" rx="5" fill="#3B82F6"/>
+        <rect x="9" y="4" width="6" height="9" rx="3" fill="#FFFFFF"/>
+        <path d="M6 10v1a6 6 0 0 0 12 0v-1" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <line x1="12" y1="17" x2="12" y2="20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9" y1="20" x2="15" y2="20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h1>OVOZLI SUHBAT</h1>
+        <div class="tag">GURUH REJIMI — XOHLAGAN ODAM QO'SHILADI</div>
+      </div>
     </div>
-  </div>
-
-  <!-- =================== LOGIN SCREEN =================== -->
-  <div id="login-screen" class="hidden h-screen w-screen flex items-center justify-center" style="background:var(--bg);">
-    <form id="login-form" class="login-card w-full max-w-[400px] p-8 space-y-6">
-      <div class="text-center space-y-2">
-        <div class="w-9 h-9 mx-auto">
-          <img src="assets/MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
-        </div>
-        <h1 class="font-semibold text-2xl tracking-tight text-[#ececec]">Continue to MRagent</h1>
-      </div>
-
-      <div class="space-y-3">
-        <div class="space-y-1.5" id="login-pass-wrap">
-          <input id="login-pass" type="password" autocomplete="current-password"
-                 class="login-input w-full rounded-xl px-4 py-3 text-[15px] text-[#ececec] focus:outline-none placeholder:text-[#8e8e8e]"
-                 placeholder="Login password" required />
-        </div>
-        <div class="space-y-2 hidden px-2" id="login-otp-wrap">
-          <div id="login-otp-boxes" class="flex justify-between gap-2.5"></div>
-          <input type="hidden" id="login-otp" />
-          <p id="login-otp-timer" class="text-[13px] text-[#8e8e8e] text-center hidden"></p>
-        </div>
-      </div>
-
-      <p id="login-error" class="text-[13px] text-[#f2555a] hidden">Wrong password, or the backend didn't respond.</p>
-
-      <button type="submit" id="login-btn"
-              class="w-full bg-[#ececec] hover:bg-white text-[#212121] rounded-xl py-3 text-[15px] font-medium transition disabled:opacity-40">
-        Continue
+    <div class="head-right">
+      <button class="profile-icon-btn" id="profileIconBtn" title="Profil" aria-label="Profil">
+        <span class="profile-icon-letter" id="headerAvatarLetter">?</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </button>
-
-    </form>
+    </div>
+    <div class="rec-dot" id="dot" aria-hidden="true"></div>
   </div>
 
-  <!-- =================== CHAT APP (shown after login) =================== -->
-  <div id="app-screen" class="hidden h-screen flex" style="background:var(--bg);">
-
-    <!-- =================== SIDEBAR =================== -->
-    <aside id="sidebar" class="shrink-0 flex flex-col sidebar-collapsible">
-      <!-- Header brand: pinned/preview da yuqori chapda, icon bilan bir qator (Claude uslubi) -->
-      <div id="sidebar-brand" class="hidden">
-        <div class="brand-orb w-6 h-6 rounded-full overflow-hidden shrink-0" style="background:#ececec;">
-          <img class="brand-orb-static" src="assets/MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
-          <video class="brand-orb-video" src="assets/circle2_transparent.webm" autoplay loop muted playsinline></video>
-        </div>
-        <span>MRagent</span>
-      </div>
-      <div id="sidebar-top-content" class="px-3 py-3 space-y-0.5 sidebar-fade">
-        <button id="new-chat-btn"
-                class="sidebar-item sidebar-nav-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-1.5 text-[#ececec] text-left">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
-            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-          </svg>
-          New
-        </button>
-        <button id="bash-btn"
-                class="sidebar-item sidebar-nav-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-1.5 text-[#ececec] text-left">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
-            <polyline points="4 17 10 11 4 5" stroke-linecap="round" stroke-linejoin="round"/>
-            <line x1="12" y1="19" x2="20" y2="19" stroke-linecap="round"/>
-          </svg>
-          Bash
-        </button>
-        <button id="replay-btn"
-                class="sidebar-item sidebar-nav-item w-full flex items-center gap-2.5 hover:bg-[#2a2a2a] rounded-lg px-3 py-1.5 text-[#ececec] text-left">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          Replay
-        </button>
-      </div>
-
-      <div class="px-3 mt-1 sidebar-fade">
-        <div class="sidebar-search-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
-            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/>
-          </svg>
-          <input id="chat-search" type="text" placeholder="Search chats" autocomplete="off" />
-        </div>
-      </div>
-
-      <div class="px-3 mt-5 flex-1 min-h-0 flex flex-col sidebar-fade">
-        <p class="sidebar-section-label px-3 mb-1">Chats</p>
-        <div id="chat-history" class="text-sm text-[#d9d9d9] overflow-y-auto flex-1 min-h-0">
-          <!-- filled by JS -->
-        </div>
-      </div>
-
-      <div class="sidebar-footer-row sidebar-fade">
-        <div class="sidebar-item flex-1 flex items-center gap-2.5 rounded-lg px-2 py-2 min-w-0 hover:bg-[#2a2a2a]">
-          <div class="w-7 h-7 rounded-full overflow-hidden shrink-0" id="footer-logo-wrap" style="background:#ececec; position:relative;">
-            <img id="footer-logo" src="assets/MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
-          </div>
-          <div class="min-w-0">
-            <p class="text-[13px] truncate text-[#ececec]">MRagent</p>
-            <p class="text-[11px] text-[#8e8e8e]" id="tunnel-status">connecting...</p>
-          </div>
-        </div>
-        <button id="logout-btn" class="sidebar-footer-action shrink-0">
-          sign out
-        </button>
-      </div>
-    </aside>
-
-    <!-- Darkened backdrop behind the sidebar when it's opened as a
-         slide-over on mobile; tapping it closes the sidebar again. -->
-    <div id="sidebar-backdrop" class="hidden"></div>
-
-    <!-- =================== MAIN CHAT =================== -->
-    <div id="chat-panel" class="flex-1 flex flex-col min-w-0 relative" style="background:var(--bg);">
-      <!-- Header: menu icon + active chat's title (endi dropdown chevron
-           bilan) + o'ng tomonda file/Share tugmalari — Claude.ai'dagi
-           header'ga vizual moslik uchun (screenshot solishtiruvi asosida
-           qo'shildi: asl versiyada bular yo'q edi, faqat menu+title bor edi). -->
-      <header id="chat-header" class="shrink-0 h-14 flex items-center gap-1 px-2">
-        <button id="header-menu-btn" title="Chats"
-                class="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <line x1="9" y1="4" x2="9" y2="20"/>
-          </svg>
-        </button>
-        <button id="chat-title-btn" class="flex items-center gap-1 px-1 py-1 rounded-lg hover:bg-[#2a2a2a] min-w-0" style="max-width:60%;">
-          <span id="chat-title" class="text-[15px] font-medium text-[#ececec] truncate">MRagent</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-[#8e8e8e]">
-            <polyline points="6 9 12 15 18 9" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <div class="flex-1"></div>
-        <button id="header-file-btn" title="Files"
-                class="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[#2a2a2a] text-[#ececec]">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-linejoin="round"/>
-            <path d="M14 2v6h6" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <button id="header-share-btn"
-                class="shrink-0 text-[13px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a2a] text-[#ececec] border"
-                style="border-color:#3a3a3a;">
-          Share
-        </button>
-      </header>
-      <main id="chat" class="flex-1 overflow-y-auto w-full"><div id="chat-inner" class="px-4 py-6 space-y-6 max-w-[720px] mx-auto w-full"></div></main>
-
-      <!-- Empty-state: centered greeting + input, ChatGPT-style. Hidden the
-           moment the first message goes out; the bottom-pinned footer
-           below takes over from then on. -->
-      <div id="empty-state" class="absolute inset-x-0 bottom-0 top-14 flex flex-col items-center justify-center px-4">
-        <div class="w-full max-w-[720px]">
-          <div class="text-center text-[#ececec] text-2xl font-medium mb-6" id="welcome">
-            Hey! What are we building today?
-          </div>
-          <div id="composer-slot-empty"></div>
-        </div>
-      </div>
-
-      <!-- Bottom-pinned footer: shown once the conversation has messages. -->
-      <footer id="chat-footer" class="px-4 pb-6 pt-2 hidden">
-        <div id="composer-slot-footer"></div>
-      </footer>
+  <div id="lobby">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="join">QO'SHILISH</button>
+      <button class="tab-btn" data-tab="create">YARATISH</button>
+      <button class="tab-btn" data-tab="rooms">XONALAR</button>
     </div>
 
-    <!-- =================== REAL BASH TERMINAL =================== -->
-    <!-- Raw PTY over WebSocket straight to the machine, bypassing the AI
-         entirely. Hidden by default; toggled by the "Bash" sidebar button. -->
-    <div id="term-panel" class="hidden flex-1 flex flex-col min-w-0" style="background:var(--bg-code);">
-      <div class="flex items-center justify-between px-4 py-2.5 border-b shrink-0" style="border-color:#2a2a2a;">
-        <div class="flex items-center gap-2 text-[13px] text-[#a8a8a8]">
-          <span class="w-2 h-2 rounded-full shrink-0" id="term-status-dot" style="background:#f2555a;"></span>
-          <span id="term-status-text">connecting...</span>
-        </div>
-        <button id="term-close-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1">
-          close
-        </button>
+    <div class="tab-panel active" id="panel-join">
+      <label for="roomJoin">XONA KODI</label>
+      <div class="code-row">
+        <input id="roomJoin" minlength="4" maxlength="8" placeholder="4-8 BELGI, MASALAN 1234" />
       </div>
-      <div id="term-container" class="flex-1 min-h-0 p-2"></div>
+      <div id="joinPassWrap" style="display:none;">
+        <label for="passwordJoin">PAROL</label>
+        <div class="code-row">
+          <input id="passwordJoin" type="password" maxlength="32" placeholder="PAROLNI KIRIT" />
+        </div>
+      </div>
+      <div class="status" id="statusJoin">Ismingiz va xona kodini kiriting</div>
+      <button class="btn-main" id="joinBtn" disabled>QO'SHILISH</button>
+      <button class="mic-retry-btn" id="micRetryJoin"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span id="micRetryJoinTxt">MIKROFON RUXSATINI BROWSERDAN QAYTA SO'RASH</span></button>
     </div>
 
-    <!-- =================== REPLAY MODE =================== -->
-    <!-- OS darajasidagi mouse/keyboard record+playback (evdev + ydotool).
-         LLM ishtirokisiz, token sarflanmaydi. "Bash" panel bilan bir xil
-         toggle naqshi: chat-panel yashiriladi, bu panel ko'rsatiladi. -->
-    <div id="replay-panel" class="hidden flex-1 flex flex-col min-w-0" style="background:var(--bg-code);">
-      <div class="flex items-center justify-between px-4 py-2.5 border-b shrink-0" style="border-color:#2a2a2a;">
-        <span class="text-[13px] text-[#a8a8a8]">Replay Mode</span>
-        <button id="replay-close-btn" class="text-[12px] text-[#8e8e8e] hover:text-[#ececec] px-2 py-1">
-          close
+    <div class="tab-panel" id="panel-create">
+      <label for="roomCreate">XONA KODI</label>
+      <div class="code-row">
+        <input id="roomCreate" minlength="4" maxlength="8" placeholder="4-8 BELGI, MASALAN 1234" />
+      </div>
+      <label for="roomNameCreate">XONA NOMI</label>
+      <div class="code-row">
+        <input id="roomNameCreate" maxlength="32" placeholder="MASALAN DOSTLAR XONASI" />
+      </div>
+      <label for="passwordCreate">PAROL (ixtiyoriy)</label>
+      <div class="code-row">
+        <input id="passwordCreate" type="password" minlength="4" maxlength="9" placeholder="4-9 BELGI, IXTIYORIY" />
+      </div>
+      <label for="maxParticipantsCreate">MAKSIMAL ODAM SONI (2-30)</label>
+      <div class="code-row">
+        <input id="maxParticipantsCreate" type="number" min="2" max="30" value="10" placeholder="MASALAN 10" />
+      </div>
+      <label>KO'RINISH</label>
+      <div class="vis-row">
+        <button type="button" class="vis-btn active" id="visPublic" data-vis="public">
+          <span class="vis-label"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>PUBLIC</span>
+          <span class="vsub">kod ro'yxatda ko'rinadi</span>
+        </button>
+        <button type="button" class="vis-btn" id="visPrivate" data-vis="private">
+          <span class="vis-label"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>PRIVATE</span>
+          <span class="vsub">faqat kodni bilgan kiradi</span>
         </button>
       </div>
-      <div class="px-4 py-3 shrink-0">
-        <button id="add-replay-project-btn"
-                class="w-full py-2 rounded-lg text-[#ececec] hover:bg-[#3a3a3a] text-[13px]"
-                style="background:#2a2a2a;">
-          + Add Replay Project
-        </button>
+      <div class="created-code-box" id="createdCodeBox">
+        <div class="cc-code" id="createdCodeText">----</div>
+        <button class="copy-btn" id="copyCodeBtn"><svg class="btn-icon" id="copyIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span id="copyTxt">NUSXALASH</span></button>
       </div>
-      <div id="replay-list" class="flex-1 overflow-y-auto px-4 space-y-1 text-[13px]"></div>
+      <div class="status" id="statusCreate">Ma'lumotlarni to'ldiring va XONA YARATISH bosing</div>
+      <button class="btn-main" id="createBtn" disabled>XONA YARATISH</button>
+      <button class="mic-retry-btn" id="micRetryCreate"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span id="micRetryCreateTxt">MIKROFON RUXSATINI BROWSERDAN QAYTA SO'RASH</span></button>
     </div>
-  </div>
 
-  <!-- =================== LOGOUT / CACHE-CLEAR OVERLAY =================== -->
-  <!-- login-screen bilan bir xil vizual til: shrift, ranglar, kartochka.
-       Faqat logout paytida ko'rinadi, "hidden" bilan boshlanadi. Ichidagi
-       raqam va progress-bar JS orqali (doLogout ichida) jonlantiriladi. -->
-  <div id="logout-overlay" class="hidden h-screen w-screen flex items-center justify-center fixed inset-0 z-[999]" style="background:var(--bg);">
-    <div class="login-card w-full max-w-[400px] p-8 space-y-6 text-center">
-      <div class="w-9 h-9 mx-auto">
-        <img src="assets/MRagent-logo.svg" alt="MRagent" width="100%" height="100%" />
+    <div class="tab-panel" id="panel-rooms">
+      <div class="rooms-search-wrap">
+        <input id="roomSearch" type="search" maxlength="40" placeholder="Xona nomi yoki kod..." autocomplete="off" />
       </div>
-      <div class="space-y-1">
-        <h1 class="font-semibold text-xl tracking-tight text-[#ececec]">Signing out</h1>
-        <p id="logout-status-text" class="text-[13px] text-[#8e8e8e]">Clearing local session…</p>
+      <div class="rooms-bigtabs">
+        <button class="rooms-bigtab active" data-rbig="mine">Menikilar</button>
+        <button class="rooms-bigtab" data-rbig="public">Ommaviy</button>
       </div>
-      <div class="space-y-2">
-        <div class="w-full h-1.5 rounded-full overflow-hidden" style="background:#2a2a2a;">
-          <div id="logout-progress-bar" class="h-full rounded-full" style="width:0%; background:#e0703a; transition: width 120ms linear;"></div>
+
+      <div class="rbig-panel active" id="rbig-mine">
+        <div class="subtabs">
+          <button class="subtab-btn active" data-subtab="mine-public">Public</button>
+          <button class="subtab-btn" data-subtab="mine-private">Private</button>
         </div>
-        <p id="logout-bytes-text" class="text-[12px] text-[#8e8e8e] tabular-nums">0.000 B cleared</p>
+        <div class="subtab-panel active" id="subpanel-mine-public">
+          <div class="room-list" id="myPublicRoomList">
+            <div class="empty-list">Hali public xona yaratmagansiz</div>
+          </div>
+        </div>
+        <div class="subtab-panel" id="subpanel-mine-private">
+          <div class="room-list" id="myPrivateRoomList">
+            <div class="empty-list">Hali private xona yaratmagansiz</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rbig-panel" id="rbig-public">
+        <div class="room-list" id="publicRoomList">
+          <div class="empty-list">Yuklanmoqda...</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ===== VAQTINCHALIK DEBUG KONSOL (ERUDA) =====
-       Mobil qurilmada F12 yo'q, shuning uchun on-screen console kerak.
-       Bug topilgach BU BLOK O'CHIRILADI — production'da doim qolmaydi
-       (tashqi CDN'ga bog'liqlik + ekranda ortiqcha tugma, foydalanuvchiga
-       kerak emas). ["mrai-debug"="0"] localStorage bilan o'chirib qo'yish
-       ham mumkin, lekin hozircha shartsiz yoqilgan — tezroq topish uchun.
-  -->
-  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-  <script>eruda.init();</script>
-  <!-- ===== DEBUG KONSOL TUGADI ===== -->
+  <div id="profileScreen" style="display:none;">
+    <button class="back-btn" id="profileBack"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>ORQAGA</button>
 
-  <script type="module" src="js/main.js"></script>
+    <button class="google-signin-btn" id="googleSignInBtn"><svg class="btn-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>GOOGLE BILAN KIRISH</button>
+
+    <div class="tabs" id="profileTabs">
+      <button class="ptab-btn active" data-ptab="guest">MEHMON</button>
+      <button class="ptab-btn" data-ptab="account">HISOB</button>
+    </div>
+
+    <div class="ptab-panel active" id="ppanel-guest">
+      <div class="profile-box">
+        <span class="profile-label">MEHMON PROFILI</span>
+        <div class="profile-row">
+          <div class="profile-avatar-upload" id="guestAvatarWrap">
+            <div class="profile-avatar" id="profileAvatar" style="background:#65aadd">?</div>
+            <div class="avatar-edit-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </div>
+            <input type="file" id="guestAvatarFile" accept="image/*" style="display:none;" />
+          </div>
+          <input id="profileName" maxlength="20" placeholder="ISMINGIZNI YOZING" />
+        </div>
+        <div class="guest-id-row">
+          <span class="gid-label">USERNAME</span>
+          <span class="gid-val" id="guestUsernameDisplay">--------</span>
+        </div>
+      </div>
+      <div class="howto">Mehmon rejimida username tasodifiy beriladi. Ismingiz va profilingiz rasmini o'zgartirishingiz mumkin. Akkaunt ochish uchun <b>HISOB</b> bo'limiga o'ting.</div>
+    </div>
+
+    <div class="ptab-panel" id="ppanel-account">
+      <div id="accountLoggedOut">
+        <div class="subtabs">
+          <button class="psub-btn active" data-asub="login">KIRISH</button>
+          <button class="psub-btn" data-asub="register">RO'YXATDAN O'TISH</button>
+        </div>
+
+        <div class="psub-panel active" id="asub-login">
+          <input class="form-input" id="loginEmail" type="text" placeholder="USERNAME" autocomplete="username" />
+          <input class="form-input" id="loginPassword" type="password" placeholder="PAROL" autocomplete="current-password" />
+          <div class="status" id="statusLogin"></div>
+          <button class="btn-main" id="loginBtn">KIRISH</button>
+        </div>
+
+        <div class="psub-panel" id="asub-register">
+          <input class="form-input" id="regName" type="text" maxlength="20" placeholder="ISM" autocomplete="name" />
+          <input class="form-input" id="regEmail" type="text" maxlength="20" placeholder="USERNAME" autocomplete="username" />
+          <input class="form-input" id="regPassword" type="password" placeholder="PAROL" autocomplete="new-password" />
+          <input class="form-input" id="regPassword2" type="password" placeholder="PAROLNI TAKRORLANG" autocomplete="new-password" />
+          <div class="status" id="statusRegister"></div>
+          <button class="btn-main" id="registerBtn">RO'YXATDAN O'TISH</button>
+        </div>
+      </div>
+
+      <div id="accountLoggedIn" style="display:none;">
+        <div class="profile-box">
+          <span class="profile-label">PROFILNI TAHRIRLASH</span>
+          <div class="profile-row">
+            <div class="profile-avatar-upload" id="accAvatarWrap">
+              <div class="profile-avatar" id="accAvatar" style="background:#65aadd">?</div>
+              <div class="avatar-edit-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </div>
+              <input type="file" id="accAvatarFile" accept="image/*" style="display:none;" />
+            </div>
+            <div style="flex:1; min-width:0;">
+              <label for="accName" style="margin-bottom:4px;">ISM</label>
+              <input class="form-input" id="accName" type="text" maxlength="20" placeholder="ISM" style="margin-bottom:0;" />
+            </div>
+          </div>
+          <label for="accUsername" style="margin-top:12px;">USERNAME</label>
+          <input class="form-input" id="accUsername" maxlength="20" placeholder="username" style="margin-bottom:0;" />
+          <div class="status" id="statusAccount"></div>
+          <button class="btn-main" id="saveAccountBtn">SAQLASH</button>
+        </div>
+        <button class="signout-btn" id="signOutBtn"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>CHIQISH (SIGN OUT)</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="callScreen" style="display:none;">
+    <div class="vc-header">
+      <div class="vc-header-left">
+        <div class="vc-title" id="vcRoomTitle">Ovozli suhbat</div>
+        <div class="vc-subtitle" id="stateTxt">OFFLINE</div>
+      </div>
+      <div class="vc-header-actions">
+        <button type="button" class="vc-icon-btn" id="leaveTop" title="Chiqish">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span id="leaveTopTxt" style="display:none">CHIQISH</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="participants" id="participants"></div>
+
+    <div class="vc-status status" id="status"></div>
+    <div class="meter" id="meter" aria-hidden="true"><canvas id="meterCanvas"></canvas></div>
+
+    <div class="vc-controls">
+      <div class="vc-side-wrap">
+        <button type="button" class="vc-side-btn" id="speakerBtn" title="Karnay">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        </button>
+        <div class="vc-side-label">Karnay</div>
+      </div>
+
+      <div class="vc-side-wrap">
+        <button type="button" class="vc-mic-btn" id="muteBtn" title="Mikrofon">
+          <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <div class="vc-mic-hint" id="muteTxt">Mikrofonni o‘chirish</div>
+      </div>
+
+      <div class="vc-side-wrap">
+        <button type="button" class="vc-side-btn leave" id="mainBtn" title="Chiqish">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9l-6 3 6 3"/><path d="M22 12H5"/><path d="M16 5v14"/></svg>
+          <span id="mainBtnTxt" style="display:none">CHIQISH</span>
+        </button>
+        <div class="vc-side-label">Chiqish</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="avatar-lightbox" id="avatarLightbox" aria-hidden="true">
+    <button type="button" class="avatar-lightbox-close" id="avatarLightboxClose" aria-label="Yopish">&times;</button>
+    <img class="avatar-lightbox-img" id="avatarLightboxImg" alt="Profil rasmi" />
+  </div>
+
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDojQ1RXFNgL3DYkA7MxU3zlMQS6UQnRMc",
+  authDomain: "v1mic-9544a.firebaseapp.com",
+  projectId: "v1mic-9544a",
+  storageBucket: "v1mic-9544a.firebasestorage.app",
+  messagingSenderId: "396038389625",
+  appId: "1:396038389625:web:e86831fca56c8a13abf9a8"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const ROOM_COLLECTION = 'aloqa-xonasi-rooms';
+const DEFAULT_MAX_PARTICIPANTS = 10;
+const MIN_MAX_PARTICIPANTS = 2;
+const MAX_MAX_PARTICIPANTS = 30;
+const MY_ROOMS_KEY = 'aloqa-xonasi-my-rooms';
+
+const lobbyEl = document.getElementById('lobby');
+const callScreenEl = document.getElementById('callScreen');
+
+const profileNameInput = document.getElementById('profileName');
+const profileAvatarEl = document.getElementById('profileAvatar');
+const roomJoinInput = document.getElementById('roomJoin');
+const passwordJoinInput = document.getElementById('passwordJoin');
+const joinPassWrap = document.getElementById('joinPassWrap');
+const joinBtn = document.getElementById('joinBtn');
+const statusJoinEl = document.getElementById('statusJoin');
+const micRetryJoinBtn = document.getElementById('micRetryJoin');
+const micRetryJoinTxt = document.getElementById('micRetryJoinTxt');
+
+const roomCreateInput = document.getElementById('roomCreate');
+const roomNameCreateInput = document.getElementById('roomNameCreate');
+const passwordCreateInput = document.getElementById('passwordCreate');
+const maxParticipantsCreateInput = document.getElementById('maxParticipantsCreate');
+const createBtn = document.getElementById('createBtn');
+const statusCreateEl = document.getElementById('statusCreate');
+const visPublicBtn = document.getElementById('visPublic');
+const visPrivateBtn = document.getElementById('visPrivate');
+const micRetryCreateBtn = document.getElementById('micRetryCreate');
+const micRetryCreateTxt = document.getElementById('micRetryCreateTxt');
+const createdCodeBox = document.getElementById('createdCodeBox');
+const createdCodeText = document.getElementById('createdCodeText');
+const copyCodeBtn = document.getElementById('copyCodeBtn');
+const copyIcon = document.getElementById('copyIcon');
+const copyTxt = document.getElementById('copyTxt');
+
+const publicRoomListEl = document.getElementById('publicRoomList');
+const myPublicRoomListEl = document.getElementById('myPublicRoomList');
+const myPrivateRoomListEl = document.getElementById('myPrivateRoomList');
+
+const mainBtn = document.getElementById('mainBtn');
+const mainBtnTxt = document.getElementById('mainBtnTxt');
+const leaveTopBtn = document.getElementById('leaveTop');
+const leaveTopTxt = document.getElementById('leaveTopTxt');
+const muteBtn = document.getElementById('muteBtn');
+const muteIcon = document.getElementById('muteIcon');
+const muteTxt = document.getElementById('muteTxt');
+const statusEl = document.getElementById('status');
+const stateTxt = document.getElementById('stateTxt');
+const dot = document.getElementById('dot');
+const meterEl = document.getElementById('meter');
+const participantsEl = document.getElementById('participants');
+
+let selectedVisibility = 'public';
+const PROFILE_NAME_KEY = 'aloqa-xonasi-profile-name';
+let currentProfile = null; // avval e'lon — currentAvatarUrl chaqirilishidan oldin
+
+function colorForProfile(id){
+  let h = 0;
+  for (let i=0;i<id.length;i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  return ['#e17076','#7bc862','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774','#5eb2f5'][h % 8];
+}
+function currentAvatarUrl(){
+  return (currentProfile && currentProfile.avatar) || localStorage.getItem('aloqa-xonasi-avatar') || '';
+}
+function applyAvatarToEl(el, nameFallback){
+  const url = currentAvatarUrl();
+  const n = (nameFallback || '').trim();
+  const letter = (n.charAt(0).toUpperCase() || '?');
+  const color = colorForProfile(n || 'x');
+  if (!el) return;
+  if (url){
+    el.textContent = '';
+    el.style.backgroundImage = 'url(' + url + ')';
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.style.backgroundColor = 'transparent';
+  } else {
+    el.style.backgroundImage = '';
+    el.textContent = letter;
+    el.style.background = color;
+  }
+}
+function updateProfileAvatar(){
+  const n = profileNameInput.value.trim();
+  const letter = (n.charAt(0).toUpperCase() || '?');
+  const color = colorForProfile(n || 'x');
+  applyAvatarToEl(profileAvatarEl, n);
+  const headerLetter = document.getElementById('headerAvatarLetter');
+  const headerBtn = document.getElementById('profileIconBtn');
+  if (headerLetter && headerBtn){
+    headerLetter.textContent = letter;
+    const url = currentAvatarUrl();
+    headerBtn.classList.remove('has-letter', 'has-photo');
+    headerBtn.style.backgroundImage = '';
+    if (url){
+      headerBtn.classList.add('has-photo');
+      headerBtn.style.backgroundImage = 'url(' + url + ')';
+      headerBtn.style.borderColor = 'transparent';
+    } else if (n){
+      headerBtn.classList.add('has-letter');
+      headerBtn.style.background = color;
+      headerBtn.style.borderColor = 'transparent';
+    } else {
+      headerBtn.style.background = '';
+      headerBtn.style.borderColor = '';
+    }
+  }
+}
+profileNameInput.value = localStorage.getItem(PROFILE_NAME_KEY) || '';
+updateProfileAvatar();
+
+// --- Jonli validatsiya: ism va kod bo'lmasa tugmalar o'chiq ---
+function refreshJoinBtnState(){
+  const nameOk = profileNameInput.value.trim().length > 0;
+  const codeLen = roomJoinInput.value.trim().length;
+  const codeOk = codeLen >= 4 && codeLen <= 8;
+  joinBtn.disabled = !(nameOk && codeOk);
+}
+function refreshCreateBtnState(){
+  const nameOk = profileNameInput.value.trim().length > 0;
+  const codeLen = roomCreateInput.value.trim().length;
+  const codeOk = codeLen >= 4 && codeLen <= 8;
+  const roomNameOk = roomNameCreateInput.value.trim().length > 0;
+  const pass = passwordCreateInput.value;
+  const passOk = pass.length === 0 || (pass.length >= 4 && pass.length <= 9);
+  const maxP = parseInt(maxParticipantsCreateInput.value, 10);
+  const maxPOk = Number.isFinite(maxP) && maxP >= MIN_MAX_PARTICIPANTS && maxP <= MAX_MAX_PARTICIPANTS;
+  createBtn.disabled = !(nameOk && codeOk && roomNameOk && passOk && maxPOk);
+}
+function refreshAllBtnStates(){ refreshJoinBtnState(); refreshCreateBtnState(); }
+
+profileNameInput.addEventListener('input', () => {
+  localStorage.setItem(PROFILE_NAME_KEY, profileNameInput.value.trim());
+  updateProfileAvatar();
+  refreshAllBtnStates();
+});
+
+const meterCanvas = document.getElementById('meterCanvas');
+const meterCtx = meterCanvas ? meterCanvas.getContext('2d') : null;
+let smoothLevel = 0;
+let wavePhase = 0;
+const WAVE_LAYERS = [
+  { amp: 1.00, freq: 1.15, speed: 0.018, color: 'rgba(59,130,246,0.55)', width: 2.4 },
+  { amp: 0.72, freq: 1.70, speed: 0.026, color: 'rgba(59,130,246,0.28)', width: 1.8 },
+  { amp: 0.48, freq: 0.85, speed: 0.012, color: 'rgba(22,163,74,0.35)', width: 2.0 },
+  { amp: 0.32, freq: 2.20, speed: 0.032, color: 'rgba(99,102,241,0.22)', width: 1.4 }
+];
+
+const myId = (crypto.randomUUID ? crypto.randomUUID() : 'p-' + Math.random().toString(36).slice(2)).slice(0,8);
+let myName = '';
+
+let localStream = null;
+let micReady = false;
+let muted = false;
+let audioCtx, analyser, meterRAF;
+
+let joined = false;
+let roomRef = null;
+let myPeerRef = null;
+let myPeerUnsub = null;
+let presenceUnsub = null;
+let isRoomHost = false;
+let forceMuted = false; // host meni majburan o'chirdimi
+const peers = {};
+const peerNames = {};
+const peerMuted = {};      // pid -> o'sha peer o'zini mute qilganmi
+const peerForceMuted = {}; // pid -> hostmi kimdir uni majburan o'chirganmi
+const pairUnsubs = {};
+let autoJoinAttempted = false;
+let speakerOn = true;
+
+function getRoomFromUrl(){
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const r = (p.get('room') || '').trim().toUpperCase();
+    if (r.length >= 4 && r.length <= 8 && /^[A-Z0-9]+$/.test(r)) return r;
+  } catch (e) {}
+  return '';
+}
+function setRoomInUrl(code){
+  try {
+    const u = new URL(window.location.href);
+    if (code) u.searchParams.set('room', String(code).toUpperCase());
+    else u.searchParams.delete('room');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
+  } catch (e) {}
+}
+function clearRoomFromUrl(){
+  setRoomInUrl('');
+  try { sessionStorage.removeItem('aloqa-room-pass'); } catch (e) {}
+}
+function saveRoomPass(pass){
+  try {
+    if (pass) sessionStorage.setItem('aloqa-room-pass', pass);
+    else sessionStorage.removeItem('aloqa-room-pass');
+  } catch (e) {}
+}
+function loadRoomPass(){
+  try { return sessionStorage.getItem('aloqa-room-pass') || ''; } catch (e) { return ''; }
+}
+
+function setStatus(text, isErr){ statusEl.textContent = text; statusEl.className = 'status' + (isErr ? ' err' : ''); }
+function setStatusJoin(text, isErr){ statusJoinEl.textContent = text; statusJoinEl.className = 'status' + (isErr ? ' err' : ''); }
+function setStatusCreate(text, isErr){ statusCreateEl.textContent = text; statusCreateEl.className = 'status' + (isErr ? ' err' : ''); }
+function setDot(mode){ if (dot) dot.className = 'rec-dot' + (mode ? ' ' + mode : ''); }
+function pairKey(a,b){ return [a,b].sort().join('__'); }
+
+async function sha256Hex(str){
+  const enc = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function getMyRooms(){
+  try{ return JSON.parse(localStorage.getItem(MY_ROOMS_KEY) || '[]'); }catch(e){ return []; }
+}
+function addMyRoom(code){
+  const list = getMyRooms();
+  if (!list.includes(code)) list.unshift(code);
+  localStorage.setItem(MY_ROOMS_KEY, JSON.stringify(list.slice(0,30)));
+}
+function removeMyRoom(code){
+  const list = getMyRooms().filter(c => c !== code);
+  localStorage.setItem(MY_ROOMS_KEY, JSON.stringify(list));
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'rooms') refreshRoomLists();
+  });
+});
+document.querySelectorAll('.subtab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const wrap = btn.closest('.rbig-panel') || btn.parentElement;
+    wrap.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+    wrap.querySelectorAll('.subtab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const panel = document.getElementById('subpanel-' + btn.dataset.subtab);
+    if (panel) panel.classList.add('active');
+  });
+});
+document.querySelectorAll('.rooms-bigtab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.rooms-bigtab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.rbig-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('rbig-' + btn.dataset.rbig).classList.add('active');
+  });
+});
+function closeAllRoomMenus(){
+  document.querySelectorAll('.room-menu.open').forEach(m => {
+    m.classList.remove('open');
+    if (m._menuWrap && m.parentElement !== m._menuWrap) m._menuWrap.appendChild(m);
+  });
+}
+document.addEventListener('click', closeAllRoomMenus);
+
+// --- PROFIL SAHIFASI ---
+const auth = firebase.auth();
+const profileScreenEl = document.getElementById('profileScreen');
+const profileIconBtn = document.getElementById('profileIconBtn');
+const profileBackBtn = document.getElementById('profileBack');
+const guestUsernameDisplayEl = document.getElementById('guestUsernameDisplay');
+
+function openProfileScreen(){
+  lobbyEl.style.display = 'none';
+  profileScreenEl.style.display = 'block';
+}
+function closeProfileScreen(){
+  profileScreenEl.style.display = 'none';
+  lobbyEl.style.display = 'block';
+}
+profileIconBtn.addEventListener('click', openProfileScreen);
+profileBackBtn.addEventListener('click', closeProfileScreen);
+
+document.querySelectorAll('.ptab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ptab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ptab-panel').forEach(p => {
+      p.classList.remove('active');
+      p.style.display = 'none';
+    });
+    btn.classList.add('active');
+    const panel = document.getElementById('ppanel-' + btn.dataset.ptab);
+    if (panel) {
+      panel.classList.add('active');
+      panel.style.display = 'block';
+    }
+  });
+});
+document.querySelectorAll('.psub-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.psub-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.psub-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('asub-' + btn.dataset.asub).classList.add('active');
+  });
+});
+
+// --- HISOB: real Firebase Authentication (Anonymous → Google/Email link) ---
+function setStatusEl(el, text, isErr){ el.textContent = text; el.className = 'status' + (isErr ? ' err' : ''); }
+
+const accountLoggedOutEl = document.getElementById('accountLoggedOut');
+const accountLoggedInEl = document.getElementById('accountLoggedIn');
+const accAvatarEl = document.getElementById('accAvatar');
+const accAvatarFileEl = document.getElementById('accAvatarFile');
+const accNameInput = document.getElementById('accName');
+const accUsernameInput = document.getElementById('accUsername');
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+
+function autoUsername(uid){ return 'user_' + uid.slice(0, 6).toLowerCase(); }
+function emailFromUsername(u){ return u.trim().toLowerCase() + '@aloqa-xonasi.local'; }
+
+function updateGoogleBtnVisibility(isRealAccount){
+  googleSignInBtn.style.display = isRealAccount ? 'none' : 'flex';
+}
+
+async function loadOrCreateProfile(user){
+  const ref = db.collection('users').doc(user.uid);
+  const snap = await ref.get();
+  const isAnon = user.isAnonymous;
+  if (snap.exists) {
+    currentProfile = snap.data();
+    if (currentProfile.avatar) localStorage.setItem('aloqa-xonasi-avatar', currentProfile.avatar);
+  } else {
+    currentProfile = {
+      name: isAnon ? 'Mehmon' : (user.displayName || 'Foydalanuvchi'),
+      username: autoUsername(user.uid),
+      avatar: user.photoURL || null,
+      provider: isAnon ? 'anonymous' : (user.providerData[0] ? user.providerData[0].providerId : 'password'),
+      createdAt: Date.now()
+    };
+    await ref.set(currentProfile);
+    if (!isAnon) {
+      await db.collection('usernames').doc(currentProfile.username).set({ uid: user.uid }).catch(()=>{});
+    }
+  }
+  renderAccountView(user);
+  tryAutoJoinFromUrl();
+}
+
+async function tryAutoJoinFromUrl(){
+  if (autoJoinAttempted || joined) return;
+  const code = getRoomFromUrl();
+  if (!code) return;
+  autoJoinAttempted = true;
+
+  // Qo'shilish tabini ochish
+  const joinTabBtn = document.querySelector('.tab-btn[data-tab="join"]');
+  if (joinTabBtn) joinTabBtn.click();
+
+  roomJoinInput.value = code;
+  const savedPass = loadRoomPass();
+  if (savedPass) {
+    passwordJoinInput.value = savedPass;
+    joinPassWrap.style.display = 'block';
+  }
+
+  // Ism bo'sh bo'lsa profil nomi
+  if (!profileNameInput.value.trim()) {
+    const p = currentProfile || {};
+    profileNameInput.value = (p.name && p.name !== 'Mehmon') ? p.name : (p.username || 'Mehmon');
+    localStorage.setItem(PROFILE_NAME_KEY, profileNameInput.value);
+  }
+
+  setStatusJoin('URL dagi xonaga qayta ulanilmoqda: ' + code + '...');
+  setTimeout(() => {
+    if (!joined) joinBtn.click();
+  }, 450);
+}
+
+function renderAccountView(user){
+  user = user || auth.currentUser;
+  if (!user) return;
+  const isAnon = user.isAnonymous;
+  updateGoogleBtnVisibility(!isAnon);
+
+  const p = currentProfile || {};
+  guestUsernameDisplayEl.textContent = p.username || autoUsername(user.uid);
+  profileNameInput.value = isAnon ? (p.name || '') : (p.username || p.name);
+  localStorage.setItem(PROFILE_NAME_KEY, profileNameInput.value);
+  updateProfileAvatar();
+  refreshAllBtnStates();
+
+  const profileTabsEl = document.getElementById('profileTabs');
+  const guestPanel = document.getElementById('ppanel-guest');
+  const accountPanel = document.getElementById('ppanel-account');
+
+  if (isAnon) {
+    // Mehmon: MEHMON + HISOB tablarini ko'rsat (faqat bittasi active)
+    if (profileTabsEl) profileTabsEl.style.display = '';
+    if (guestPanel) {
+      guestPanel.classList.add('active');
+      guestPanel.style.display = ''; // CSS .active ishlasin
+    }
+    if (accountPanel) {
+      accountPanel.classList.remove('active');
+      accountPanel.style.display = 'none'; // inline block qolib ketmasin
+    }
+    document.querySelectorAll('.ptab-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.ptab === 'guest');
+    });
+    accountLoggedOutEl.style.display = 'block';
+    accountLoggedInEl.style.display = 'none';
+    return;
+  }
+
+  // Real akkaunt (email/Google): faqat PROFIL ko'rinadi — MEHMON va HISOB tablar yo'q
+  if (profileTabsEl) profileTabsEl.style.display = 'none';
+  if (guestPanel) {
+    guestPanel.classList.remove('active');
+    guestPanel.style.display = 'none';
+  }
+  if (accountPanel) {
+    accountPanel.classList.add('active');
+    accountPanel.style.display = 'block';
+  }
+  accountLoggedOutEl.style.display = 'none';
+  accountLoggedInEl.style.display = 'block';
+
+  accNameInput.value = p.name || '';
+  accUsernameInput.value = p.username || autoUsername(user.uid);
+  // Header bilan bir xil avatar ko'rsatish
+  applyAvatarToEl(accAvatarEl, p.name || p.username || '');
+}
+
+// --- Mehmon: ismni tahrirlash Firestore'ga yoziladi (username o'zgarmaydi) ---
+let guestNameSaveTimer = null;
+profileNameInput.addEventListener('input', () => {
+  const user = auth.currentUser;
+  if (!user || !user.isAnonymous) return;
+  clearTimeout(guestNameSaveTimer);
+  guestNameSaveTimer = setTimeout(() => {
+    const newName = profileNameInput.value.trim() || 'Mehmon';
+    if (currentProfile) currentProfile.name = newName;
+    db.collection('users').doc(user.uid).update({ name: newName }).catch((err) => {
+      console.error('Mehmon ism saqlash xatosi:', err);
+    });
+  }, 500);
+});
+
+// --- Anonim sessiyani boshlash (sahifa ochilganda) ---
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    loadOrCreateProfile(user);
+  } else {
+    auth.signInAnonymously().catch((err) => {
+      console.error('Anon auth xatosi:', err);
+    });
+  }
+});
+
+// --- Ro'yxatdan o'tish: username + email(ichki) + parol, anon UID'ga LINK qilinadi ---
+document.getElementById('registerBtn').addEventListener('click', async () => {
+  const st = document.getElementById('statusRegister');
+  const name = document.getElementById('regName').value.trim();
+  const usernameRaw = document.getElementById('regEmail').value.trim(); // shu input username sifatida ishlatiladi
+  const pass = document.getElementById('regPassword').value;
+  const pass2 = document.getElementById('regPassword2').value;
+  if (!name || !usernameRaw || !pass) { setStatusEl(st, "Ism, username va parolni to'ldiring", true); return; }
+  if (pass !== pass2) { setStatusEl(st, 'Parollar mos emas', true); return; }
+  if (pass.length < 6) { setStatusEl(st, "Parol kamida 6 belgidan iborat bo'lsin", true); return; }
+  const username = usernameRaw.replace(/\s+/g, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+  if (username.length < 3) { setStatusEl(st, "Username kamida 3 belgi (faqat a-z, 0-9, _)", true); return; }
+
+  try {
+    const takenSnap = await db.collection('usernames').doc(username).get();
+    if (takenSnap.exists) { setStatusEl(st, 'Bu username band', true); return; }
+
+    const credential = firebase.auth.EmailAuthProvider.credential(emailFromUsername(username), pass);
+    const user = auth.currentUser;
+    let resultUser;
+    if (user && user.isAnonymous) {
+      // Mehmon → Email akkauntga LINK: UID saqlanadi
+      const res = await user.linkWithCredential(credential);
+      resultUser = res.user;
+    } else {
+      const res = await auth.createUserWithEmailAndPassword(emailFromUsername(username), pass);
+      resultUser = res.user;
+    }
+    // createdAt ni o'zgartirmaymiz (rules unchanged('createdAt') talab qiladi)
+    const existingCreatedAt = (currentProfile && currentProfile.createdAt) || Date.now();
+    currentProfile = {
+      name,
+      username,
+      avatar: currentProfile?.avatar || null,
+      provider: 'password',
+      createdAt: existingCreatedAt
+    };
+    // merge: mavjud maydonlarni saqlab, faqat keraklilarini yangilaydi
+    await db.collection('users').doc(resultUser.uid).set(currentProfile, { merge: true });
+    await db.collection('usernames').doc(username).set({ uid: resultUser.uid });
+    setStatusEl(st, "Ro'yxatdan o'tildi! Xush kelibsiz, " + name);
+    renderAccountView(resultUser);
+  } catch (err) {
+    console.error(err);
+    let msg = err.message || 'Noma\'lum xato';
+    if (err.code === 'auth/email-already-in-use') msg = 'Bu username band (allaqachon ro\'yxatdan o\'tilgan)';
+    else if (err.code === 'auth/weak-password') msg = 'Parol juda zaif (kamida 6 belgi)';
+    else if (err.code === 'permission-denied' || (err.message && err.message.includes('permission'))) {
+      msg = 'Firestore ruxsati yo\'q. Rules\'da provider o\'zgarishiga ruxsat bering.';
+    }
+    setStatusEl(st, msg, true);
+  }
+});
+
+// --- Kirish: username + parol (ichki email'ga tarjima qilinadi) ---
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const st = document.getElementById('statusLogin');
+  const username = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPassword').value;
+  if (!username || !pass) { setStatusEl(st, "Username va parolni kiriting", true); return; }
+  try {
+    const res = await auth.signInWithEmailAndPassword(emailFromUsername(username), pass);
+    setStatusEl(st, "Xush kelibsiz");
+    await loadOrCreateProfile(res.user);
+  } catch (err) {
+    console.error(err);
+    setStatusEl(st, "Username yoki parol noto'g'ri", true);
+  }
+});
+
+// --- Profilni saqlash (ism, username) ---
+document.getElementById('saveAccountBtn').addEventListener('click', async () => {
+  const st = document.getElementById('statusAccount');
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) return;
+  const newName = accNameInput.value.trim();
+  const newUsername = accUsernameInput.value.trim().replace(/\s+/g, '').toLowerCase();
+  if (!newName) { setStatusEl(st, "Ism bo'sh bo'lmasin", true); return; }
+  if (!newUsername) { setStatusEl(st, "Username bo'sh bo'lmasin", true); return; }
+
+  try {
+    const oldUsername = currentProfile.username;
+    if (newUsername !== oldUsername) {
+      const takenSnap = await db.collection('usernames').doc(newUsername).get();
+      if (takenSnap.exists) { setStatusEl(st, 'Bu username band', true); return; }
+      await db.collection('usernames').doc(newUsername).set({ uid: user.uid });
+      if (oldUsername) await db.collection('usernames').doc(oldUsername).delete().catch(()=>{});
+    }
+    currentProfile.name = newName;
+    currentProfile.username = newUsername;
+    await db.collection('users').doc(user.uid).update({ name: newName, username: newUsername });
+    setStatusEl(st, 'Saqlandi');
+    renderAccountView(user);
+  } catch (err) {
+    console.error(err);
+    setStatusEl(st, 'Xatolik: ' + err.message, true);
+  }
+});
+
+// --- Avatar yuklash (mehmon va hisob, base64, 900KB limit) ---
+async function saveAvatarDataUrl(dataUrl){
+  const user = auth.currentUser;
+  if (!user) return;
+  if (dataUrl.length > 900000) {
+    alert("Rasm juda katta (900KB dan oshmasligi kerak). Kichikroq rasm tanlang.");
+    return;
+  }
+  if (!currentProfile) currentProfile = {};
+  currentProfile.avatar = dataUrl;
+  localStorage.setItem('aloqa-xonasi-avatar', dataUrl);
+  updateProfileAvatar();
+  try {
+    await db.collection('users').doc(user.uid).set({ avatar: dataUrl }, { merge: true });
+    renderAccountView(user);
+  } catch (err) {
+    console.error(err);
+    alert('Rasm saqlanmadi: ' + err.message);
+  }
+}
+function bindAvatarPicker(fileEl){
+  if (!fileEl) return;
+  fileEl.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => saveAvatarDataUrl(reader.result);
+    reader.readAsDataURL(file);
+    fileEl.value = '';
+  });
+}
+bindAvatarPicker(accAvatarFileEl);
+bindAvatarPicker(document.getElementById('guestAvatarFile'));
+
+function openAvatarLightbox(url){
+  if (!url) return;
+  const lb = document.getElementById('avatarLightbox');
+  const img = document.getElementById('avatarLightboxImg');
+  if (!lb || !img) return;
+  img.src = url;
+  lb.classList.add('open');
+  lb.setAttribute('aria-hidden', 'false');
+}
+function closeAvatarLightbox(){
+  const lb = document.getElementById('avatarLightbox');
+  const img = document.getElementById('avatarLightboxImg');
+  if (!lb) return;
+  lb.classList.remove('open');
+  lb.setAttribute('aria-hidden', 'true');
+  if (img) img.src = '';
+}
+document.getElementById('avatarLightboxClose')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeAvatarLightbox();
+});
+document.getElementById('avatarLightbox')?.addEventListener('click', (e) => {
+  if (e.target.id === 'avatarLightbox') closeAvatarLightbox();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAvatarLightbox();
+});
+
+function bindAvatarPreviewAndEdit(wrapEl, fileEl){
+  if (!wrapEl) return;
+  const badge = wrapEl.querySelector('.avatar-edit-badge');
+  const avatarEl = wrapEl.querySelector('.profile-avatar');
+  if (badge) {
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (fileEl) fileEl.click();
+    });
+  }
+  wrapEl.addEventListener('click', (e) => {
+    if (badge && (e.target === badge || badge.contains(e.target))) return;
+    const url = currentAvatarUrl();
+    if (url) {
+      openAvatarLightbox(url);
+    } else if (fileEl) {
+      fileEl.click();
+    }
+  });
+}
+bindAvatarPreviewAndEdit(document.getElementById('accAvatarWrap'), accAvatarFileEl);
+bindAvatarPreviewAndEdit(document.getElementById('guestAvatarWrap'), document.getElementById('guestAvatarFile'));
+
+// --- Sign out: real akkaunt sessiyasidan chiqadi, keyin YANGI anonim UID (0-dan) ---
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  await auth.signOut();
+  currentProfile = null;
+  profileNameInput.value = '';
+  localStorage.setItem(PROFILE_NAME_KEY, '');
+  localStorage.removeItem('aloqa-xonasi-avatar');
+  updateProfileAvatar();
+  refreshAllBtnStates();
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPassword').value = '';
+  // onAuthStateChanged avtomatik signInAnonymously() ni chaqiradi — yangi mehmon UID
+});
+
+// --- Google bilan kirish/link (popup — ishonchliroq; redirect fallback) ---
+async function finishGoogleUser(user) {
+  const ref = db.collection('users').doc(user.uid);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    // Yangi Google akkaunt (mehmon emas)
+    currentProfile = {
+      name: user.displayName || 'Foydalanuvchi',
+      username: autoUsername(user.uid),
+      avatar: user.photoURL || null,
+      provider: 'google.com',
+      createdAt: Date.now()
+    };
+    await ref.set(currentProfile);
+    await db.collection('usernames').doc(currentProfile.username).set({ uid: user.uid }).catch(()=>{});
+  } else {
+    currentProfile = snap.data() || {};
+    // Mehmon → Google: ism + rasm Google dan, username O'ZGARMAYDI (guest username qoladi)
+    const guestUsername = currentProfile.username || autoUsername(user.uid);
+    const updates = {
+      provider: 'google.com',
+      name: user.displayName || currentProfile.name || 'Foydalanuvchi',
+      // username ni ataylab yozmaymiz — eski guest username saqlanadi
+    };
+    if (user.photoURL) {
+      updates.avatar = user.photoURL;
+      currentProfile.avatar = user.photoURL;
+    }
+    currentProfile.provider = 'google.com';
+    currentProfile.name = updates.name;
+    currentProfile.username = guestUsername;
+    await ref.set(updates, { merge: true }).catch((e) => console.error('Google profile update:', e));
+    // Guest username ni usernames kolleksiyasiga band qilish (agar yo'q bo'lsa)
+    if (guestUsername) {
+      await db.collection('usernames').doc(guestUsername).set({ uid: user.uid }).catch(()=>{});
+    }
+  }
+  if (currentProfile.avatar) localStorage.setItem('aloqa-xonasi-avatar', currentProfile.avatar);
+  renderAccountView(user);
+}
+
+function isPopupBlockedErr(err) {
+  if (!err) return false;
+  const c = err.code || '';
+  const m = String(err.message || '');
+  return c === 'auth/popup-blocked'
+    || c === 'auth/popup-closed-by-user'
+    || m.toLowerCase().includes('popup')
+    || m.toLowerCase().includes('blocked');
+}
+
+googleSignInBtn.addEventListener('click', async () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  const user = auth.currentUser;
+  try {
+    let result;
+    try {
+      if (user && user.isAnonymous) {
+        result = await user.linkWithPopup(provider);
+      } else {
+        result = await auth.signInWithPopup(provider);
+      }
+    } catch (firstErr) {
+      // Google akkaunt boshqa UID da band → oddiy sign-in
+      if (firstErr.code === 'auth/credential-already-in-use' || firstErr.code === 'auth/email-already-in-use') {
+        try {
+          result = await auth.signInWithPopup(provider);
+        } catch (e2) {
+          if (isPopupBlockedErr(e2)) {
+            await auth.signInWithRedirect(provider);
+            return;
+          }
+          throw e2;
+        }
+      } else if (isPopupBlockedErr(firstErr)) {
+        // Popup bloklangan — redirect (alert chiqarmaymiz)
+        if (user && user.isAnonymous) {
+          await user.linkWithRedirect(provider);
+        } else {
+          await auth.signInWithRedirect(provider);
+        }
+        return;
+      } else {
+        throw firstErr;
+      }
+    }
+    if (result && result.user) await finishGoogleUser(result.user);
+  } catch (err) {
+    console.error('Google kirish xatosi:', err);
+    // popup-blocked ni foydalanuvchiga ko'rsatmaymiz
+    if (isPopupBlockedErr(err)) {
+      try {
+        const u = auth.currentUser;
+        if (u && u.isAnonymous) await u.linkWithRedirect(new firebase.auth.GoogleAuthProvider());
+        else await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+      } catch (re) {
+        console.error(re);
+      }
+      return;
+    }
+    alert('Google bilan kirib bo\'lmadi: ' + (err.message || err.code || err));
+  }
+});
+
+auth.getRedirectResult().then(async (result) => {
+  if (result && result.user) {
+    await finishGoogleUser(result.user);
+  }
+}).catch((err) => {
+  console.error('Google redirect xatosi:', err);
+  if (err && err.code && err.code !== 'auth/popup-closed-by-user') {
+    // faqat jiddiy xatolarni ko'rsatamiz
+    console.warn('Google redirect failed:', err.code, err.message);
+  }
+});
+visPublicBtn.addEventListener('click', () => setVisibility('public'));
+visPrivateBtn.addEventListener('click', () => setVisibility('private'));
+function setVisibility(v){
+  selectedVisibility = v;
+  visPublicBtn.classList.toggle('active', v === 'public');
+  visPrivateBtn.classList.toggle('active', v === 'private');
+}
+
+// --- Kod inputlarini real-vaqtda katta harfga o'girish ---
+function forceUppercase(input){
+  input.addEventListener('input', () => {
+    const pos = input.selectionStart;
+    input.value = input.value.toUpperCase();
+    input.setSelectionRange(pos, pos);
+  });
+}
+forceUppercase(roomJoinInput);
+forceUppercase(roomCreateInput);
+
+// --- Enter tugmasi bilan yuborish ---
+function submitOnEnter(input, action){
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      action();
+    }
+  });
+}
+submitOnEnter(profileNameInput, () => { if (!joinBtn.disabled) joinBtn.click(); });
+submitOnEnter(roomJoinInput, () => { if (!joinBtn.disabled) joinBtn.click(); });
+submitOnEnter(passwordJoinInput, () => { if (!joinBtn.disabled) joinBtn.click(); });
+submitOnEnter(roomCreateInput, () => { if (!createBtn.disabled) createBtn.click(); });
+submitOnEnter(roomNameCreateInput, () => { if (!createBtn.disabled) createBtn.click(); });
+submitOnEnter(passwordCreateInput, () => { if (!createBtn.disabled) createBtn.click(); });
+
+let roomCheckTimer = null;
+roomJoinInput.addEventListener('input', () => {
+  refreshJoinBtnState();
+  const code = roomJoinInput.value.trim().toUpperCase();
+  clearTimeout(roomCheckTimer);
+  if (!code){ joinPassWrap.style.display = 'none'; return; }
+  roomCheckTimer = setTimeout(async () => {
+    try{
+      const snap = await db.collection(ROOM_COLLECTION).doc(code).get();
+      if (snap.exists && snap.data().passwordHash){
+        joinPassWrap.style.display = 'block';
+      } else {
+        joinPassWrap.style.display = 'none';
+      }
+    }catch(e){}
+  }, 350);
+});
+roomCreateInput.addEventListener('input', refreshCreateBtnState);
+roomNameCreateInput.addEventListener('input', refreshCreateBtnState);
+passwordCreateInput.addEventListener('input', refreshCreateBtnState);
+maxParticipantsCreateInput.addEventListener('input', refreshCreateBtnState);
+
+const roomSearchInput = document.getElementById('roomSearch');
+function applyRoomSearch(){
+  const q = (roomSearchInput && roomSearchInput.value || '').trim().toLowerCase();
+  document.querySelectorAll('#panel-rooms .room-list').forEach(list => {
+    let visible = 0;
+    list.querySelectorAll('.room-card').forEach(card => {
+      const text = card.textContent.toLowerCase();
+      const show = !q || text.includes(q);
+      card.classList.toggle('hidden-search', !show);
+      if (show) visible++;
+    });
+    const empty = list.querySelector('.empty-list.search-empty');
+    const hasNativeEmpty = list.querySelector('.empty-list:not(.search-empty)');
+    if (q && !visible && !hasNativeEmpty){
+      if (!empty){
+        const el = document.createElement('div');
+        el.className = 'empty-list search-empty';
+        el.textContent = 'Hech narsa topilmadi';
+        list.appendChild(el);
+      }
+    } else if (empty){
+      empty.remove();
+    }
+  });
+}
+if (roomSearchInput){
+  roomSearchInput.addEventListener('input', applyRoomSearch);
+}
+
+let roomListUnsubs = [];
+function clearRoomListListeners(){
+  roomListUnsubs.forEach(u => { try{ u(); }catch(e){} });
+  roomListUnsubs = [];
+}
+
+function renderRoomList(el, rooms, emptyText, isMine){
+  if (!rooms.length){
+    el.innerHTML = `<div class="empty-list">${emptyText}</div>`;
+    return;
+  }
+  el.innerHTML = '';
+  rooms.forEach(r => {
+    const card = makeRoomCard(r.code, r.data, r.count, isMine);
+    el.appendChild(card);
+    const unsub = db.collection(ROOM_COLLECTION).doc(r.code).collection('peers')
+      .onSnapshot(psnap => { updateRoomCardCount(card, psnap.size, r.data.maxParticipants); });
+    roomListUnsubs.push(unsub);
+  });
+}
+
+async function fetchMyCreatedRooms(){
+  const uid = auth.currentUser && auth.currentUser.uid;
+  const found = new Map();
+  if (uid){
+    try{
+      const snap = await db.collection(ROOM_COLLECTION).where('createdByUid','==', uid).limit(50).get();
+      snap.forEach(doc => found.set(doc.id, doc.data()));
+    }catch(e){}
+  }
+  for (const code of getMyRooms()){
+    if (found.has(code)) continue;
+    try{
+      const snap = await db.collection(ROOM_COLLECTION).doc(code).get();
+      if (snap.exists) found.set(code, snap.data());
+      else removeMyRoom(code);
+    }catch(e){}
+  }
+  const results = [];
+  for (const [code, data] of found){
+    const count = await countPeers(code);
+    results.push({ code, data, count });
+  }
+  return results;
+}
+
+async function refreshRoomLists(){
+  clearRoomListListeners();
+  publicRoomListEl.innerHTML = '<div class="empty-list">Yuklanmoqda...</div>';
+  myPublicRoomListEl.innerHTML = '<div class="empty-list">Yuklanmoqda...</div>';
+  myPrivateRoomListEl.innerHTML = '<div class="empty-list">Yuklanmoqda...</div>';
+
+  try{
+    const snap = await db.collection(ROOM_COLLECTION).where('visibility','==','public').limit(30).get();
+    const rooms = [];
+    for (const doc of snap.docs){
+      rooms.push({ code: doc.id, data: doc.data(), count: await countPeers(doc.id) });
+    }
+    renderRoomList(publicRoomListEl, rooms, 'Hozircha ommaviy xonalar yo\'q', false);
+  }catch(e){
+    publicRoomListEl.innerHTML = '<div class="empty-list err">Yuklab bo\'lmadi. Firestore rules\'ni tekshiring.</div>';
+  }
+
+  try{
+    const mine = await fetchMyCreatedRooms();
+    renderRoomList(myPublicRoomListEl, mine.filter(r => r.data.visibility !== 'private'), 'Hali public xona yaratmagansiz', true);
+    renderRoomList(myPrivateRoomListEl, mine.filter(r => r.data.visibility === 'private'), 'Hali private xona yaratmagansiz', true);
+  }catch(e){
+    myPublicRoomListEl.innerHTML = '<div class="empty-list err">Yuklab bo\'lmadi.</div>';
+    myPrivateRoomListEl.innerHTML = '<div class="empty-list err">Yuklab bo\'lmadi.</div>';
+  }
+  applyRoomSearch();
+}
+function updateRoomCardCount(card, count, maxParticipants){
+  const el = card.querySelector('.rc-count');
+  const max = Number.isFinite(maxParticipants) ? maxParticipants : DEFAULT_MAX_PARTICIPANTS;
+  const isPrivate = card.dataset.isPrivate === '1';
+  if (el) el.textContent = `${count}/${max} kishi · ${isPrivate ? 'Private' : 'Public'}`;
+  const badge = card.querySelector('.rc-status-badge');
+  if (badge){
+    badge.textContent = count > 0 ? 'FAOL' : "BO'SH";
+    badge.classList.toggle('active', count > 0);
+  }
+}
+async function countPeers(code){
+  try{
+    const snap = await db.collection(ROOM_COLLECTION).doc(code).collection('peers').get();
+    return snap.size;
+  }catch(e){ return 0; }
+}
+function isOwnedRoom(code, data){
+  const uid = auth.currentUser && auth.currentUser.uid;
+  if (uid && data && data.createdByUid === uid) return true;
+  return getMyRooms().includes(code);
+}
+
+function roomDisplayName(code, data){
+  const n = data && data.name && String(data.name).trim();
+  return n || code;
+}
+
+function makeRoomCard(code, data, count, isMine){
+  const card = document.createElement('div');
+  card.className = 'room-card';
+  const isPrivate = data.visibility === 'private';
+  card.dataset.isPrivate = isPrivate ? '1' : '0';
+  const canManage = !!(isMine || isOwnedRoom(code, data));
+  const title = roomDisplayName(code, data);
+  const roomMax = Number.isFinite(data.maxParticipants) ? data.maxParticipants : DEFAULT_MAX_PARTICIPANTS;
+  const peak = Number.isFinite(data.peakCount) ? data.peakCount : count;
+  const hasPass = !!(data.passwordHash);
+  card.innerHTML = `
+    <div class="rc-code">${escapeHtml(code)}</div>
+    <div class="rc-meta">
+      <div class="rc-name-row">
+        <span class="rc-name">${escapeHtml(title)}</span>
+        <span class="rc-status-badge ${count > 0 ? 'active' : ''}">${count > 0 ? 'FAOL' : "BO'SH"}</span>
+      </div>
+      <div class="rc-count">${count}/${roomMax} kishi · ${isPrivate ? 'Private' : 'Public'}${hasPass ? ' · 🔒' : ''}</div>
+      <button type="button" class="rc-more-toggle">Ko'proq...</button>
+      <div class="rc-details">
+        <div class="rc-detail-row">Yaratilgan: <b>${fmtDT(data.createdAt)}</b></div>
+        <div class="rc-detail-row">Oxirgi kirish: <b>${fmtDT(data.lastJoinedAt)}</b></div>
+        <div class="rc-detail-row">Eng ko'p bo'lgani: <b>${peak} kishi</b></div>
+        ${hasPass ? '<div class="rc-detail-row">Parol: <b>bor</b></div>' : ''}
+      </div>
+    </div>
+    <button type="button" class="rc-copy-link" title="Havolani nusxalash" aria-label="Copy link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+    </button>
+    <div class="rc-lock">${isPrivate ? lockSvg() : globeSvg()}</div>
+    ${canManage ? `
+      <div class="room-menu-wrap">
+        <button type="button" class="room-more-btn" aria-label="Menyu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+        </button>
+        <div class="room-menu">
+          <button type="button" class="room-edit-btn">Nomini tahrirlash</button>
+          <button type="button" class="room-del-btn">O'chirish</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+  const moreToggle = card.querySelector('.rc-more-toggle');
+  const details = card.querySelector('.rc-details');
+  moreToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = !details.classList.contains('open');
+    details.classList.toggle('open', willOpen);
+    moreToggle.textContent = willOpen ? 'Kamroq' : "Ko'proq...";
+  });
+  const copyLinkBtn = card.querySelector('.rc-copy-link');
+  copyLinkBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const link = window.location.origin + window.location.pathname + '?room=' + encodeURIComponent(code);
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast(hasPass ? 'Havola nusxalandi (parol so‘raladi)' : 'Havola nusxalandi');
+    } catch (err) {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showToast('Havola nusxalandi'); }
+      catch (e2) { prompt('Havolani nusxalang:', link); }
+      document.body.removeChild(ta);
+    }
+  });
+  card.addEventListener('click', () => {
+    document.querySelector('.tab-btn[data-tab="join"]').click();
+    roomJoinInput.value = code;
+    roomJoinInput.dispatchEvent(new Event('input'));
+    if (hasPass) {
+      joinPassWrap.style.display = 'block';
+      setStatusJoin('Bu xona parol bilan himoyalangan. Parolni kiriting.', true);
+      passwordJoinInput.focus();
+    } else {
+      joinPassWrap.style.display = 'none';
+      passwordJoinInput.value = '';
+      if (!profileNameInput.value.trim()) profileNameInput.focus();
+    }
+  });
+  if (canManage){
+    const moreBtn = card.querySelector('.room-more-btn');
+    const menu = card.querySelector('.room-menu');
+    const editBtn = card.querySelector('.room-edit-btn');
+    const delBtn = card.querySelector('.room-del-btn');
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.room-menu.open').forEach(m => {
+        if (m !== menu){
+          m.classList.remove('open');
+          const wrap = m._menuWrap;
+          if (wrap && m.parentElement !== wrap) wrap.appendChild(m);
+        }
+      });
+      const willOpen = !menu.classList.contains('open');
+      menu.classList.toggle('open', willOpen);
+      if (willOpen){
+        menu._menuWrap = menu.parentElement;
+        document.body.appendChild(menu);
+        const r = moreBtn.getBoundingClientRect();
+        const w = 168;
+        const h = menu.offsetHeight || 88;
+        let left = r.right - w;
+        if (left < 8) left = 8;
+        if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+        const openUp = r.bottom + h + 8 > window.innerHeight;
+        menu.style.left = left + 'px';
+        menu.style.top = (openUp ? (r.top - h - 6) : (r.bottom + 6)) + 'px';
+      } else if (menu._menuWrap){
+        menu._menuWrap.appendChild(menu);
+      }
+    });
+    editBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeAllRoomMenus();
+      const next = prompt('Yangi xona nomi', title);
+      if (next == null) return;
+      const name = next.trim();
+      if (!name){ alert("Nom bo'sh bo'lmasin"); return; }
+      if (name.length > 32){ alert('Nom 32 belgidan oshmasin'); return; }
+      try{
+        await renameRoom(code, name);
+      }catch(err){
+        alert("Nom saqlanmadi. Rules'ni tekshiring.");
+      }
+    });
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeAllRoomMenus();
+      if (!confirm(title + " xonasini butunlay o'chirasizmi? Kod bo'shaydi.")) return;
+      delBtn.textContent = "O'chirilmoqda...";
+      try{
+        await deleteRoomCompletely(code);
+      }catch(err){
+        alert("O'chirilmadi. Rules'da o'chirish ruxsatini tekshiring.");
+        delBtn.textContent = "O'chirish";
+      }
+    });
+  }
+  return card;
+}
+
+async function renameRoom(code, name){
+  await db.collection(ROOM_COLLECTION).doc(code).set({ name }, { merge: true });
+  await refreshRoomLists();
+}
+
+async function deleteRoomCompletely(code){
+  const ref = db.collection(ROOM_COLLECTION).doc(code);
+  const [peersSnap, signalsSnap] = await Promise.all([
+    ref.collection('peers').get(),
+    ref.collection('signals').get()
+  ]);
+  const batch = db.batch();
+  peersSnap.forEach(d => batch.delete(d.ref));
+  signalsSnap.forEach(d => batch.delete(d.ref));
+  batch.delete(ref);
+  await batch.commit();
+  removeMyRoom(code);
+  await refreshRoomLists();
+}
+
+async function waitIceComplete(peer){
+  if (peer.iceGatheringState === 'complete') return;
+  await new Promise(resolve => {
+    function check(){
+      if (peer.iceGatheringState === 'complete'){
+        peer.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }
+    }
+    peer.addEventListener('icegatheringstatechange', check);
+    setTimeout(resolve, 4000);
+  });
+}
+
+function resizeMeterCanvas(){
+  if (!meterCanvas || !meterEl) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = meterEl.clientWidth || 280;
+  const h = meterEl.clientHeight || 72;
+  meterCanvas.width = Math.floor(w * dpr);
+  meterCanvas.height = Math.floor(h * dpr);
+  if (meterCtx) meterCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawSiriWaves(level){
+  if (!meterCtx || !meterCanvas) return;
+  const w = meterEl.clientWidth || 280;
+  const h = meterEl.clientHeight || 72;
+  const midY = h * 0.5;
+  meterCtx.clearRect(0, 0, w, h);
+
+  // soft center glow (water-like)
+  const glow = meterCtx.createRadialGradient(w * 0.5, midY, 2, w * 0.5, midY, w * 0.42);
+  glow.addColorStop(0, `rgba(59,130,246,${(0.06 + level * 0.18).toFixed(3)})`);
+  glow.addColorStop(1, 'rgba(59,130,246,0)');
+  meterCtx.fillStyle = glow;
+  meterCtx.fillRect(0, 0, w, h);
+
+  // quiet "breath" + voice amplitude — always a soft water motion
+  const baseAmp = 4.5 + level * (h * 0.36);
+  const breath = 0.88 + 0.12 * Math.sin(wavePhase * 0.28);
+
+  WAVE_LAYERS.forEach((layer, li) => {
+    const amp = baseAmp * layer.amp * breath;
+    const phase = wavePhase * (0.55 + li * 0.12) + li * 1.1;
+    meterCtx.beginPath();
+    meterCtx.lineWidth = layer.width;
+    meterCtx.strokeStyle = layer.color;
+    meterCtx.lineCap = 'round';
+    meterCtx.lineJoin = 'round';
+
+    const steps = 64;
+    for (let i = 0; i <= steps; i++){
+      const t = i / steps;
+      const x = t * w;
+      // envelope: soft edges like water ripple fading at sides
+      const envelope = Math.sin(Math.PI * t);
+      const y =
+        midY +
+        Math.sin(t * Math.PI * 2 * layer.freq + phase) * amp * envelope +
+        Math.sin(t * Math.PI * 2 * (layer.freq * 0.45) - phase * 0.7) * amp * 0.28 * envelope;
+      if (i === 0) meterCtx.moveTo(x, y);
+      else meterCtx.lineTo(x, y);
+    }
+    meterCtx.stroke();
+  });
+}
+
+function startMeter(stream){
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.85;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    resizeMeterCanvas();
+    smoothLevel = 0;
+    wavePhase = 0;
+
+    function loop(){
+      // Tab yashirin bo'lsa — animatsiyani to'xtatib, batareyani tejash
+      if (document.hidden){
+        meterRAF = requestAnimationFrame(loop);
+        return;
+      }
+      analyser.getByteFrequencyData(data);
+      // real volume: emphasize mid bands a bit (voice)
+      let sum = 0;
+      const n = data.length;
+      for (let i = 0; i < n; i++){
+        const w = i < n * 0.15 ? 0.4 : (i < n * 0.55 ? 1.2 : 0.7);
+        sum += data[i] * w;
+      }
+      const raw = Math.min(1, (sum / n) / 90);
+      // heavy exponential smooth — Siri-like calm response
+      const attack = 0.14;
+      const release = 0.045;
+      const target = (muted || forceMuted) ? 0 : raw;
+      if (target > smoothLevel) smoothLevel += (target - smoothLevel) * attack;
+      else smoothLevel += (target - smoothLevel) * release;
+
+      // phase advances slower when quiet, a bit faster when speaking
+      wavePhase += 0.022 + smoothLevel * 0.05;
+
+      drawSiriWaves(smoothLevel);
+
+      const wasSpeaking = !!speakingState[myId];
+      const nowSpeaking = !muted && !forceMuted && smoothLevel > 0.08;
+      if (wasSpeaking !== nowSpeaking){
+        speakingState[myId] = nowSpeaking;
+        if (joined) renderParticipants();
+      }
+      meterRAF = requestAnimationFrame(loop);
+    }
+    loop();
+    window.addEventListener('resize', resizeMeterCanvas);
+  }catch(e){}
+}
+let logoRAF = null;
+let logoSmoothMy = 0;
+let logoSmoothPeer = 0;
+function logoLevelOf(an, data){
+  an.getByteFrequencyData(data);
+  const avg = data.reduce((a,b)=>a+b,0) / data.length;
+  return Math.min(1, avg / 90);
+}
+function startLogoReact(){
+  if (logoRAF) return;
+  const logo = document.getElementById('appLogo');
+  if (!logo) return;
+  logoSmoothMy = 0;
+  logoSmoothPeer = 0;
+  function loop(){
+    if (document.hidden){
+      logoRAF = requestAnimationFrame(loop);
+      return;
+    }
+    let targetMy = 0;
+    if (!muted && !forceMuted && analyser){
+      targetMy = logoLevelOf(analyser, new Uint8Array(analyser.frequencyBinCount));
+    }
+    let targetPeer = 0;
+    Object.values(peerAnalysers).forEach(a => {
+      if (!a) return;
+      const lvl = logoLevelOf(a.an, a.data);
+      if (lvl > targetPeer) targetPeer = lvl;
+    });
+    logoSmoothMy += (targetMy - logoSmoothMy) * 0.08;
+    logoSmoothPeer += (targetPeer - logoSmoothPeer) * 0.08;
+    const glow = Math.max(logoSmoothMy, logoSmoothPeer);
+    const scale = 1 + glow * 0.08;
+    logo.style.transform = 'scale(' + scale.toFixed(3) + ')';
+    logo.style.filter = glow > 0.05
+      ? 'drop-shadow(0 0 ' + (glow * 8).toFixed(1) + 'px rgba(59,130,246,' + (0.35 + glow * 0.45).toFixed(2) + '))'
+      : 'none';
+    logoRAF = requestAnimationFrame(loop);
+  }
+  loop();
+}
+function stopLogoReact(){
+  if (logoRAF){ cancelAnimationFrame(logoRAF); logoRAF = null; }
+  const logo = document.getElementById('appLogo');
+  if (logo){
+    logo.style.filter = 'none';
+    logo.style.transform = 'scale(1)';
+  }
+}
+
+function stopMeter(){
+  if (meterRAF){ cancelAnimationFrame(meterRAF); meterRAF = null; }
+  smoothLevel = 0;
+  if (meterCtx && meterEl){
+    const w = meterEl.clientWidth || 280;
+    const h = meterEl.clientHeight || 72;
+    meterCtx.clearRect(0, 0, w, h);
+  }
+  if (audioCtx){ audioCtx.close().catch(()=>{}); audioCtx = null; }
+  analyser = null;
+}
+
+async function requestMicUpfront(){
+  setDot('pending');
+  try{
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micReady = true;
+    setDot('');
+    startMeter(localStream);
+    micRetryJoinBtn.classList.remove('show');
+    micRetryCreateBtn.classList.remove('show');
+  }catch(e){
+    micReady = false;
+    setDot('');
+    setStatusJoin('Mikrofonga ruxsat berilmadi. Brauzer manzil satridagi qulf belgisiga bosib yoq.', true);
+    setStatusCreate('Mikrofonga ruxsat berilmadi. Brauzer manzil satridagi qulf belgisiga bosib yoq.', true);
+    micRetryJoinBtn.classList.add('show');
+    micRetryCreateBtn.classList.add('show');
+  }
+}
+micRetryJoinBtn.addEventListener('click', async () => {
+  micRetryJoinTxt.textContent = 'SO\'RALYAPTI...';
+  await requestMicUpfront();
+  micRetryJoinTxt.textContent = 'MIKROFON RUXSATINI BROWSERDAN QAYTA SO\'RASH';
+  if (micReady) setStatusJoin('Mikrofon tayyor');
+});
+micRetryCreateBtn.addEventListener('click', async () => {
+  micRetryCreateTxt.textContent = 'SO\'RALYAPTI...';
+  await requestMicUpfront();
+  micRetryCreateTxt.textContent = 'MIKROFON RUXSATINI BROWSERDAN QAYTA SO\'RASH';
+  if (micReady) setStatusCreate('Mikrofon tayyor');
+});
+window.addEventListener('DOMContentLoaded', () => {
+  requestMicUpfront();
+  refreshRoomLists();
+  refreshAllBtnStates();
+});
+
+const AVATAR_COLORS = ['#e17076','#7bc862','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774','#5eb2f5'];
+function colorFor(id){
+  let h = 0;
+  for (let i=0;i<id.length;i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function initialFor(name){
+  return (name || '?').trim().charAt(0).toUpperCase() || '?';
+}
+function displayName(pid){
+  if (pid === myId) return myName || 'Siz';
+  return peerNames[pid] || pid.slice(0,4);
+}
+
+const speakingState = {};
+const peerAnalysers = {};
+
+function micSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+}
+function micOffSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+}
+function inviteSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>';
+}
+function lockSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+}
+function globeSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+}
+function checkSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+}
+
+function renderParticipants(){
+  participantsEl.innerHTML = '';
+  if (!joined) { stateTxt.textContent = 'OFFLINE'; return; }
+
+  const meRow = document.createElement('div');
+  meRow.className = 'prow';
+  const meEffectivelyMuted = muted || forceMuted;
+  const meSpeaking = !meEffectivelyMuted && speakingState[myId];
+  const meStateLabel = forceMuted ? 'xona egasi o\'chirdi' : (muted ? 'mikrofon o\'chiq' : (meSpeaking ? 'gapiryapti' : 'tinglayapti'));
+  meRow.innerHTML = `
+    <div class="avatar" style="background:${colorFor(myId)}">${initialFor(myName)}</div>
+    <div class="pinfo">
+      <div class="pname me-label">${escapeHtml(myName || 'Siz')}${isRoomHost ? ' (host)' : ''}</div>
+      <div class="pstate ${meEffectivelyMuted ? 'invited' : (meSpeaking ? 'speaking' : 'listening')}">${meStateLabel}</div>
+    </div>
+    <div class="picon" style="color:${meEffectivelyMuted ? 'var(--red)' : 'var(--text-dim)'}">${meEffectivelyMuted ? micOffSvg() : micSvg()}</div>
+  `;
+  participantsEl.appendChild(meRow);
+
+  Object.keys(peers).forEach(pid => {
+    const p = peers[pid];
+    const connected = p && p.pc && p.pc.connectionState === 'connected';
+    const pMuted = !!peerMuted[pid] || !!peerForceMuted[pid];
+    const speaking = connected && !pMuted && speakingState[pid];
+    const row = document.createElement('div');
+    row.className = 'prow';
+    let stateLabel, stateClass;
+    if (!connected){ stateLabel = 'ulanmoqda...'; stateClass = 'invited'; }
+    else if (pMuted){ stateLabel = 'mikrofon o\'chiq'; stateClass = 'invited'; }
+    else { stateLabel = speaking ? 'gapiryapti' : 'tinglayapti'; stateClass = speaking ? 'speaking' : 'listening'; }
+    const micIconHtml = !connected ? inviteSvg() : (pMuted ? micOffSvg() : micSvg());
+    const micIconColor = pMuted ? 'var(--red)' : 'var(--text-dim)';
+    const hostMuteBtnHtml = (isRoomHost && connected) ? `
+      <button class="host-mute-btn" data-pid="${pid}" title="${pMuted ? 'Mikrofonini yoqish' : 'Mikrofonini o\'chirish'}" style="border:none;background:transparent;cursor:pointer;color:${pMuted ? 'var(--red)' : 'var(--text-dim)'};display:flex;align-items:center;padding:4px;flex-shrink:0;">
+        ${pMuted ? micOffSvg() : micSvg()}
+      </button>` : '';
+    row.innerHTML = `
+      <div class="avatar" style="background:${colorFor(pid)}">${initialFor(displayName(pid))}</div>
+      <div class="pinfo">
+        <div class="pname">${escapeHtml(displayName(pid))}</div>
+        <div class="pstate ${stateClass}">${stateLabel}</div>
+      </div>
+      <div class="picon" style="color:${micIconColor}">${micIconHtml}</div>
+      ${hostMuteBtnHtml}
+    `;
+    participantsEl.appendChild(row);
+  });
+
+  if (isRoomHost){
+    participantsEl.querySelectorAll('.host-mute-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = btn.getAttribute('data-pid');
+        toggleForceMutePeer(pid);
+      });
+    });
+  }
+
+  const n = Object.keys(peers).length + 1;
+  stateTxt.textContent = (n <= 1) ? 'YOLG\'IZ XONADA' : n + ' KISHI XONADA';
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtDT(ts){
+  if (!ts) return 'Nomaʼlum';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function watchSpeaking(pid, stream){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const an = ctx.createAnalyser();
+    an.fftSize = 512;
+    src.connect(an);
+    const data = new Uint8Array(an.frequencyBinCount);
+    peerAnalysers[pid] = { ctx, an, data };
+    function loop(){
+      if (!peerAnalysers[pid]) return;
+      an.getByteFrequencyData(data);
+      const avg = data.reduce((a,b)=>a+b,0) / data.length;
+      const wasSpeaking = !!speakingState[pid];
+      const nowSpeaking = avg > 12;
+      if (wasSpeaking !== nowSpeaking){
+        speakingState[pid] = nowSpeaking;
+        renderParticipants();
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  }catch(e){}
+}
+function stopWatchSpeaking(pid){
+  const a = peerAnalysers[pid];
+  if (a){ a.ctx.close().catch(()=>{}); delete peerAnalysers[pid]; }
+  delete speakingState[pid];
+}
+
+// --- ICE muvaffaqiyatsiz bo'lganda qayta urinish holati ---
+const iceRestartAttempts = {};
+
+async function establishPeer(room, peerId){
+  if (peers[peerId]) return;
+
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  const audioEl = document.createElement('audio');
+  audioEl.autoplay = true;
+  audioEl.playsInline = true;
+  audioEl.style.display = 'none';
+  if (typeof speakerOn !== 'undefined') audioEl.muted = !speakerOn;
+  document.body.appendChild(audioEl);
+  pc.ontrack = (e) => {
+    audioEl.srcObject = e.streams[0];
+    if (typeof speakerOn !== 'undefined') audioEl.muted = !speakerOn;
+    watchSpeaking(peerId, e.streams[0]);
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed'){
+      // Avval ICE qayta ishga tushirishga urinamiz, faqat taklif qiluvchi tomon
+      const attempts = iceRestartAttempts[peerId] || 0;
+      if (myId < peerId && attempts < 2){
+        iceRestartAttempts[peerId] = attempts + 1;
+        restartIceForPeer(room, peerId, pc);
+        setDot('pending');
+        renderParticipants();
+        return;
+      }
+      teardownPeer(peerId);
+    } else if (['disconnected','closed'].includes(pc.connectionState)){
+      teardownPeer(peerId);
+    }
+    setDot(pc.connectionState === 'connected' ? 'live' : 'pending');
+    if (pc.connectionState === 'connected') delete iceRestartAttempts[peerId];
+    renderParticipants();
+  };
+
+  peers[peerId] = { pc, audioEl };
+  renderParticipants();
+
+  const sigRef = roomRef.collection('signals').doc(pairKey(myId, peerId));
+
+  if (myId < peerId){
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await waitIceComplete(pc);
+    await sigRef.set({ offer: JSON.stringify(pc.localDescription) }, { merge: true });
+
+    pairUnsubs[peerId] = sigRef.onSnapshot(async (doc) => {
+      const d = doc.data();
+      if (d && d.answer && pc.signalingState === 'have-local-offer'){
+        try{ await pc.setRemoteDescription(JSON.parse(d.answer)); }catch(e){}
+      }
+    });
+  } else {
+    pairUnsubs[peerId] = sigRef.onSnapshot(async (doc) => {
+      const d = doc.data();
+      if (d && d.offer && !pc.currentRemoteDescription){
+        try{
+          await pc.setRemoteDescription(JSON.parse(d.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await waitIceComplete(pc);
+          await sigRef.set({ answer: JSON.stringify(pc.localDescription) }, { merge: true });
+        }catch(e){}
+      }
+    });
+  }
+}
+
+async function restartIceForPeer(room, peerId, pc){
+  try{
+    const offer = await pc.createOffer({ iceRestart: true });
+    await pc.setLocalDescription(offer);
+    await waitIceComplete(pc);
+    const sigRef = roomRef.collection('signals').doc(pairKey(myId, peerId));
+    await sigRef.set({ offer: JSON.stringify(pc.localDescription), answer: firebase.firestore.FieldValue.delete() }, { merge: true });
+  }catch(e){
+    teardownPeer(peerId);
+  }
+}
+
+function teardownPeer(peerId){
+  const p = peers[peerId];
+  if (p){
+    try{ p.pc.close(); }catch(e){}
+    p.audioEl.remove();
+    delete peers[peerId];
+  }
+  delete peerNames[peerId];
+  delete iceRestartAttempts[peerId];
+  stopWatchSpeaking(peerId);
+  if (pairUnsubs[peerId]){ pairUnsubs[peerId](); delete pairUnsubs[peerId]; }
+  // signalizatsiya hujjatini tozalash (ushbu tomon uchun, resurs to'planmasin)
+  if (roomRef){
+    roomRef.collection('signals').doc(pairKey(myId, peerId)).delete().catch(()=>{});
+  }
+  renderParticipants();
+}
+
+async function ensureMic(setStatusFn){
+  if (!micReady || !localStream || localStream.getAudioTracks().every(t => t.readyState === 'ended')){
+    setStatusFn('Mikrofonga ruxsat so\'ralyapti...');
+    try{
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micReady = true;
+      startMeter(localStream);
+      return true;
+    }catch(e){
+      setStatusFn('Mikrofon ruxsati berilmadi.', true);
+      return false;
+    }
+  }
+  return true;
+}
+
+function enterCallScreen(){
+  lobbyEl.style.display = 'none';
+  callScreenEl.style.display = 'flex';
+  callScreenEl.classList.add('active-call');
+  joined = true;
+  setDot('live');
+  setStatus('');
+  const titleEl = document.getElementById('vcRoomTitle');
+  if (titleEl && roomRef) titleEl.textContent = 'Xona · ' + roomRef.id;
+  renderParticipants();
+  startLogoReact();
+  applyEffectiveMuteState();
+  // URL da xona kodi — refresh da qayta ulanish uchun
+  if (roomRef && roomRef.id) setRoomInUrl(roomRef.id);
+}
+
+async function attachPresence(room, peersCol){
+  presenceUnsub = peersCol.onSnapshot((snap) => {
+    snap.docChanges().forEach((change) => {
+      const pid = change.doc.id;
+      if (pid === myId) return;
+      const data = change.doc.data() || {};
+      if (change.type === 'added'){
+        peerNames[pid] = data.name || pid.slice(0,4);
+        peerMuted[pid] = !!data.muted;
+        peerForceMuted[pid] = !!data.forceMuted;
+        establishPeer(room, pid);
+      }
+      if (change.type === 'modified'){
+        peerNames[pid] = data.name || pid.slice(0,4);
+        peerMuted[pid] = !!data.muted;
+        peerForceMuted[pid] = !!data.forceMuted;
+        renderParticipants();
+      }
+      if (change.type === 'removed'){
+        delete peerMuted[pid];
+        delete peerForceMuted[pid];
+        teardownPeer(pid);
+      }
+    });
+  });
+}
+
+// --- Host xonaning egasi ekanini aniqlaydi, keyin har bir peer o'z hujjatini
+//     kuzatib turadi: agar host `forceMuted:true` qo'ysa, avtomatik o'zini mute qiladi ---
+function watchMyPeerDoc(){
+  if (!myPeerRef) return;
+  if (myPeerUnsub) { myPeerUnsub(); myPeerUnsub = null; }
+  myPeerUnsub = myPeerRef.onSnapshot((doc) => {
+    const data = doc.data();
+    if (!data) return;
+    const nowForceMuted = !!data.forceMuted;
+    if (nowForceMuted !== forceMuted){
+      forceMuted = nowForceMuted;
+      applyEffectiveMuteState();
+    }
+  });
+}
+
+// --- Haqiqiy audio track holatini muted OR forceMuted ga qarab yangilaydi ---
+function applyEffectiveMuteState(){
+  const effectivelyMuted = muted || forceMuted;
+  if (localStream) {
+    localStream.getAudioTracks().forEach(t => t.enabled = !effectivelyMuted);
+  }
+  if (muteIcon) muteIcon.innerHTML = effectivelyMuted ? MIC_OFF_ICON_INNER : MIC_ICON_INNER;
+  if (muteTxt) {
+    muteTxt.textContent = forceMuted
+      ? 'Host o‘chirdi'
+      : (muted ? 'Mikrofon o‘chiq · bosing' : 'Mikrofonni o‘chirish');
+  }
+  if (muteBtn) {
+    muteBtn.classList.toggle('muted', !!effectivelyMuted && !forceMuted);
+    muteBtn.classList.toggle('forced', !!forceMuted);
+    muteBtn.classList.toggle('active', !!effectivelyMuted);
+  }
+  if (myPeerRef) myPeerRef.set({ muted }, { merge: true }).catch(()=>{});
+  if (joined) renderParticipants();
+}
+
+// --- Faqat host chaqiradi: boshqa foydalanuvchining mikrofonini majburan
+//     o'chiradi/yoqadi. Bu to'g'ridan-to'g'ri o'sha odamning trackini
+//     o'chirolmaydi (brauzer xavfsizligi) — signal yuboradi, o'sha client esa
+//     watchMyPeerDoc() orqali buni ko'rib avtomatik o'z trackini o'chiradi. ---
+async function toggleForceMutePeer(pid){
+  if (!isRoomHost || !roomRef) return;
+  const currentlyForceMuted = !!peerForceMuted[pid];
+  try{
+    await roomRef.collection('peers').doc(pid).set({ forceMuted: !currentlyForceMuted }, { merge: true });
+  }catch(e){}
+}
+
+// --- Tugma yuklanish holati yordamchisi ---
+function setBtnLoading(btn, loading, loadingText, normalText){
+  btn.disabled = loading;
+  btn.classList.toggle('loading', loading);
+  btn.textContent = loading ? loadingText : normalText;
+}
+
+joinBtn.addEventListener('click', async () => {
+  const enteredName = profileNameInput.value.trim();
+  const room = roomJoinInput.value.trim().toUpperCase();
+  const password = passwordJoinInput.value;
+
+  if (!enteredName){ setStatusJoin('Ism kiritilmadi.', true); return; }
+  if (!room || room.length < 4 || room.length > 8){ setStatusJoin('Xona kodi 4-8 belgi bo\'lsin.', true); return; }
+
+  setBtnLoading(joinBtn, true, 'QO\'SHILYAPTI...', 'QO\'SHILISH');
+  roomRef = db.collection(ROOM_COLLECTION).doc(room);
+
+  let roomSnap;
+  try{
+    roomSnap = await roomRef.get();
+  }catch(e){
+    console.error('room get:', e);
+    setStatusJoin('Firestore xatosi (o\'qish): ' + (e.code || e.message), true);
+    setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+    return;
+  }
+
+  if (!roomSnap.exists){
+    setStatusJoin('Bunday xona topilmadi. Kodni tekshiring yoki "Yaratish" bo\'limidan yangi xona oching.', true);
+    setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+    return;
+  }
+  const roomData = roomSnap.data();
+
+  if (roomData.passwordHash){
+    if (!password){
+      joinPassWrap.style.display = 'block';
+      setStatusJoin('Bu xona parol bilan himoyalangan. Parolni kiriting.', true);
+      setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+      return;
+    }
+    const enteredHash = await sha256Hex(password);
+    if (enteredHash !== roomData.passwordHash){
+      setStatusJoin('Parol xato.', true);
+      setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+      return;
+    }
+  }
+
+  if (!(await ensureMic(setStatusJoin))){ setBtnLoading(joinBtn, false, '', 'QO\'SHILISH'); return; }
+
+  // --- Sig'im tekshiruvi + peer yozish ---
+  // Eski kod: tx.get(peersCol) → invalid-argument (transaction da butun kolleksiya o'qib bo'lmaydi)
+  const roomMaxParticipants = Number.isFinite(roomData.maxParticipants) ? roomData.maxParticipants : DEFAULT_MAX_PARTICIPANTS;
+  const peersCol = roomRef.collection('peers');
+  const myPeerDoc = peersCol.doc(myId);
+  try{
+    const existing = await peersCol.get();
+    const alreadyIn = existing.docs.some(d => d.id === myId);
+    if (!alreadyIn && existing.size >= roomMaxParticipants){
+      setStatusJoin(`Xona to'lgan (max ${roomMaxParticipants} kishi, hozir ${existing.size}).`, true);
+      setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+      return;
+    }
+    existing.forEach(doc => {
+      if (doc.id !== myId){
+        const d = doc.data();
+        peerNames[doc.id] = (d.name || doc.id.slice(0,4));
+        peerMuted[doc.id] = !!d.muted;
+        peerForceMuted[doc.id] = !!d.forceMuted;
+      }
+    });
+    const newCount = alreadyIn ? existing.size : existing.size + 1;
+    const prevPeak = Number.isFinite(roomData.peakCount) ? roomData.peakCount : 0;
+    await myPeerDoc.set({ joinedAt: Date.now(), name: enteredName, muted: false, forceMuted: false });
+    await roomRef.set({ lastJoinedAt: Date.now(), peakCount: Math.max(prevPeak, newCount) }, { merge: true });
+  }catch(e){
+    console.error('join write:', e);
+    setStatusJoin('Firestore xatosi (qo\'shilish): ' + (e.code || e.message), true);
+    setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+    return;
+  }
+
+  myName = enteredName;
+  myPeerRef = myPeerDoc;
+  isRoomHost = (roomData.createdBy === myId); // deyarli hech qachon true bo'lmaydi (join qiluvchi host emas), lekin xavfsizlik uchun tekshiramiz
+  muted = false;
+  forceMuted = false;
+  saveRoomPass(password || '');
+
+  setBtnLoading(joinBtn, false, '', 'QO\'SHILISH');
+  enterCallScreen();
+  attachPresence(room, peersCol);
+  watchMyPeerDoc();
+});
+
+createBtn.addEventListener('click', async () => {
+  const enteredName = profileNameInput.value.trim();
+  const room = roomCreateInput.value.trim().toUpperCase();
+  const password = passwordCreateInput.value;
+
+  const roomName = roomNameCreateInput.value.trim();
+  if (!enteredName){ setStatusCreate('Ism kiritilmadi.', true); return; }
+  if (!room || room.length < 4 || room.length > 8){ setStatusCreate('Xona kodi 4-8 belgi bo\'lsin.', true); return; }
+  if (!roomName){ setStatusCreate('Xona nomini yozing!', true); return; }
+  if (password && (password.length < 4 || password.length > 9)){
+    setStatusCreate('Parol 4-9 belgi bo\'lsin (harf va raqam bo\'lishi mumkin).', true);
+    return;
+  }
+  let maxParticipants = parseInt(maxParticipantsCreateInput.value, 10);
+  if (!Number.isFinite(maxParticipants)) maxParticipants = DEFAULT_MAX_PARTICIPANTS;
+  maxParticipants = Math.round(maxParticipants);
+  if (maxParticipants < MIN_MAX_PARTICIPANTS || maxParticipants > MAX_MAX_PARTICIPANTS){
+    setStatusCreate(`Odam soni ${MIN_MAX_PARTICIPANTS} dan ${MAX_MAX_PARTICIPANTS} gacha bo'lsin.`, true);
+    return;
+  }
+
+  setBtnLoading(createBtn, true, 'YARATILMOQDA...', 'XONA YARATISH');
+  roomRef = db.collection(ROOM_COLLECTION).doc(room);
+
+  let roomSnap;
+  try{
+    roomSnap = await roomRef.get();
+  }catch(e){
+    console.error('create room get:', e);
+    setStatusCreate('Firestore xatosi (o\'qish): ' + (e.code || e.message), true);
+    setBtnLoading(createBtn, false, '', 'XONA YARATISH');
+    return;
+  }
+
+  if (roomSnap.exists){
+    setStatusCreate('Bu kod allaqachon band. Boshqa kod tanlang yoki "Qo\'shilish"dan foydalaning.', true);
+    setBtnLoading(createBtn, false, '', 'XONA YARATISH');
+    return;
+  }
+
+  const payload = {
+    name: roomName,
+    createdAt: Date.now(),
+    visibility: selectedVisibility,
+    createdBy: myId,
+    createdByUid: (auth.currentUser && auth.currentUser.uid) || null,
+    maxParticipants: maxParticipants,
+    lastJoinedAt: Date.now(),
+    peakCount: 1
+  };
+  if (password) payload.passwordHash = await sha256Hex(password);
+
+  try{
+    await roomRef.set(payload);
+  }catch(e){
+    console.error('create room set:', e);
+    setStatusCreate('Firestore xatosi (xona yaratish): ' + (e.code || e.message), true);
+    setBtnLoading(createBtn, false, '', 'XONA YARATISH');
+    return;
+  }
+
+  addMyRoom(room);
+  setStatusCreate('Yangi xona yaratildi');
+  createdCodeText.textContent = room;
+  createdCodeBox.classList.add('show');
+
+  if (!(await ensureMic(setStatusCreate))){ setBtnLoading(createBtn, false, '', 'XONA YARATISH'); return; }
+
+  const peersCol = roomRef.collection('peers');
+  myName = enteredName;
+  myPeerRef = peersCol.doc(myId);
+  isRoomHost = true;
+  muted = false;
+  forceMuted = false;
+  try{
+    await myPeerRef.set({ joinedAt: Date.now(), name: myName, muted: false, forceMuted: false });
+  }catch(e){
+    console.error('create peer set:', e);
+    setStatusCreate('Firestore xatosi (peer): ' + (e.code || e.message), true);
+    setBtnLoading(createBtn, false, '', 'XONA YARATISH');
+    return;
+  }
+
+  saveRoomPass(password || '');
+  setBtnLoading(createBtn, false, '', 'XONA YARATISH');
+  enterCallScreen();
+  attachPresence(room, peersCol);
+  watchMyPeerDoc();
+});
+
+const COPY_ICON_INNER = '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
+const CHECK_ICON_INNER = '<polyline points="20 6 9 17 4 12"/>';
+let toastTimer = null;
+function showToast(msg, ms){
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms || 1800);
+}
+copyCodeBtn.addEventListener('click', async () => {
+  const code = createdCodeText.textContent;
+  try{
+    await navigator.clipboard.writeText(code);
+    copyIcon.innerHTML = CHECK_ICON_INNER;
+    copyTxt.textContent = 'NUSXALANDI';
+    copyCodeBtn.classList.add('copied');
+    showToast('Kod nusxalandi: ' + code);
+    setTimeout(() => {
+      copyIcon.innerHTML = COPY_ICON_INNER;
+      copyTxt.textContent = 'NUSXALASH';
+      copyCodeBtn.classList.remove('copied');
+    }, 1800);
+  }catch(e){
+    showToast('Nusxalab bo\'lmadi');
+  }
+});
+
+async function cleanupAllSignals(){
+  // Chiqishda ushbu foydalanuvchi ishtirok etgan barcha signal juftlik hujjatlarini tozalash
+  if (!roomRef) return;
+  const ids = Object.keys(peers);
+  await Promise.all(ids.map(pid =>
+    roomRef.collection('signals').doc(pairKey(myId, pid)).delete().catch(()=>{})
+  ));
+}
+
+async function leave(){
+  joined = false;
+  stopLogoReact();
+  if (presenceUnsub){ presenceUnsub(); presenceUnsub = null; }
+  if (myPeerUnsub){ myPeerUnsub(); myPeerUnsub = null; }
+  await cleanupAllSignals();
+  Object.keys(peers).forEach(teardownPeer);
+  if (myPeerRef){ await myPeerRef.delete().catch(()=>{}); myPeerRef = null; }
+  roomRef = null;
+  isRoomHost = false;
+  muted = false;
+  forceMuted = false;
+  setDot('');
+  callScreenEl.style.display = 'none';
+  callScreenEl.classList.remove('active-call');
+  lobbyEl.style.display = 'block';
+  clearRoomFromUrl();
+
+  passwordJoinInput.value = '';
+  passwordCreateInput.value = '';
+  roomJoinInput.value = '';
+  roomCreateInput.value = '';
+  roomNameCreateInput.value = '';
+  maxParticipantsCreateInput.value = DEFAULT_MAX_PARTICIPANTS;
+  joinPassWrap.style.display = 'none';
+  createdCodeBox.classList.remove('show');
+  setStatusJoin('Ismingiz va xona kodini kiriting');
+  setStatusCreate('Ma\'lumotlarni to\'ldiring va XONA YARATISH bosing');
+  refreshAllBtnStates();
+  refreshRoomLists();
+}
+
+// --- Chiqishni tasdiqlash: birinchi bosishda ogohlantirish, ikkinchisida chiqadi ---
+let leaveConfirmTimer = null;
+function requestLeave(btn, txtEl, normalText){
+  if (btn.classList.contains('confirming')){
+    clearTimeout(leaveConfirmTimer);
+    btn.classList.remove('confirming');
+    txtEl.textContent = normalText;
+    leave();
+    return;
+  }
+  btn.classList.add('confirming');
+  txtEl.textContent = 'YANA BOSING';
+  leaveConfirmTimer = setTimeout(() => {
+    btn.classList.remove('confirming');
+    txtEl.textContent = normalText;
+  }, 2500);
+}
+mainBtn.addEventListener('click', () => requestLeave(mainBtn, mainBtnTxt, 'CHIQISH'));
+leaveTopBtn.addEventListener('click', () => requestLeave(leaveTopBtn, leaveTopTxt, 'CHIQISH'));
+
+const MIC_ICON_INNER = '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>';
+const MIC_OFF_ICON_INNER = '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>';
+
+muteBtn.addEventListener('click', () => {
+  if (forceMuted){
+    setStatus('Xona egasi mikrofoningizni o\'chirib qo\'ygan.', true);
+    return;
+  }
+  if (!localStream) return;
+  muted = !muted;
+  applyEffectiveMuteState();
+});
+
+// Karnay: barcha remote audio on/off
+const speakerBtn = document.getElementById('speakerBtn');
+if (speakerBtn) {
+  speakerBtn.addEventListener('click', () => {
+    speakerOn = !speakerOn;
+    speakerBtn.classList.toggle('active', !speakerOn);
+    Object.values(peers).forEach(p => {
+      if (p && p.audioEl) p.audioEl.muted = !speakerOn;
+    });
+    setStatus(speakerOn ? 'Karnay yoqildi' : 'Karnay o‘chirildi');
+  });
+}
+
+window.addEventListener('beforeunload', () => {
+  if (myPeerRef) myPeerRef.delete().catch(()=>{});
+});
+</script>
 </body>
 </html>
